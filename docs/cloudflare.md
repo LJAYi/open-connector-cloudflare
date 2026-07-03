@@ -11,14 +11,15 @@ Worker runtime uses:
 ## Prerequisites
 
 - A Cloudflare account with Workers, D1, and R2 access.
-- Wrangler authentication configured for your account.
+- Wrangler available through `npx wrangler`.
 - Node.js 22 or newer.
 
 ## Create Local Config
 
-Copy the example Wrangler config:
+Install dependencies and copy the example Wrangler config:
 
 ```bash
+npm install
 cp wrangler.example.jsonc wrangler.local.jsonc
 ```
 
@@ -38,58 +39,26 @@ npx wrangler login
 Create the D1 database and R2 bucket:
 
 ```bash
-npx wrangler d1 create oomol-connect
-npx wrangler r2 bucket create oomol-connect-transit-files
+npx wrangler d1 create open-connector
+npx wrangler r2 bucket create open-connector-transit-files
 ```
 
-Put the returned D1 `database_id` into `wrangler.local.jsonc`.
-
-## Build Runtime Assets
-
-Generate the provider catalog and build the Web Console:
-
-```bash
-npm run generate:catalog
-npm run build:web
-```
-
-Make sure your Wrangler config maps the built Web Console assets to the `ASSETS` binding before
-starting a Worker preview or deploying. `wrangler.example.jsonc` already includes the required
-Static Assets configuration:
-
-```jsonc
-"assets": {
-  "directory": "dist/web",
-  "binding": "ASSETS",
-  "not_found_handling": "single-page-application"
-}
-```
-
-## Local Worker Preview
-
-Apply migrations locally and start a Worker preview:
-
-```bash
-npx wrangler d1 migrations apply oomol-connect --local
-npm run dev:cloudflare
-```
-
-The local Worker preview uses the same generated provider Action executor registry as the Node
-runtime.
+Put the returned D1 `database_id` into `wrangler.local.jsonc`. All Wrangler commands that read the
+Worker config should use `--config wrangler.local.jsonc`.
 
 ## Remote Deployment
 
 Apply migrations remotely:
 
 ```bash
-npx wrangler d1 migrations apply oomol-connect --remote
+npx wrangler d1 migrations apply open-connector --remote --config wrangler.local.jsonc
 ```
 
 Set required secrets with Wrangler:
 
 ```bash
-npx wrangler secret put OOMOL_CONNECT_ADMIN_TOKEN
-npx wrangler secret put OOMOL_CONNECT_ENCRYPTION_KEY
+npx wrangler secret put OOMOL_CONNECT_ADMIN_TOKEN --config wrangler.local.jsonc
+npx wrangler secret put OOMOL_CONNECT_ENCRYPTION_KEY --config wrangler.local.jsonc
 ```
 
 Deploy:
@@ -97,6 +66,23 @@ Deploy:
 ```bash
 npm run deploy:cloudflare
 ```
+
+`npm run deploy:cloudflare` generates the catalog, builds the Web Console, copies catalog assets,
+and runs `wrangler deploy --config wrangler.local.jsonc`. The copied `wrangler.local.jsonc` already
+maps the built Web Console assets to the `ASSETS` binding used by the Worker.
+
+## Local Worker Preview
+
+Use this optional flow when you want to test the Worker runtime locally:
+
+```bash
+npx wrangler d1 migrations apply open-connector --local --config wrangler.local.jsonc
+npm run dev:cloudflare
+```
+
+`npm run dev:cloudflare` generates the catalog, builds the Web Console, copies catalog assets, and
+runs `wrangler dev --config wrangler.local.jsonc`. The local Worker preview uses the same generated
+provider Action executor registry as the Node runtime.
 
 ## Runtime Behavior
 
