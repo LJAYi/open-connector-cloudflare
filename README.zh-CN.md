@@ -8,8 +8,8 @@
 ![MCP](https://img.shields.io/badge/MCP-ready-111827)
 ![OpenAPI](https://img.shields.io/badge/OpenAPI-3.1-6BA539)
 
-OpenConnector 是一个开源鉴权网关，连接了 626 个 provider，兼容 Cloudflare 部署，并通过
-[Connector SDK](https://github.com/oomol-lab/connector-sdk)、[oo CLI](https://github.com/oomol-lab/oo-cli)、MCP 和 HTTP 为 AI Agent 提供 6,552 个可直接调用的预置 Action。
+OpenConnector 是一个开源鉴权网关，连接了 643 个 provider，兼容 Cloudflare 部署，并通过
+[Connector SDK](https://github.com/oomol-lab/connector-sdk)、[oo CLI](https://github.com/oomol-lab/oo-cli)、MCP 和 HTTP 为 AI Agent 提供 6,680 个可直接调用的预置 Action。
 
 OpenConnector 不只是保存 provider 凭据。它把 Gateway、provider catalog 和 Action executor
 都开源出来，让开发者可以自托管运行时、检查每个 Action 契约，并以可控方式让 Agent 调用真实 SaaS，
@@ -17,7 +17,7 @@ OpenConnector 不只是保存 provider 凭据。它把 Gateway、provider catalo
 
 ## 为什么选择 OpenConnector
 
-- [连接 626 个 provider，提供 6,552 个预置 Action](docs/providers.md)，覆盖 GitHub、Gmail、Notion、
+- [连接 643 个 provider，提供 6,680 个预置 Action](docs/providers.md)，覆盖 GitHub、Gmail、Notion、
   BigQuery、Google Analytics、Supabase、Airtable、Slack 等常见 SaaS。
 - 开源鉴权网关，统一管理 API key、OAuth2、自定义凭据和无需鉴权的 provider。
 - 开源 Action 层，内置请求/响应 schema 和按需加载的 executor。
@@ -53,7 +53,7 @@ flowchart LR
   Gateway --> Actions["Open-source Action Executors"]
   Gateway --> Policy["Tokens, Scopes, Allow/Block Policy"]
   Gateway --> Logs["Run Logs"]
-  Actions --> SaaS["626 Providers"]
+  Actions --> SaaS["643 Providers"]
   Console["Web Console"] --> Gateway
   Cloudflare["Cloudflare Workers, D1, R2"] -. deploy .-> Gateway
 ```

@@ -8,8 +8,8 @@
 ![MCP](https://img.shields.io/badge/MCP-ready-111827)
 ![OpenAPI](https://img.shields.io/badge/OpenAPI-3.1-6BA539)
 
-OpenConnector is an open-source auth gateway that connects 626 providers, supports
-Cloudflare-compatible deployment, and provides 6,552 prebuilt Actions that AI agents can call
+OpenConnector is an open-source auth gateway that connects 643 providers, supports
+Cloudflare-compatible deployment, and provides 6,680 prebuilt Actions that AI agents can call
 directly through the [Connector SDK](https://github.com/oomol-lab/connector-sdk),
 [oo CLI](https://github.com/oomol-lab/oo-cli), MCP, and HTTP.
 
@@ -20,7 +20,7 @@ from scratch.
 
 ## Why OpenConnector
 
-- [626 providers and 6,552 prebuilt Actions](docs/providers.md) across SaaS products such as
+- [643 providers and 6,680 prebuilt Actions](docs/providers.md) across SaaS products such as
   GitHub, Gmail, Notion, BigQuery, Google Analytics, Supabase, Airtable, Slack, and more.
 - Open-source auth gateway for API keys, OAuth2, custom credentials, and no-auth providers.
 - Open-source Action layer with prebuilt request/response schemas and lazy-loaded executors.
@@ -59,7 +59,7 @@ flowchart LR
   Gateway --> Actions["Open-source Action Executors"]
   Gateway --> Policy["Tokens, Scopes, Allow/Block Policy"]
   Gateway --> Logs["Run Logs"]
-  Actions --> SaaS["626 Providers"]
+  Actions --> SaaS["643 Providers"]
   Console["Web Console"] --> Gateway
   Cloudflare["Cloudflare Workers, D1, R2"] -. deploy .-> Gateway
 ```
