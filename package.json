@@ -26,7 +26,10 @@
     "format": "oxfmt --check .",
     "format:fix": "oxfmt .",
     "fix": "npm run lint:fix && npm run format:fix",
-    "fix-check": "npm run fix && npm run typecheck"
+    "fix-check": "npm run fix && npm run typecheck",
+    "deploy": "npm run deploy:cloudflare-template",
+    "deploy:cloudflare-template": "npm run generate:catalog && npm run build:web && node scripts/copy-catalog-assets.ts && wrangler d1 migrations apply DB --remote && wrangler deploy --minify",
+    "validate:cloudflare": "npm run generate:catalog && npm run build:web && node scripts/copy-catalog-assets.ts && wrangler deploy --dry-run --minify"
   },
   "dependencies": {
     "@cfworker/json-schema": "^4.1.1",
@@ -67,5 +70,21 @@
     "esbuild@0.28.1": true,
     "sharp@0.34.5": true,
     "workerd@1.20260630.1": true
+  },
+  "cloudflare": {
+    "bindings": {
+      "DB": {
+        "description": "D1 stores connections, OAuth state, runtime tokens, and run logs."
+      },
+      "TRANSIT_FILES": {
+        "description": "R2 stores temporary files transferred through connector Actions."
+      },
+      "OOMOL_CONNECT_ADMIN_TOKEN": {
+        "description": "Generate a long random value for Web Console and admin API authentication. Save it in a password manager."
+      },
+      "OOMOL_CONNECT_ENCRYPTION_KEY": {
+        "description": "Generate a different long random value for credential encryption. Losing it makes encrypted D1 data unreadable."
+      }
+    }
   }
 }

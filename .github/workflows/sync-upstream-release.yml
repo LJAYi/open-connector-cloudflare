@@ -1,0 +1,114 @@
+name: Sync latest upstream release
+
+on:
+  schedule:
+    - cron: "2 20 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: open-connector-upstream-release-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the deployment repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Resolve the latest stable upstream release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="$(gh api repos/oomol-lab/open-connector/releases/latest --jq '.tag_name')"
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Unexpected upstream release tag: $tag" >&2
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Check whether the release is already installed
+        id: state
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          current="$(tr -d '[:space:]' < .open-connector-version)"
+          if [ "$current" = "$TAG" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "$TAG is already installed."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "Updating from $current to $TAG."
+          fi
+
+      - name: Preserve the Cloudflare template overlay
+        if: steps.state.outputs.skip != 'true'
+        run: |
+          mkdir -p "$RUNNER_TEMP/open-connector-cloudflare/.github/scripts"
+          mkdir -p "$RUNNER_TEMP/open-connector-cloudflare/.github/workflows"
+          cp README.md "$RUNNER_TEMP/open-connector-cloudflare/README.md"
+          cp .dev.vars.example "$RUNNER_TEMP/open-connector-cloudflare/.dev.vars.example"
+          cp .github/scripts/configure-template.mjs "$RUNNER_TEMP/open-connector-cloudflare/.github/scripts/configure-template.mjs"
+          cp .github/workflows/sync-upstream-release.yml "$RUNNER_TEMP/open-connector-cloudflare/.github/workflows/sync-upstream-release.yml"
+
+      - name: Replace application files with the immutable upstream release
+        if: steps.state.outputs.skip != 'true'
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          git remote remove upstream 2>/dev/null || true
+          git remote add upstream https://github.com/oomol-lab/open-connector.git
+          git fetch --depth=1 upstream "refs/tags/$TAG:refs/tags/$TAG"
+          git read-tree --reset -u "$TAG"
+
+      - name: Restore the Cloudflare template overlay
+        if: steps.state.outputs.skip != 'true'
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          rm -rf .github
+          mkdir -p .github/scripts .github/workflows
+          cp "$RUNNER_TEMP/open-connector-cloudflare/README.md" README.md
+          cp "$RUNNER_TEMP/open-connector-cloudflare/.dev.vars.example" .dev.vars.example
+          cp "$RUNNER_TEMP/open-connector-cloudflare/.github/scripts/configure-template.mjs" .github/scripts/configure-template.mjs
+          cp "$RUNNER_TEMP/open-connector-cloudflare/.github/workflows/sync-upstream-release.yml" .github/workflows/sync-upstream-release.yml
+          node .github/scripts/configure-template.mjs "$TAG"
+
+      - name: Set up Node.js
+        if: steps.state.outputs.skip != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install dependencies
+        if: steps.state.outputs.skip != 'true'
+        run: npm ci
+
+      - name: Validate the release
+        if: steps.state.outputs.skip != 'true'
+        run: |
+          npm run lint
+          npm run format
+          npm run build
+          npm test
+          npm run validate:cloudflare
+
+      - name: Commit the verified release
+        if: steps.state.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "chore: sync upstream release $TAG"
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:main
