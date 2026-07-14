@@ -66,7 +66,7 @@ async function collectAssets(rootDirectory) {
         await visit(absolutePath);
         continue;
       }
-      if (!entry.isFile() && !entry.isSymbolicLink()) {
+      if (!entry.isFile()) {
         continue;
       }
       const fileStat = await stat(absolutePath);

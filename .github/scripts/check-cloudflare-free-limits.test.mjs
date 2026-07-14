@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -60,5 +60,27 @@ test("passes when every measurement has headroom", async (context) => {
     limits: { workerGzipBytes: 2048, assetBytes: 8, assetCount: 2 },
   });
 
+  assert.deepEqual(result.violations, []);
+});
+
+test("ignores symbolic links when collecting assets", async (context) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "cloudflare-free-limits-"));
+  context.after(() => rm(root, { recursive: true, force: true }));
+
+  const assetsDirectory = path.join(root, "assets");
+  const wranglerOutputPath = path.join(root, "wrangler.log");
+  await mkdir(assetsDirectory);
+  await writeFile(wranglerOutputPath, "Total Upload: 4 KiB / gzip: 1 KiB\n");
+  await writeFile(path.join(assetsDirectory, "asset.txt"), "1234");
+  await symlink("asset.txt", path.join(assetsDirectory, "linked-asset.txt"));
+  await symlink("missing.txt", path.join(assetsDirectory, "dangling-asset.txt"));
+
+  const result = await checkCloudflareFreeLimits({
+    wranglerOutputPath,
+    assetsDirectory,
+    limits: { workerGzipBytes: 2048, assetBytes: 8, assetCount: 2 },
+  });
+
+  assert.deepEqual(result.assets, [{ relativePath: "asset.txt", sizeBytes: 4 }]);
   assert.deepEqual(result.violations, []);
 });
