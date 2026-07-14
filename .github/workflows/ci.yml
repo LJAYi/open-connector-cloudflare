@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "24"
+
+jobs:
+  quality:
+    name: Lint, Typecheck & Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Check formatting
+        run: npm run format
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Run tests
+        run: npm test
+
+  cloudflare:
+    name: Cloudflare Validation & Free Plan Headroom
+    needs: quality
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build the Cloudflare deployment
+        run: |
+          npm run generate:catalog
+          npm run build:web
+          node scripts/copy-catalog-assets.ts
+
+      - name: Test the Free plan guard
+        run: node --test .github/scripts/check-cloudflare-free-limits.test.mjs
+
+      - name: Validate Cloudflare Free plan headroom
+        run: |
+          output_dir="$RUNNER_TEMP/open-connector-cloudflare-free-limits"
+          mkdir -p "$output_dir"
+          npx wrangler deploy --dry-run --minify --outdir "$output_dir" 2>&1 | tee "$output_dir/wrangler.log"
+          node .github/scripts/check-cloudflare-free-limits.mjs "$output_dir/wrangler.log" dist/web
