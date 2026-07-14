@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out the deployment repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -55,7 +55,10 @@ jobs:
           mkdir -p "$RUNNER_TEMP/open-connector-cloudflare/.github/workflows"
           cp README.md "$RUNNER_TEMP/open-connector-cloudflare/README.md"
           cp .dev.vars.example "$RUNNER_TEMP/open-connector-cloudflare/.dev.vars.example"
+          cp .github/scripts/check-cloudflare-free-limits.mjs "$RUNNER_TEMP/open-connector-cloudflare/.github/scripts/check-cloudflare-free-limits.mjs"
+          cp .github/scripts/check-cloudflare-free-limits.test.mjs "$RUNNER_TEMP/open-connector-cloudflare/.github/scripts/check-cloudflare-free-limits.test.mjs"
           cp .github/scripts/configure-template.mjs "$RUNNER_TEMP/open-connector-cloudflare/.github/scripts/configure-template.mjs"
+          cp .github/workflows/ci.yml "$RUNNER_TEMP/open-connector-cloudflare/.github/workflows/ci.yml"
           cp .github/workflows/sync-upstream-release.yml "$RUNNER_TEMP/open-connector-cloudflare/.github/workflows/sync-upstream-release.yml"
 
       - name: Replace application files with the immutable upstream release
@@ -77,13 +80,16 @@ jobs:
           mkdir -p .github/scripts .github/workflows
           cp "$RUNNER_TEMP/open-connector-cloudflare/README.md" README.md
           cp "$RUNNER_TEMP/open-connector-cloudflare/.dev.vars.example" .dev.vars.example
+          cp "$RUNNER_TEMP/open-connector-cloudflare/.github/scripts/check-cloudflare-free-limits.mjs" .github/scripts/check-cloudflare-free-limits.mjs
+          cp "$RUNNER_TEMP/open-connector-cloudflare/.github/scripts/check-cloudflare-free-limits.test.mjs" .github/scripts/check-cloudflare-free-limits.test.mjs
           cp "$RUNNER_TEMP/open-connector-cloudflare/.github/scripts/configure-template.mjs" .github/scripts/configure-template.mjs
+          cp "$RUNNER_TEMP/open-connector-cloudflare/.github/workflows/ci.yml" .github/workflows/ci.yml
           cp "$RUNNER_TEMP/open-connector-cloudflare/.github/workflows/sync-upstream-release.yml" .github/workflows/sync-upstream-release.yml
           node .github/scripts/configure-template.mjs "$TAG"
 
       - name: Set up Node.js
         if: steps.state.outputs.skip != 'true'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "24"
           cache: npm
@@ -100,6 +106,15 @@ jobs:
           npm run build
           npm test
           npm run validate:cloudflare
+
+      - name: Check Cloudflare Free plan headroom
+        if: steps.state.outputs.skip != 'true'
+        run: |
+          node --test .github/scripts/check-cloudflare-free-limits.test.mjs
+          output_dir="$RUNNER_TEMP/open-connector-cloudflare-free-limits"
+          mkdir -p "$output_dir"
+          npx wrangler deploy --dry-run --minify --outdir "$output_dir" 2>&1 | tee "$output_dir/wrangler.log"
+          node .github/scripts/check-cloudflare-free-limits.mjs "$output_dir/wrangler.log" dist/web
 
       - name: Commit the verified release
         if: steps.state.outputs.skip != 'true'

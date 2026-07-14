@@ -51,6 +51,11 @@ The included GitHub Actions workflow checks the latest stable upstream Release e
 If validation fails, no commit is pushed and the currently deployed version keeps running.
 Code-only updates do not delete D1 data, R2 objects, custom domains, or Worker secrets.
 
+The sync also reserves headroom below Cloudflare Free plan hard limits. It stops before updating
+`main` if the Worker gzip size exceeds 2.7 MiB, an individual static asset exceeds 23 MiB, or the
+build contains more than 18,000 static assets. The workflow log identifies the exceeded guard so a
+release that has outgrown the Free plan is not deployed automatically.
+
 The workflow intentionally restores upstream application files on every release. Keep deployment
 customizations in Cloudflare settings or in separate branches; custom changes to tracked
 application files on `main` may be replaced by the next automatic update.
@@ -107,6 +112,10 @@ Cloudflare 一键部署模板，由社区维护，并非 OOMOL 官方项目。
 部署完成后，新仓库的 `main` 每次产生提交，Cloudflare Workers Builds 都会自动构建和
 部署。仓库内置的 GitHub Actions 会在北京时间每天凌晨 04:02 检查上游正式 Release；
 只有在完整验证通过后才更新 `main`。代码更新不会删除 D1、R2、域名或 Worker Secrets。
+
+同步流程还会预留 Cloudflare 免费计划的安全余量：Worker gzip 超过 2.7 MiB、单个静态
+资源超过 23 MiB，或者静态资源超过 18,000 个时停止更新 `main`，避免自动部署已经不再
+适合免费计划的上游版本。
 
 必须妥善保存并使用两个不同的随机值：
 
