@@ -47,7 +47,7 @@ jobs:
         run: npm test
 
   cloudflare:
-    name: Cloudflare Validation & Free Plan Headroom
+    name: Cloudflare Plan Check
     needs: quality
     runs-on: ubuntu-latest
     steps:
