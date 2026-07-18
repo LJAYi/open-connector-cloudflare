@@ -16,8 +16,9 @@ const packageJson = JSON.parse(await readFile(packagePath, "utf8"));
 packageJson.scripts = {
   ...packageJson.scripts,
   deploy: "npm run deploy:cloudflare-template",
+  "configure:cloudflare-resources": "node .github/scripts/configure-existing-resources.mjs",
   "deploy:cloudflare-template":
-    "npm run generate:catalog && npm run build:web && node scripts/copy-catalog-assets.ts && wrangler d1 migrations apply DB --remote && wrangler deploy --minify",
+    "npm run configure:cloudflare-resources && npm run generate:catalog && npm run build:web && node scripts/copy-catalog-assets.ts && wrangler d1 migrations apply DB --remote && wrangler deploy --minify",
   "validate:cloudflare":
     "npm run generate:catalog && npm run build:web && node scripts/copy-catalog-assets.ts && wrangler deploy --dry-run --minify",
 };

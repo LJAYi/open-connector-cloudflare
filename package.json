@@ -28,8 +28,9 @@
     "fix": "npm run lint:fix && npm run format:fix",
     "fix-check": "npm run fix && npm run typecheck",
     "deploy": "npm run deploy:cloudflare-template",
-    "deploy:cloudflare-template": "npm run generate:catalog && npm run build:web && node scripts/copy-catalog-assets.ts && wrangler d1 migrations apply DB --remote && wrangler deploy --minify",
-    "validate:cloudflare": "npm run generate:catalog && npm run build:web && node scripts/copy-catalog-assets.ts && wrangler deploy --dry-run --minify"
+    "deploy:cloudflare-template": "npm run configure:cloudflare-resources && npm run generate:catalog && npm run build:web && node scripts/copy-catalog-assets.ts && wrangler d1 migrations apply DB --remote && wrangler deploy --minify",
+    "validate:cloudflare": "npm run generate:catalog && npm run build:web && node scripts/copy-catalog-assets.ts && wrangler deploy --dry-run --minify",
+    "configure:cloudflare-resources": "node .github/scripts/configure-existing-resources.mjs"
   },
   "dependencies": {
     "@cfworker/json-schema": "^4.1.1",

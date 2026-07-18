@@ -78,6 +78,17 @@ npm run deploy
 The deployment command generates the provider catalog, builds the Web Console, applies D1
 migrations, and deploys the Worker.
 
+### Reusing existing Cloudflare storage
+
+When connecting this repository to an existing Worker, add these two Workers Builds variables:
+
+- `OPEN_CONNECT_D1_DATABASE_ID`: the UUID of the existing D1 database.
+- `OPEN_CONNECT_R2_BUCKET_NAME`: the name of the existing R2 bucket.
+
+Run `npm run configure:cloudflare-resources` before migrations and deployment. The command updates
+only the temporary build checkout. If neither variable is set, automatic resource provisioning
+continues to work for new one-click deployments.
+
 ## Storage choice
 
 This template uses R2 for temporary transit files so it supports files larger than Workers KV's
@@ -124,3 +135,7 @@ Cloudflare 一键部署模板，由社区维护，并非 OOMOL 官方项目。
   已有数据。
 
 Runtime Token 无需在首次部署时创建，之后可以在 Web Console 中按需创建多个。
+
+如果要把本仓库连接到已有 Worker，可在 Workers Builds 中同时设置
+`OPEN_CONNECT_D1_DATABASE_ID` 和 `OPEN_CONNECT_R2_BUCKET_NAME`，并在迁移和部署前运行
+`npm run configure:cloudflare-resources`。资源 ID 只会写入临时构建目录，不会提交到仓库。
