@@ -1,6 +1,6 @@
 import type { CatalogStore, RuntimeActionDefinition } from "../catalog-store.ts";
 import type { ConnectionService } from "../connection-service.ts";
-import type { ActionPolicyService } from "../core/action-policy.ts";
+import type { ActionPolicySnapshot } from "../core/action-policy.ts";
 import type { ActionSearchIndexProvider, ActionSearchResult } from "../core/action-search.ts";
 import type { IProviderLoader } from "../providers/provider-loader.ts";
 import type { LocalAuthOptions } from "./api/auth.ts";
@@ -8,14 +8,17 @@ import type { RuntimeActionHttpResult } from "./api/runtime-api.ts";
 import type { ITransitFileService } from "./files/transit-file-store.ts";
 import type { Logger } from "./logger.ts";
 import type { IIdempotencyStore } from "./storage/idempotency-store.ts";
+import type { IRuntimePolicyStore } from "./storage/runtime-policy-store.ts";
 import type { RunLogCaller, RunLogListInput } from "./storage/runtime-store.ts";
-import type { RuntimeTokenService } from "./storage/runtime-token-service.ts";
+import type { RuntimeGrant, RuntimeTokenService } from "./storage/runtime-token-service.ts";
 import type { Context } from "hono";
 
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { Scalar } from "@scalar/hono-api-reference";
 import { Hono } from "hono";
+import { compress } from "hono/compress";
 import { ConnectionError, defaultConnectionName } from "../connection-service.ts";
+import { ActionPolicyService, emptyPolicyRules } from "../core/action-policy.ts";
 import { DEFAULT_ACTION_SEARCH_LIMIT, createActionSearchIndexProvider, searchActions } from "../core/action-search.ts";
 import { optionalRecord, optionalString, requiredString } from "../core/cast.ts";
 import { createMcpServer, listMcpToolSummaries } from "../mcp.ts";
@@ -30,11 +33,12 @@ import {
 } from "./actions/action-idempotency.ts";
 import { ActionRunner } from "./actions/action-runner.ts";
 import { renderActionMarkdown } from "./api/action-markdown.ts";
-import { clearLocalAuthCookie, createLocalAuthMiddleware, readLocalAuthSession } from "./api/auth.ts";
+import { clearLocalAuthCookie, createLocalAuthMiddleware, readLocalAuthSession, readRuntimeGrant } from "./api/auth.ts";
 import { getResponseCachePolicy } from "./api/cache-policy.ts";
 import { HttpRequestError, internalError, jsonError, notFound, readJsonBody } from "./api/http-utils.ts";
 import { renderOAuthCompletionPage } from "./api/oauth-completion-page.ts";
 import { createOpenApiDocument } from "./api/openapi.ts";
+import { policyRequestMaxBytes, readRuntimePolicyRules, readTokenActionPolicy } from "./api/policy-input.ts";
 import {
   mapConnectionErrorStatus,
   serializeRuntimeAction,
@@ -67,6 +71,7 @@ export interface IConnectServerOptions {
   staticRoot?: string;
   auth?: LocalAuthOptions;
   actionPolicy?: ActionPolicyService;
+  runtimePolicyStore: IRuntimePolicyStore;
   actionSearch?: ActionSearchIndexProvider;
   registerStaticRoutes?: (app: Hono) => void;
   logger?: Logger;
@@ -79,16 +84,19 @@ export interface IConnectServerOptions {
 export class ConnectServer {
   private readonly options: IConnectServerOptions;
   private readonly actionSearch: ActionSearchIndexProvider;
+  private readonly actionPolicy: ActionPolicyService;
   private readonly proxyRunner: ProxyRunner;
+  private readonly policySnapshots = new WeakMap<Request, Promise<ActionPolicySnapshot>>();
 
   constructor(options: IConnectServerOptions) {
     this.options = options;
     this.actionSearch = options.actionSearch ?? createActionSearchIndexProvider(options.catalog.actions);
+    this.actionPolicy = options.actionPolicy ?? new ActionPolicyService();
     this.proxyRunner = new ProxyRunner({
       catalog: options.catalog,
       providerLoader: options.providerLoader,
       connections: options.connections,
-      actionPolicy: options.actionPolicy,
+      actionPolicy: this.actionPolicy,
       logger: options.logger,
     });
   }
@@ -111,6 +119,11 @@ export class ConnectServer {
       }
     });
     app.get("/health", (context) => context.json({ ok: true }));
+    // Compress dashboard JSON responses. Scoped to /api/* so the streaming
+    // /mcp transport and /v1/proxy pass-through are never buffered/re-encoded.
+    // The middleware's content-type filter already skips non-text bodies
+    // (e.g. transit file downloads).
+    app.use("/api/*", compress());
     app.use("*", createLocalAuthMiddleware(auth));
     app.get("/v1/health", (context) => writeRuntimeSuccess(context, { ok: true, runtime: "oomol-connect" }));
     app.get("/v1/providers", (context) => this.listRuntimeProviders(context));
@@ -149,7 +162,11 @@ export class ConnectServer {
       }),
     );
 
-    app.get("/api/providers", (context) => context.json(this.options.catalog.providers));
+    // Schema-free listing. The action detail view loads full schemas on demand
+    // from /api/actions/:actionId. The catalog is immutable at runtime, so the
+    // body and its ETag are precomputed and reused, and unchanged reloads get a
+    // 304 instead of re-downloading the payload.
+    app.get("/api/providers", (context) => this.listProviderSummaries(context));
     app.get("/api/providers/:service", (context) => this.getProvider(context, context.req.param("service")));
 
     app.get("/api/actions", (context) => context.json(this.options.catalog.actions));
@@ -175,7 +192,10 @@ export class ConnectServer {
     app.delete("/api/files/:fileId", (context) => this.deleteTransitFile(context, context.req.param("fileId")));
     app.get("/api/runtime-tokens", (context) => this.listRuntimeTokens(context));
     app.post("/api/runtime-tokens", (context) => this.createRuntimeToken(context));
+    app.put("/api/runtime-tokens/:id", (context) => this.updateRuntimeToken(context, context.req.param("id")));
     app.delete("/api/runtime-tokens/:id", (context) => this.revokeRuntimeToken(context, context.req.param("id")));
+    app.get("/api/runtime-policy", (context) => this.getRuntimePolicy(context));
+    app.put("/api/runtime-policy", (context) => this.updateRuntimePolicy(context));
     app.get("/api/oauth/configs", (context) => this.listOAuthConfigs(context));
     app.put("/api/oauth/configs/:service", (context) => this.upsertOAuthConfig(context, context.req.param("service")));
     app.delete("/api/oauth/configs/:service", (context) =>
@@ -191,7 +211,7 @@ export class ConnectServer {
     this.options.registerStaticRoutes?.(app);
     app.onError((error, context) => {
       if (error instanceof HttpRequestError) {
-        return jsonError(context, 400, error.code, error.message);
+        return jsonError(context, error.status, error.code, error.message);
       }
       this.options.logger?.error(
         {
@@ -205,6 +225,15 @@ export class ConnectServer {
     });
 
     return app;
+  }
+
+  private listProviderSummaries(context: Context): Response {
+    const { providerSummariesJson, providerSummariesEtag } = this.options.catalog;
+    context.header("ETag", providerSummariesEtag);
+    if (requestMatchesEtag(context.req.header("If-None-Match"), providerSummariesEtag)) {
+      return context.body(null, 304);
+    }
+    return context.body(providerSummariesJson, 200, { "Content-Type": "application/json" });
   }
 
   private getProvider(context: Context, service: string): Response {
@@ -305,10 +334,12 @@ export class ConnectServer {
       return notFound(context);
     }
 
+    const policy = (await this.getPolicySnapshot(context)).evaluate(action);
     return context.text(
       renderActionMarkdown(action, {
         connection: await this.options.connections.getConnectionSummary(action.service, readConnectionName(context)),
         providerPermissions: action.providerPermissions,
+        policy,
       }),
       200,
       {
@@ -394,7 +425,8 @@ export class ConnectServer {
   }
 
   private async createRuntimeActionRun(context: Context, actionId: string): Promise<Response> {
-    if (!this.options.catalog.actionsById.has(actionId)) {
+    const action = this.options.catalog.actionsById.get(actionId);
+    if (!action) {
       return writeRuntimeFailure(context, {
         status: 404,
         errorCode: "invalid_input",
@@ -406,6 +438,24 @@ export class ConnectServer {
     const body = await readJsonBody(context);
     const input = body.input ?? {};
     const connectionName = readConnectionName(context, body);
+    const runtimeGrant = readRuntimeGrant(context);
+    let policy: ActionPolicySnapshot;
+    try {
+      policy = await this.getPolicySnapshot(context);
+    } catch {
+      return writeRuntimeFailure(context, {
+        status: 500,
+        errorCode: "internal_error",
+        message: "Runtime policy is unavailable.",
+        meta: { actionId },
+      });
+    }
+    if (!policy.evaluate(action).allowed) {
+      return writeRuntimeActionHttpResult(
+        context,
+        await this.executeRuntimeAction(actionId, input, connectionName, policy, runtimeGrant),
+      );
+    }
     const idempotencyKey = readIdempotencyKey(context.req.header("idempotency-key"));
     if (!idempotencyKey.ok) {
       return writeRuntimeFailure(context, {
@@ -417,7 +467,10 @@ export class ConnectServer {
     }
 
     if (!idempotencyKey.key) {
-      return writeRuntimeActionHttpResult(context, await this.executeRuntimeAction(actionId, input, connectionName));
+      return writeRuntimeActionHttpResult(
+        context,
+        await this.executeRuntimeAction(actionId, input, connectionName, policy, runtimeGrant),
+      );
     }
 
     const now = new Date();
@@ -428,6 +481,7 @@ export class ConnectServer {
         actionId,
         connectionName: connectionName ?? defaultConnectionName,
         input,
+        runtimeTokenId: runtimeGrant?.tokenId,
       });
     } catch (error) {
       if (!(error instanceof ActionInputDepthError)) {
@@ -469,7 +523,7 @@ export class ConnectServer {
       return writeRuntimeActionHttpResult(context, claim.response);
     }
 
-    const result = await this.executeRuntimeAction(actionId, input, connectionName);
+    const result = await this.executeRuntimeAction(actionId, input, connectionName, policy, runtimeGrant);
     const completed = await this.options.idempotency.complete({
       keyHash,
       requestHash,
@@ -488,6 +542,8 @@ export class ConnectServer {
     actionId: string,
     input: unknown,
     connectionName: string | undefined,
+    policy: ActionPolicySnapshot,
+    runtimeGrant: RuntimeGrant | undefined,
   ): Promise<RuntimeActionHttpResult> {
     try {
       const run = await this.options.actions.run({
@@ -495,6 +551,8 @@ export class ConnectServer {
         input,
         caller: "http",
         connectionName,
+        policy,
+        runtimeTokenId: runtimeGrant?.tokenId,
       });
       if (!run) {
         return serializeRuntimeFailure({
@@ -542,10 +600,22 @@ export class ConnectServer {
       throw error;
     }
 
+    let policy: ActionPolicySnapshot;
+    try {
+      policy = await this.getPolicySnapshot(context);
+    } catch {
+      return writeRuntimeFailure(context, {
+        status: 500,
+        errorCode: "internal_error",
+        message: "Runtime policy is unavailable.",
+        meta: { service },
+      });
+    }
     const result = await this.proxyRunner.run({
       service,
       input: body,
       connectionName: readConnectionName(context, body),
+      policy,
     });
     if (result.ok) {
       return writeRuntimeSuccess(context, result.response);
@@ -602,8 +672,10 @@ export class ConnectServer {
       providerLoader: this.options.providerLoader,
       connections: this.options.connections,
       actions: this.options.actions,
-      actionPolicy: this.options.actionPolicy,
+      actionPolicy: this.actionPolicy,
       actionSearch: this.actionSearch,
+      getPolicySnapshot: () => this.getPolicySnapshot(context),
+      runtimeGrant: readRuntimeGrant(context),
     });
 
     await server.connect(transport);
@@ -759,21 +831,31 @@ export class ConnectServer {
   }
 
   private async createRuntimeToken(context: Context): Promise<Response> {
-    const body = await readJsonBody(context);
+    const body = await readJsonBody(context, policyRequestMaxBytes);
     const name = optionalString(body.name);
     if (!name) {
       return jsonError(context, 400, "invalid_input", "name is required.");
     }
 
-    const created = await this.options.runtimeTokens.createToken(name);
+    const created = await this.options.runtimeTokens.createToken(name, readTokenActionPolicy(body, true));
     return context.json({
       token: created.token,
       record: {
         id: created.record.id,
         name: created.record.name,
+        allowedActions: created.record.allowedActions,
+        blockedActions: created.record.blockedActions,
         createdAt: created.record.createdAt,
       },
     });
+  }
+
+  private async updateRuntimeToken(context: Context, id: string): Promise<Response> {
+    const body = await readJsonBody(context, policyRequestMaxBytes);
+    const token = await this.options.runtimeTokens.updateTokenPolicy(id, readTokenActionPolicy(body));
+    return token
+      ? context.json(token)
+      : jsonError(context, 404, "runtime_token_not_found", `Runtime token not found: ${id}.`);
   }
 
   private async revokeRuntimeToken(context: Context, id: string): Promise<Response> {
@@ -782,6 +864,22 @@ export class ConnectServer {
     }
 
     return context.json({ id, revoked: true });
+  }
+
+  private async getRuntimePolicy(context: Context): Promise<Response> {
+    return context.json((await this.getPolicySnapshot(context)).state);
+  }
+
+  private async updateRuntimePolicy(context: Context): Promise<Response> {
+    const body = await readJsonBody(context, policyRequestMaxBytes);
+    const rules = readRuntimePolicyRules(body);
+    const updatedAt = new Date().toISOString();
+    await this.options.runtimePolicyStore.set({ rules, updatedAt });
+    return context.json({
+      deployment: this.actionPolicy.rules,
+      runtime: rules,
+      updatedAt,
+    });
   }
 
   private async listOAuthConfigs(context: Context): Promise<Response> {
@@ -918,6 +1016,36 @@ export class ConnectServer {
       throw error;
     }
   }
+
+  private getPolicySnapshot(context: Context): Promise<ActionPolicySnapshot> {
+    const request = context.req.raw;
+    let snapshot = this.policySnapshots.get(request);
+    if (!snapshot) {
+      snapshot = this.loadPolicySnapshot(context);
+      this.policySnapshots.set(request, snapshot);
+    }
+    return snapshot;
+  }
+
+  private async loadPolicySnapshot(context: Context): Promise<ActionPolicySnapshot> {
+    try {
+      const record = await this.options.runtimePolicyStore.get();
+      return this.actionPolicy.createSnapshot(
+        record?.rules ?? emptyPolicyRules(),
+        readRuntimeGrant(context),
+        record?.updatedAt,
+      );
+    } catch {
+      this.options.logger?.error(
+        {
+          method: context.req.method,
+          path: context.req.path,
+        },
+        "runtime policy load failed",
+      );
+      throw new Error("Runtime policy is unavailable.");
+    }
+  }
 }
 
 interface ConnectionLogContext {
@@ -926,6 +1054,26 @@ interface ConnectionLogContext {
   service: string;
   authType?: string;
   connectionName?: string;
+}
+
+/**
+ * RFC 7232 `If-None-Match` check. Handles `*`, comma-separated lists, and the
+ * weak-comparison prefix (`W/`) so a validator round-tripped through gzip (which
+ * downgrades strong to weak) still matches.
+ */
+function requestMatchesEtag(ifNoneMatch: string | undefined, etag: string): boolean {
+  if (!ifNoneMatch) {
+    return false;
+  }
+  if (ifNoneMatch.trim() === "*") {
+    return true;
+  }
+  const target = stripWeakPrefix(etag);
+  return ifNoneMatch.split(",").some((candidate) => stripWeakPrefix(candidate.trim()) === target);
+}
+
+function stripWeakPrefix(etag: string): string {
+  return etag.startsWith("W/") ? etag.slice(2) : etag;
 }
 
 function readConnectionName(context: Context, body?: Record<string, unknown>): string | undefined {

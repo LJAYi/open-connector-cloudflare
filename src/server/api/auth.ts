@@ -1,3 +1,4 @@
+import type { RuntimeGrant } from "../storage/runtime-token-service.ts";
 import type { RuntimeJwtVerifier } from "./runtime-jwt.ts";
 import type { Context, MiddlewareHandler } from "hono";
 
@@ -17,7 +18,7 @@ export interface LocalAuthOptions {
   adminToken?: string;
   runtimeToken?: string;
   hasRuntimeTokens?(): Promise<boolean>;
-  verifyRuntimeToken?(token: string): Promise<boolean>;
+  resolveRuntimeToken?(token: string): Promise<RuntimeGrant | undefined>;
   verifyRuntimeJwt?: RuntimeJwtVerifier;
 }
 
@@ -28,6 +29,12 @@ export interface LocalAuthSession {
 
 type AuthScope = "admin" | "runtime";
 
+const runtimeGrants = new WeakMap<Request, RuntimeGrant>();
+
+export function readRuntimeGrant(context: Context): RuntimeGrant | undefined {
+  return runtimeGrants.get(context.req.raw);
+}
+
 export function createLocalAuthMiddleware(options: LocalAuthOptions): MiddlewareHandler {
   const adminToken = normalizeToken(options.adminToken);
   const runtimeToken = normalizeToken(options.runtimeToken);
@@ -35,7 +42,7 @@ export function createLocalAuthMiddleware(options: LocalAuthOptions): Middleware
     !adminToken &&
     !runtimeToken &&
     !options.hasRuntimeTokens &&
-    !options.verifyRuntimeToken &&
+    !options.resolveRuntimeToken &&
     !options.verifyRuntimeJwt
   ) {
     return async (_context, next) => {
@@ -134,7 +141,10 @@ async function hasValidToken(context: Context, options: LocalAuthOptions, scope:
     if (scope === "admin") {
       return true;
     }
-    if (!(await (options.hasRuntimeTokens?.() ?? false)) && !options.verifyRuntimeJwt) {
+    const hasRuntimeTokens = options.hasRuntimeTokens
+      ? await options.hasRuntimeTokens()
+      : options.resolveRuntimeToken !== undefined;
+    if (!hasRuntimeTokens && !options.verifyRuntimeJwt) {
       return true;
     }
     return hasValidRuntimeToken(context, options);
@@ -212,7 +222,7 @@ function normalizeToken(token: string | undefined): string | undefined {
 }
 
 function readAuthScope(path: string): AuthScope {
-  return path.startsWith("/mcp") || path.startsWith("/v1/") ? "runtime" : "admin";
+  return path === "/mcp" || path.startsWith("/mcp/") || path === "/v1" || path.startsWith("/v1/") ? "runtime" : "admin";
 }
 
 function canUseAdminAuth(path: string, method: string): boolean {
@@ -230,7 +240,9 @@ async function hasValidRuntimeToken(context: Context, options: LocalAuthOptions)
   if (!token) {
     return false;
   }
-  if (await (options.verifyRuntimeToken?.(token) ?? false)) {
+  const grant = await options.resolveRuntimeToken?.(token);
+  if (grant) {
+    runtimeGrants.set(context.req.raw, grant);
     return true;
   }
   return await (options.verifyRuntimeJwt?.(token) ?? false);

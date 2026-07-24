@@ -5,6 +5,7 @@ import type {
   OAuthConfig,
   ProviderDefinition,
   RunLogPage,
+  RuntimePolicyState,
   RuntimeTokenSummary,
 } from "./model";
 import type { ThemeMode } from "./theme";
@@ -126,17 +127,31 @@ export interface RuntimeLoadResult {
   data: AppData;
 }
 
-export async function loadRuntimeData(unlockToken: string): Promise<RuntimeLoadResult> {
+/**
+ * Loads dashboard state.
+ *
+ * The provider catalog is generated at build time and cannot change while the
+ * server runs, so `cachedProviders` lets refreshes skip re-downloading it and
+ * re-fetch only mutable data.
+ */
+export async function loadRuntimeData(
+  unlockToken: string,
+  cachedProviders?: ProviderDefinition[],
+): Promise<RuntimeLoadResult> {
   const authSession = await apiGet<AuthSession>("/api/auth/session", { bearerToken: unlockToken });
   if (!authSession.authenticated) {
     return { authSession, data: emptyData };
   }
 
-  const [providers, connections, oauthConfigs, runtimeTokens, runPage] = await Promise.all([
-    apiGet<ProviderDefinition[]>("/api/providers"),
+  const catalogRequest =
+    cachedProviders !== undefined ? Promise.resolve(cachedProviders) : apiGet<ProviderDefinition[]>("/api/providers");
+
+  const [providers, connections, oauthConfigs, runtimeTokens, runtimePolicy, runPage] = await Promise.all([
+    catalogRequest,
     apiGet<ConnectionRecord[]>("/api/connections"),
     apiGet<OAuthConfig[]>("/api/oauth/configs"),
     apiGet<RuntimeTokenSummary[]>("/api/runtime-tokens"),
+    apiGet<RuntimePolicyState>("/api/runtime-policy"),
     apiGet<RunLogPage>("/api/runs"),
   ]);
 
@@ -147,6 +162,7 @@ export async function loadRuntimeData(unlockToken: string): Promise<RuntimeLoadR
       connections,
       oauthConfigs,
       runtimeTokens,
+      runtimePolicy,
       runs: runPage.items,
       runsNextCursor: runPage.nextCursor,
     },
@@ -162,6 +178,9 @@ export function App(): ReactNode {
     authenticated: true,
   });
   const pendingUnlockToken = useRef("");
+  // Catalog is immutable while the server runs, so it is fetched once and
+  // reused across refreshes instead of being re-downloaded on every action.
+  const cachedProviders = useRef<ProviderDefinition[] | undefined>(undefined);
   const [locked, setLocked] = useState(false);
   const [loading, setLoading] = useState(true);
   const [runtimeChecked, setRuntimeChecked] = useState(false);
@@ -180,9 +199,10 @@ export function App(): ReactNode {
     let cancelled = false;
     const requestUnlockToken = pendingUnlockToken.current;
     setLoading(true);
-    loadRuntimeData(requestUnlockToken)
+    loadRuntimeData(requestUnlockToken, cachedProviders.current)
       .then(({ authSession: session, data: nextData }) => {
         if (!cancelled) {
+          cachedProviders.current = session.authenticated ? nextData.providers : undefined;
           const nextAuth = nextAuthLoadState(
             {
               pendingUnlockToken: pendingUnlockToken.current,
@@ -204,6 +224,7 @@ export function App(): ReactNode {
         }
         if (caught instanceof ApiError && caught.status === 401) {
           pendingUnlockToken.current = "";
+          cachedProviders.current = undefined;
           setData(emptyData);
           setAuthSession({ adminAuthConfigured: true, authenticated: false });
           setLocked(true);
@@ -389,7 +410,14 @@ function AppShell(props: {
             />
             <Route
               path="/access"
-              element={<AccessPage tokens={props.data.runtimeTokens} onRefresh={props.onRefresh} />}
+              element={
+                <AccessPage
+                  providers={props.data.providers}
+                  tokens={props.data.runtimeTokens}
+                  policy={props.data.runtimePolicy ?? emptyData.runtimePolicy!}
+                  onRefresh={props.onRefresh}
+                />
+              }
             />
             <Route path="/resources" element={<ResourcesPage />} />
             <Route path="*" element={<Navigate to="/overview" replace />} />

@@ -26,14 +26,19 @@ export interface CredentialField {
 
 export type JsonSchema = Record<string, unknown>;
 
+/**
+ * Action as returned by `/api/providers`, which omits the JSON schemas to keep
+ * the catalog listing small. Use {@link FullActionDefinition} where schemas are
+ * required; load it from `/api/actions/:actionId`.
+ */
 export interface ActionDefinition {
   id: string;
   service: string;
   name: string;
   description: string;
   requiredScopes: string[];
-  inputSchema: JsonSchema;
-  outputSchema: JsonSchema;
+  inputSchema?: JsonSchema;
+  outputSchema?: JsonSchema;
   execution: {
     locallyExecutable: boolean;
     catalogOnly: boolean;
@@ -41,6 +46,12 @@ export interface ActionDefinition {
     noAuthRunnable: boolean;
     needsCredential: boolean;
   };
+}
+
+/** Action with schemas, as returned by `/api/actions/:actionId`. */
+export interface FullActionDefinition extends ActionDefinition {
+  inputSchema: JsonSchema;
+  outputSchema: JsonSchema;
 }
 
 export interface ProviderDefinition {
@@ -78,8 +89,36 @@ export interface OAuthConfig {
 export interface RuntimeTokenSummary {
   id: string;
   name: string;
+  allowedActions: string[];
+  blockedActions: string[];
   createdAt: string;
   lastUsedAt?: string;
+}
+
+export interface PolicyRules {
+  allowedActions: string[];
+  blockedActions: string[];
+  allowedProxies: string[];
+  blockedProxies: string[];
+}
+
+export interface RuntimePolicyState {
+  deployment: PolicyRules;
+  runtime: PolicyRules;
+  updatedAt?: string;
+}
+
+export interface PolicyCheck {
+  source: "deployment" | "runtime" | "token";
+  outcome: "allow_match" | "block_match" | "allow_miss";
+  rule?: string;
+}
+
+export interface PolicyDecision {
+  allowed: boolean;
+  code?: string;
+  message?: string;
+  checks: PolicyCheck[];
 }
 
 export interface RuntimeTokenCreation {
@@ -97,6 +136,8 @@ export interface RunLog {
   durationMs: number;
   ok: boolean;
   connectionId?: string;
+  runtimeTokenId?: string;
+  policy?: PolicyDecision;
   connectionProfile?: {
     displayName?: string;
   };
@@ -133,6 +174,7 @@ export interface AppData {
   connections: ConnectionRecord[];
   oauthConfigs: OAuthConfig[];
   runtimeTokens: RuntimeTokenSummary[];
+  runtimePolicy?: RuntimePolicyState;
   runs: RunLog[];
   runsNextCursor?: string;
 }
@@ -151,6 +193,7 @@ export interface ProviderConnectionStatus {
   noSetupRequired: boolean;
   connected: boolean;
   oauthClientRequired: boolean;
+  connections: ConnectionRecord[];
   connection?: ConnectionRecord;
 }
 
@@ -216,8 +259,21 @@ export const emptyData: AppData = {
   connections: [],
   oauthConfigs: [],
   runtimeTokens: [],
+  runtimePolicy: {
+    deployment: emptyPolicyRules(),
+    runtime: emptyPolicyRules(),
+  },
   runs: [],
 };
+
+function emptyPolicyRules(): PolicyRules {
+  return {
+    allowedActions: [],
+    blockedActions: [],
+    allowedProxies: [],
+    blockedProxies: [],
+  };
+}
 
 export function createOverviewSummary(data: AppData): OverviewSummary {
   const actions = data.providers.flatMap((provider) => provider.actions);
@@ -239,14 +295,20 @@ export function resolveProviderConnectionStatus(
   oauthConfigs: OAuthConfig[],
 ): ProviderConnectionStatus {
   const noSetupRequired = isNoAuthOnlyProvider(provider);
-  const serviceConnections = connections.filter((connection) => connection.service === provider.service);
-  const connection = noSetupRequired ? undefined : pickUsableCredentialConnection(serviceConnections);
+  const serviceConnections = noSetupRequired ? [] : usableConnectionsForService(connections, provider.service);
+  const connection = pickUsableCredentialConnection(serviceConnections);
   return {
     noSetupRequired,
     connected: connection != null,
-    oauthClientRequired: providerHasOAuth(provider) && !oauthClientConfigured(provider.service, oauthConfigs),
+    oauthClientRequired:
+      connection == null && providerRequiresOAuth(provider) && !oauthClientConfigured(provider.service, oauthConfigs),
+    connections: serviceConnections,
     connection,
   };
+}
+
+export function usableConnectionsForService(connections: ConnectionRecord[], service: string): ConnectionRecord[] {
+  return connections.filter((connection) => connection.service === service && isUsableCredentialConnection(connection));
 }
 
 export function isNoAuthOnlyProvider(provider: ProviderDefinition): boolean {
@@ -268,8 +330,9 @@ function isUsableCredentialConnection(connection: ConnectionRecord | undefined):
   );
 }
 
-function providerHasOAuth(provider: ProviderDefinition): boolean {
-  return provider.auth.some((auth) => auth.type === "oauth2") || provider.authTypes.includes("oauth2");
+function providerRequiresOAuth(provider: ProviderDefinition): boolean {
+  const authTypes = provider.auth.length > 0 ? provider.auth.map((auth) => auth.type) : provider.authTypes;
+  return authTypes.includes("oauth2") && authTypes.every((authType) => authType === "oauth2");
 }
 
 function oauthClientConfigured(service: string, oauthConfigs: OAuthConfig[]): boolean {
@@ -384,7 +447,7 @@ export function parameterSummaries(
   }));
 }
 
-export function buildActionExamples(action: ActionDefinition): { curl: string; typescript: string } {
+export function buildActionExamples(action: FullActionDefinition): { curl: string; typescript: string } {
   const body = { input: JSON.parse(exampleInput(action.inputSchema)) as unknown };
   const bodyText = JSON.stringify(body, null, 2);
   return {
