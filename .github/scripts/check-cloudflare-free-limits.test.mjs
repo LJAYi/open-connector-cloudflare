@@ -5,9 +5,17 @@ import path from "node:path";
 import test from "node:test";
 import {
   checkCloudflareFreeLimits,
+  DEFAULT_LIMITS,
   parseWranglerAssetCount,
   parseWranglerGzipBytes,
 } from "./check-cloudflare-free-limits.mjs";
+
+test("temporarily admits v1.3.3 while staying below Cloudflare hard limits", () => {
+  assert.ok(DEFAULT_LIMITS.workerGzipBytes > Math.round(2854.75 * 1024));
+  assert.ok(DEFAULT_LIMITS.workerGzipBytes < 3_000_000);
+  assert.ok(DEFAULT_LIMITS.assetBytes > Math.round(24.54 * 1024 * 1024));
+  assert.ok(DEFAULT_LIMITS.assetBytes < 25 * 1024 * 1024);
+});
 
 test("parses Wrangler gzip sizes", () => {
   assert.equal(parseWranglerGzipBytes("Total Upload: 10 KiB / gzip: 2.5 KiB"), 2560);
