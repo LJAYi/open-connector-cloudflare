@@ -1,6 +1,5 @@
 import type { CredentialValidators, ExecutionContext, ProviderExecutors } from "../../core/types.ts";
 import type { ProviderFetch } from "../provider-runtime.ts";
-import type { MinimaxActionName } from "./actions.ts";
 
 import { createHash } from "node:crypto";
 import { compactObject, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
@@ -24,7 +23,7 @@ interface MinimaxActionContext {
 }
 type MinimaxActionHandler = (input: Record<string, unknown>, context: MinimaxActionContext) => Promise<unknown>;
 
-export const minimaxActionHandlers: Record<MinimaxActionName, MinimaxActionHandler> = {
+export const minimaxActionHandlers: Record<string, MinimaxActionHandler> = {
   list_models(_input, context) {
     return minimaxGetJson("/v1/models", context);
   },

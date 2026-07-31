@@ -5,16 +5,6 @@ import { defineProviderAction } from "../../core/provider-definition.ts";
 
 const service = "minimax";
 
-export type MinimaxActionName =
-  | "list_models"
-  | "retrieve_model"
-  | "create_response"
-  | "estimate_input_tokens"
-  | "text_to_video"
-  | "image_to_video"
-  | "query_video_generation"
-  | "download_video";
-
 const trimmedNonEmptyString = (description: string) => s.string({ description, minLength: 1, pattern: "\\S" });
 
 const optionalTrimmedString = (description: string) => s.string(description);
