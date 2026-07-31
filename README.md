@@ -63,6 +63,19 @@ application files on `main` may be replaced by the next automatic update.
 You can also run the update immediately from **Actions → Sync latest upstream release → Run
 workflow**.
 
+## Canary testing
+
+The optional `canary` branch is isolated from production and can track either upstream `main` or a
+branch from the owner's source fork. Run **Actions → Sync canary source**, choose
+`oomol-lab/open-connector` or `LJAYi/open-connector`, and enter a branch, tag, or full commit SHA.
+The workflow resolves the selection to an immutable commit, runs the complete validation suite and
+Cloudflare Free plan guard, then updates only `canary`.
+
+Connect `canary` to a separate Worker named `open-connector-canary`. Use an independent D1 database
+and R2 bucket, and configure its Workers Builds variables `OPEN_CONNECT_D1_DATABASE_ID` and
+`OPEN_CONNECT_R2_BUCKET_NAME`. Do not bind the canary Worker to production storage. Scheduled canary
+syncs follow `oomol-lab/open-connector@main` daily at 04:32 Beijing time.
+
 ## Manual deployment
 
 The Deploy to Cloudflare button is recommended. For a manual deployment:
@@ -133,6 +146,11 @@ Cloudflare 一键部署模板，由社区维护，并非 OOMOL 官方项目。
 - `OOMOL_CONNECT_ADMIN_TOKEN`：登录 Web Console 和调用管理接口。
 - `OOMOL_CONNECT_ENCRYPTION_KEY`：加密 D1 中保存的凭据和 OAuth 配置；丢失后无法解密
   已有数据。
+
+如需测试官方 `main` 或个人源码分支，可使用 **Actions → Sync canary source**。该流程只更新
+`canary` 分支，并应连接到独立的 `open-connector-canary` Worker、D1 数据库和 R2 存储桶；
+不要让测试环境复用生产数据。定时任务会在北京时间每天 04:32 同步官方 `main`，也可以
+手动选择 `LJAYi/open-connector` 中的任意分支、tag 或完整 commit SHA。
 
 Runtime Token 无需在首次部署时创建，之后可以在 Web Console 中按需创建多个。
 

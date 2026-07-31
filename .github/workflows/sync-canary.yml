@@ -1,0 +1,158 @@
+name: Sync canary source
+
+on:
+  schedule:
+    - cron: "32 20 * * *"
+  workflow_dispatch:
+    inputs:
+      source_repository:
+        description: Source repository to test
+        required: true
+        default: oomol-lab/open-connector
+        type: choice
+        options:
+          - oomol-lab/open-connector
+          - LJAYi/open-connector
+      source_ref:
+        description: Branch, tag, or full commit SHA to test
+        required: true
+        default: main
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: open-connector-canary-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    env:
+      SOURCE_REPOSITORY: ${{ github.event_name == 'workflow_dispatch' && inputs.source_repository || 'oomol-lab/open-connector' }}
+      SOURCE_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.source_ref || 'main' }}
+    steps:
+      - name: Check out the canary deployment branch
+        uses: actions/checkout@v7
+        with:
+          ref: canary
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate and resolve the source revision
+        id: source
+        run: |
+          case "$SOURCE_REPOSITORY" in
+            oomol-lab/open-connector|LJAYi/open-connector) ;;
+            *) echo "Unsupported source repository: $SOURCE_REPOSITORY" >&2; exit 1 ;;
+          esac
+          if [[ "$SOURCE_REF" == -* || ! "$SOURCE_REF" =~ ^[0-9A-Za-z._/-]{1,200}$ || "$SOURCE_REF" == *..* ]]; then
+            echo "Unsupported source ref: $SOURCE_REF" >&2
+            exit 1
+          fi
+          git remote remove source 2>/dev/null || true
+          git remote add source "https://github.com/$SOURCE_REPOSITORY.git"
+          git fetch --depth=1 source "$SOURCE_REF"
+          source_sha="$(git rev-parse FETCH_HEAD)"
+          if [[ ! "$source_sha" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Could not resolve an immutable source commit" >&2
+            exit 1
+          fi
+          echo "sha=$source_sha" >> "$GITHUB_OUTPUT"
+          echo "Resolved $SOURCE_REPOSITORY@$SOURCE_REF to $source_sha."
+
+      - name: Check whether the revision is already installed
+        id: state
+        env:
+          SOURCE_SHA: ${{ steps.source.outputs.sha }}
+        run: |
+          expected="canary:$SOURCE_REPOSITORY@$SOURCE_SHA"
+          current="$(tr -d '[:space:]' < .open-connector-version)"
+          if [ "$current" = "$expected" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "$expected is already installed."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Preserve the Cloudflare template overlay
+        if: steps.state.outputs.skip != 'true'
+        run: |
+          overlay="$RUNNER_TEMP/open-connector-cloudflare"
+          mkdir -p "$overlay/.github/scripts" "$overlay/.github/workflows"
+          cp README.md "$overlay/README.md"
+          cp .dev.vars.example "$overlay/.dev.vars.example"
+          cp .github/scripts/check-cloudflare-free-limits.mjs "$overlay/.github/scripts/check-cloudflare-free-limits.mjs"
+          cp .github/scripts/check-cloudflare-free-limits.test.mjs "$overlay/.github/scripts/check-cloudflare-free-limits.test.mjs"
+          cp .github/scripts/configure-canary.mjs "$overlay/.github/scripts/configure-canary.mjs"
+          cp .github/scripts/configure-canary.test.mjs "$overlay/.github/scripts/configure-canary.test.mjs"
+          cp .github/scripts/configure-template.mjs "$overlay/.github/scripts/configure-template.mjs"
+          cp .github/scripts/configure-existing-resources.mjs "$overlay/.github/scripts/configure-existing-resources.mjs"
+          cp .github/scripts/configure-existing-resources.test.mjs "$overlay/.github/scripts/configure-existing-resources.test.mjs"
+          cp .github/workflows/ci.yml "$overlay/.github/workflows/ci.yml"
+          cp .github/workflows/sync-canary.yml "$overlay/.github/workflows/sync-canary.yml"
+          cp .github/workflows/sync-upstream-release.yml "$overlay/.github/workflows/sync-upstream-release.yml"
+
+      - name: Replace application files with the selected source revision
+        if: steps.state.outputs.skip != 'true'
+        env:
+          SOURCE_SHA: ${{ steps.source.outputs.sha }}
+        run: git read-tree --reset -u "$SOURCE_SHA"
+
+      - name: Restore and configure the canary overlay
+        if: steps.state.outputs.skip != 'true'
+        env:
+          SOURCE_SHA: ${{ steps.source.outputs.sha }}
+        run: |
+          overlay="$RUNNER_TEMP/open-connector-cloudflare"
+          rm -rf .github
+          cp -R "$overlay/.github" .github
+          cp "$overlay/README.md" README.md
+          cp "$overlay/.dev.vars.example" .dev.vars.example
+          package_version="$(node -p "require('./package.json').version")"
+          node .github/scripts/configure-template.mjs "v$package_version"
+          node .github/scripts/configure-canary.mjs "$SOURCE_REPOSITORY" "$SOURCE_SHA"
+
+      - name: Set up Node.js
+        if: steps.state.outputs.skip != 'true'
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install dependencies
+        if: steps.state.outputs.skip != 'true'
+        run: npm ci
+
+      - name: Validate the canary source
+        if: steps.state.outputs.skip != 'true'
+        run: |
+          npm run lint
+          npm run format
+          npm run build
+          npm test
+          npm run validate:cloudflare
+
+      - name: Check Cloudflare Free plan headroom
+        if: steps.state.outputs.skip != 'true'
+        run: |
+          node --test .github/scripts/check-cloudflare-free-limits.test.mjs
+          node --test .github/scripts/configure-canary.test.mjs
+          node --test .github/scripts/configure-existing-resources.test.mjs
+          output_dir="$RUNNER_TEMP/open-connector-cloudflare-free-limits"
+          mkdir -p "$output_dir"
+          npx wrangler deploy --dry-run --minify --outdir "$output_dir" 2>&1 | tee "$output_dir/wrangler.log"
+          node .github/scripts/check-cloudflare-free-limits.mjs "$output_dir/wrangler.log" dist/web
+
+      - name: Commit the verified canary revision
+        if: steps.state.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ steps.source.outputs.sha }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "chore: sync canary $SOURCE_REPOSITORY@${SOURCE_SHA:0:12}"
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:canary

@@ -57,10 +57,13 @@ jobs:
           cp .dev.vars.example "$RUNNER_TEMP/open-connector-cloudflare/.dev.vars.example"
           cp .github/scripts/check-cloudflare-free-limits.mjs "$RUNNER_TEMP/open-connector-cloudflare/.github/scripts/check-cloudflare-free-limits.mjs"
           cp .github/scripts/check-cloudflare-free-limits.test.mjs "$RUNNER_TEMP/open-connector-cloudflare/.github/scripts/check-cloudflare-free-limits.test.mjs"
+          cp .github/scripts/configure-canary.mjs "$RUNNER_TEMP/open-connector-cloudflare/.github/scripts/configure-canary.mjs"
+          cp .github/scripts/configure-canary.test.mjs "$RUNNER_TEMP/open-connector-cloudflare/.github/scripts/configure-canary.test.mjs"
           cp .github/scripts/configure-template.mjs "$RUNNER_TEMP/open-connector-cloudflare/.github/scripts/configure-template.mjs"
           cp .github/scripts/configure-existing-resources.mjs "$RUNNER_TEMP/open-connector-cloudflare/.github/scripts/configure-existing-resources.mjs"
           cp .github/scripts/configure-existing-resources.test.mjs "$RUNNER_TEMP/open-connector-cloudflare/.github/scripts/configure-existing-resources.test.mjs"
           cp .github/workflows/ci.yml "$RUNNER_TEMP/open-connector-cloudflare/.github/workflows/ci.yml"
+          cp .github/workflows/sync-canary.yml "$RUNNER_TEMP/open-connector-cloudflare/.github/workflows/sync-canary.yml"
           cp .github/workflows/sync-upstream-release.yml "$RUNNER_TEMP/open-connector-cloudflare/.github/workflows/sync-upstream-release.yml"
 
       - name: Replace application files with the immutable upstream release
@@ -84,10 +87,13 @@ jobs:
           cp "$RUNNER_TEMP/open-connector-cloudflare/.dev.vars.example" .dev.vars.example
           cp "$RUNNER_TEMP/open-connector-cloudflare/.github/scripts/check-cloudflare-free-limits.mjs" .github/scripts/check-cloudflare-free-limits.mjs
           cp "$RUNNER_TEMP/open-connector-cloudflare/.github/scripts/check-cloudflare-free-limits.test.mjs" .github/scripts/check-cloudflare-free-limits.test.mjs
+          cp "$RUNNER_TEMP/open-connector-cloudflare/.github/scripts/configure-canary.mjs" .github/scripts/configure-canary.mjs
+          cp "$RUNNER_TEMP/open-connector-cloudflare/.github/scripts/configure-canary.test.mjs" .github/scripts/configure-canary.test.mjs
           cp "$RUNNER_TEMP/open-connector-cloudflare/.github/scripts/configure-template.mjs" .github/scripts/configure-template.mjs
           cp "$RUNNER_TEMP/open-connector-cloudflare/.github/scripts/configure-existing-resources.mjs" .github/scripts/configure-existing-resources.mjs
           cp "$RUNNER_TEMP/open-connector-cloudflare/.github/scripts/configure-existing-resources.test.mjs" .github/scripts/configure-existing-resources.test.mjs
           cp "$RUNNER_TEMP/open-connector-cloudflare/.github/workflows/ci.yml" .github/workflows/ci.yml
+          cp "$RUNNER_TEMP/open-connector-cloudflare/.github/workflows/sync-canary.yml" .github/workflows/sync-canary.yml
           cp "$RUNNER_TEMP/open-connector-cloudflare/.github/workflows/sync-upstream-release.yml" .github/workflows/sync-upstream-release.yml
           node .github/scripts/configure-template.mjs "$TAG"
 
@@ -115,6 +121,7 @@ jobs:
         if: steps.state.outputs.skip != 'true'
         run: |
           node --test .github/scripts/check-cloudflare-free-limits.test.mjs
+          node --test .github/scripts/configure-canary.test.mjs
           node --test .github/scripts/configure-existing-resources.test.mjs
           output_dir="$RUNNER_TEMP/open-connector-cloudflare-free-limits"
           mkdir -p "$output_dir"
