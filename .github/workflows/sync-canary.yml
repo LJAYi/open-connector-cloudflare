@@ -139,7 +139,7 @@ jobs:
           npm test
           npm run validate:cloudflare
 
-      - name: Check Cloudflare Free plan headroom
+      - name: Check Cloudflare Free plan limits (maximum)
         if: steps.state.outputs.skip != 'true'
         env:
           CLOUDFLARE_LIMIT_PROFILE: canary

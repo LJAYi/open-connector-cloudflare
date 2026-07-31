@@ -18,11 +18,10 @@ test("temporarily admits v1.3.3 while staying below Cloudflare hard limits", () 
   assert.ok(DEFAULT_LIMITS.assetBytes < 25 * 1024 * 1024);
 });
 
-test("lets canary approach but not reach Cloudflare hard limits", () => {
-  assert.ok(CANARY_LIMITS.workerGzipBytes > DEFAULT_LIMITS.workerGzipBytes);
-  assert.ok(CANARY_LIMITS.workerGzipBytes < 3_000_000);
-  assert.ok(CANARY_LIMITS.assetBytes > Math.round(24.82 * 1024 * 1024));
-  assert.ok(CANARY_LIMITS.assetBytes < 25 * 1024 * 1024);
+test("lets canary use Cloudflare Free hard limits", () => {
+  assert.equal(CANARY_LIMITS.workerGzipBytes, 3_000_000);
+  assert.equal(CANARY_LIMITS.assetBytes, 25 * 1024 * 1024);
+  assert.equal(CANARY_LIMITS.assetCount, 20_000);
 });
 
 test("parses Wrangler gzip sizes", () => {
