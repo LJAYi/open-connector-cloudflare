@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import {
   checkCloudflareFreeLimits,
+  CANARY_LIMITS,
   DEFAULT_LIMITS,
   parseWranglerAssetCount,
   parseWranglerGzipBytes,
@@ -15,6 +16,13 @@ test("temporarily admits v1.3.3 while staying below Cloudflare hard limits", () 
   assert.ok(DEFAULT_LIMITS.workerGzipBytes < 3_000_000);
   assert.ok(DEFAULT_LIMITS.assetBytes > Math.round(24.54 * 1024 * 1024));
   assert.ok(DEFAULT_LIMITS.assetBytes < 25 * 1024 * 1024);
+});
+
+test("lets canary approach but not reach Cloudflare hard limits", () => {
+  assert.ok(CANARY_LIMITS.workerGzipBytes > DEFAULT_LIMITS.workerGzipBytes);
+  assert.ok(CANARY_LIMITS.workerGzipBytes < 3_000_000);
+  assert.ok(CANARY_LIMITS.assetBytes > Math.round(24.82 * 1024 * 1024));
+  assert.ok(CANARY_LIMITS.assetBytes < 25 * 1024 * 1024);
 });
 
 test("parses Wrangler gzip sizes", () => {
