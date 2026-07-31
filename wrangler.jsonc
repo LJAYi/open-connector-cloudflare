@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "open-connector",
+  "name": "open-connector-canary",
   "main": "src/server/cloudflare.ts",
   "compatibility_date": "2026-07-02",
   "compatibility_flags": ["nodejs_compat"],
@@ -24,7 +24,8 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "open-connector",
+      "database_name": "open-connector-canary",
+      "database_id": "5447b670-a5c6-40e8-961c-da6e240918e5",
       "migrations_dir": "migrations",
     },
   ],
@@ -36,6 +37,7 @@
   "r2_buckets": [
     {
       "binding": "TRANSIT_FILES",
+      "bucket_name": "open-connector-canary-transit-files",
     },
   ],
   // Option B: KV backend (no credit card required; max file size 25 MiB).
