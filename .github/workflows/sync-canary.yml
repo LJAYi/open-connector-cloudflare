@@ -1,8 +1,6 @@
 name: Sync canary source
 
 on:
-  schedule:
-    - cron: "32 20 * * *"
   workflow_dispatch:
     inputs:
       source_repository:
@@ -30,8 +28,8 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     env:
-      SOURCE_REPOSITORY: ${{ github.event_name == 'workflow_dispatch' && inputs.source_repository || 'oomol-lab/open-connector' }}
-      SOURCE_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.source_ref || 'main' }}
+      SOURCE_REPOSITORY: ${{ inputs.source_repository }}
+      SOURCE_REF: ${{ inputs.source_ref }}
     steps:
       - name: Check out the canary deployment branch
         uses: actions/checkout@v7
