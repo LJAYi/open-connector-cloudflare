@@ -72,9 +72,10 @@ The workflow resolves the selection to an immutable commit, runs the complete va
 Cloudflare Free plan guard, then updates only `canary`.
 
 Connect `canary` to a separate Worker named `open-connector-canary`. Use an independent D1 database
-and R2 bucket, and configure its Workers Builds variables `OPEN_CONNECT_D1_DATABASE_ID` and
-`OPEN_CONNECT_R2_BUCKET_NAME`. Do not bind the canary Worker to production storage. Scheduled canary
-syncs follow `oomol-lab/open-connector@main` daily at 04:32 Beijing time.
+and R2 bucket, then set their identifiers as the GitHub repository variables
+`CANARY_D1_DATABASE_ID` and `CANARY_R2_BUCKET_NAME`. The sync writes those non-secret identifiers
+into the canary Wrangler config. Do not bind the canary Worker to production storage. Scheduled
+canary syncs follow `oomol-lab/open-connector@main` daily at 04:32 Beijing time.
 
 ## Manual deployment
 
