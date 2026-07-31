@@ -143,6 +143,8 @@ jobs:
 
       - name: Check Cloudflare Free plan headroom
         if: steps.state.outputs.skip != 'true'
+        env:
+          CLOUDFLARE_LIMIT_PROFILE: canary
         run: |
           node --test .github/scripts/check-cloudflare-free-limits.test.mjs
           node --test .github/scripts/configure-canary.test.mjs

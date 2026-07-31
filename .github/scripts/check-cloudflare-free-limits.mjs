@@ -13,6 +13,14 @@ export const DEFAULT_LIMITS = Object.freeze({
   assetCount: 18_000,
 });
 
+export const CANARY_LIMITS = Object.freeze({
+  // Canary may approach Cloudflare's hard limits so upstream main can be tested
+  // before release. Keep a small buffer for measurement and packaging drift.
+  workerGzipBytes: 2_990_000,
+  assetBytes: Math.floor(24.9 * MEBIBYTE),
+  assetCount: 18_000,
+});
+
 export async function checkCloudflareFreeLimits({ wranglerOutputPath, assetsDirectory, limits = DEFAULT_LIMITS }) {
   const wranglerOutput = await readFile(wranglerOutputPath, "utf8");
   const workerGzipBytes = parseWranglerGzipBytes(wranglerOutput);
@@ -116,14 +124,17 @@ async function main() {
     );
   }
 
-  const result = await checkCloudflareFreeLimits({ wranglerOutputPath, assetsDirectory });
-  console.log("Cloudflare Free plan headroom check");
-  console.log(`  Worker gzip: ${formatBytes(result.workerGzipBytes)} / ${formatBytes(DEFAULT_LIMITS.workerGzipBytes)}`);
+  const limits = process.env.CLOUDFLARE_LIMIT_PROFILE === "canary" ? CANARY_LIMITS : DEFAULT_LIMITS;
+  const result = await checkCloudflareFreeLimits({ wranglerOutputPath, assetsDirectory, limits });
   console.log(
-    `  Static assets: ${result.assetCount.toLocaleString("en-US")} / ${DEFAULT_LIMITS.assetCount.toLocaleString("en-US")}`,
+    `Cloudflare Free plan headroom check${process.env.CLOUDFLARE_LIMIT_PROFILE === "canary" ? " (canary)" : ""}`,
+  );
+  console.log(`  Worker gzip: ${formatBytes(result.workerGzipBytes)} / ${formatBytes(limits.workerGzipBytes)}`);
+  console.log(
+    `  Static assets: ${result.assetCount.toLocaleString("en-US")} / ${limits.assetCount.toLocaleString("en-US")}`,
   );
   console.log(
-    `  Largest asset: ${result.largestAsset.relativePath} (${formatBytes(result.largestAsset.sizeBytes)} / ${formatBytes(DEFAULT_LIMITS.assetBytes)})`,
+    `  Largest asset: ${result.largestAsset.relativePath} (${formatBytes(result.largestAsset.sizeBytes)} / ${formatBytes(limits.assetBytes)})`,
   );
 
   if (result.violations.length === 0) {
