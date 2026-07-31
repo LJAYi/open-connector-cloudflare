@@ -29,12 +29,12 @@ export function configureExistingResources(source, databaseId, bucketName) {
   if (databaseIdLines.length === 1) {
     configured = configured.replace(/^(\s*)"database_id"\s*:.*$/m, `$1"database_id": "${databaseId}",`);
   } else {
-    const databaseNameLines = configured.match(/^\s*"database_name"\s*:\s*"open-connector",\s*$/gm) ?? [];
+    const databaseNameLines = configured.match(/^\s*"database_name"\s*:\s*"[a-z0-9-]+",\s*$/gm) ?? [];
     if (databaseNameLines.length !== 1) {
-      throw new Error('Expected one D1 database_name set to "open-connector"');
+      throw new Error("Expected one D1 database_name");
     }
     configured = configured.replace(
-      /^(\s*)"database_name"\s*:\s*"open-connector",\s*$/m,
+      /^(\s*)"database_name"\s*:\s*"[a-z0-9-]+",\s*$/m,
       `$&\n$1"database_id": "${databaseId}",`,
     );
   }

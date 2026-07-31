@@ -20,6 +20,15 @@ test("injects existing D1 and R2 resource identifiers", () => {
   assert.equal(configureExistingResources(configured, databaseId, bucketName), configured);
 });
 
+test("injects resources into the canary deployment config", () => {
+  const canarySource = source.replaceAll('"open-connector"', '"open-connector-canary"');
+  const configured = configureExistingResources(canarySource, databaseId, bucketName);
+
+  assert.match(configured, /"database_name": "open-connector-canary"/);
+  assert.match(configured, new RegExp(`"database_id": "${databaseId}"`));
+  assert.match(configured, new RegExp(`"bucket_name": "${bucketName}"`));
+});
+
 test("requires both resource identifiers", () => {
   assert.throws(
     () => configureExistingResources(source, databaseId),
