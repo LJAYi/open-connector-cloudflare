@@ -14,11 +14,11 @@ export const DEFAULT_LIMITS = Object.freeze({
 });
 
 export const CANARY_LIMITS = Object.freeze({
-  // Canary may approach Cloudflare's hard limits so upstream main can be tested
-  // before release. Keep a small buffer for measurement and packaging drift.
-  workerGzipBytes: 2_990_000,
-  assetBytes: Math.floor(24.9 * MEBIBYTE),
-  assetCount: 18_000,
+  // Canary intentionally uses Cloudflare Free's hard limits so upstream or
+  // fork branches can be tested even when they have no production headroom.
+  workerGzipBytes: 3_000_000,
+  assetBytes: 25 * MEBIBYTE,
+  assetCount: 20_000,
 });
 
 export async function checkCloudflareFreeLimits({ wranglerOutputPath, assetsDirectory, limits = DEFAULT_LIMITS }) {
