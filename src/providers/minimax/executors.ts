@@ -1,6 +1,5 @@
 import type { CredentialValidators, ExecutionContext, ProviderExecutors } from "../../core/types.ts";
 import type { ProviderFetch } from "../provider-runtime.ts";
-import type { MinimaxActionName } from "./actions.ts";
 
 import { createHash } from "node:crypto";
 import { compactObject, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
@@ -24,7 +23,7 @@ interface MinimaxActionContext {
 }
 type MinimaxActionHandler = (input: Record<string, unknown>, context: MinimaxActionContext) => Promise<unknown>;
 
-export const minimaxActionHandlers: Record<MinimaxActionName, MinimaxActionHandler> = {
+export const minimaxActionHandlers: Record<string, MinimaxActionHandler> = {
   list_models(_input, context) {
     return minimaxGetJson("/v1/models", context);
   },
@@ -39,6 +38,9 @@ export const minimaxActionHandlers: Record<MinimaxActionName, MinimaxActionHandl
   estimate_input_tokens(input, context) {
     return minimaxPostJson("/v1/responses/input_tokens", normalizeMinimaxBody(input), context);
   },
+  create_video_generation_v2(input, context) {
+    return minimaxPostJson("/v2/video_generation", normalizeMinimaxVideoV2Body(input), context);
+  },
   text_to_video(input, context) {
     return minimaxPostJson("/v1/video_generation", normalizeMinimaxVideoBody(input), context);
   },
@@ -48,6 +50,17 @@ export const minimaxActionHandlers: Record<MinimaxActionName, MinimaxActionHandl
   query_video_generation(input, context) {
     const taskId = readInputString(input.task_id, "task_id");
     return minimaxGetJson(`/v1/query/video_generation?task_id=${encodeURIComponent(taskId)}`, context);
+  },
+  query_video_generation_v2(input, context) {
+    const taskId = readInputString(input.task_id, "task_id");
+    return minimaxGetJson(`/v2/query/video_generation/${encodeURIComponent(taskId)}`, context);
+  },
+  list_video_generation_v2(input, context) {
+    return minimaxGetJson(createVideoGenerationV2ListPath(input), context);
+  },
+  delete_video_generation_v2(input, context) {
+    const taskId = readInputString(input.task_id, "task_id");
+    return minimaxDeleteJson(`/v2/video_generation/${encodeURIComponent(taskId)}`, context);
   },
   download_video(input, context) {
     const fileId = readInputString(input.file_id, "file_id");
@@ -128,6 +141,19 @@ async function minimaxPostJson(
   );
 }
 
+async function minimaxDeleteJson(path: string, context: MinimaxActionContext): Promise<Record<string, unknown>> {
+  return minimaxRequestJson(
+    path,
+    {
+      method: "DELETE",
+      headers: minimaxHeaders(context.apiKey, { accept: "application/json" }),
+      signal: context.signal,
+    },
+    context.fetcher,
+    context.apiBaseUrl,
+  );
+}
+
 async function minimaxRequestJson(
   path: string,
   init: RequestInit,
@@ -194,6 +220,49 @@ function normalizeMinimaxVideoBody(input: Record<string, unknown>): Record<strin
     resolution: trimString(input.resolution),
     callback_url: trimString(input.callback_url),
   });
+}
+
+function normalizeMinimaxVideoV2Body(input: Record<string, unknown>): Record<string, unknown> {
+  return compactObject({
+    ...input,
+    model: trimString(input.model),
+    resolution: trimString(input.resolution),
+    ratio: trimString(input.ratio),
+    callback_url: trimString(input.callback_url),
+  });
+}
+
+function createVideoGenerationV2ListPath(input: Record<string, unknown>): string {
+  const search = new URLSearchParams();
+  appendQueryValue(search, "page_num", input.page_num);
+  appendQueryValue(search, "page_size", input.page_size);
+
+  const filter = optionalRecord(input.filter);
+  if (filter) {
+    appendQueryValue(search, "filter.status", filter.status);
+    appendQueryValue(search, "filter.model", filter.model);
+    appendQueryValue(search, "filter.task_type", filter.task_type);
+    const taskIds = filter.task_ids;
+    if (Array.isArray(taskIds)) {
+      for (const taskId of taskIds) {
+        appendQueryValue(search, "filter.task_ids", taskId);
+      }
+    }
+  }
+
+  const query = search.toString();
+  return query ? `/v2/query/video_generation?${query}` : "/v2/query/video_generation";
+}
+
+function appendQueryValue(search: URLSearchParams, key: string, value: unknown): void {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    search.append(key, String(value));
+    return;
+  }
+  const text = trimString(value);
+  if (text) {
+    search.append(key, text);
+  }
 }
 
 async function readMinimaxPayload(response: Response): Promise<Record<string, unknown>> {

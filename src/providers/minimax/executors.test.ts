@@ -1,141 +1,137 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { validateActionInput } from "../../core/validation.ts";
 import { minimaxActions } from "./actions.ts";
-import { credentialValidators, minimaxActionHandlers } from "./executors.ts";
+import { minimaxActionHandlers } from "./executors.ts";
 
-const textToVideo = minimaxActions.find((action) => action.name === "text_to_video")!;
-const imageToVideo = minimaxActions.find((action) => action.name === "image_to_video")!;
-const downloadVideo = minimaxActions.find((action) => action.name === "download_video")!;
+const apiBaseUrl = "https://api.minimax.io";
 
-describe("MiniMax video actions", () => {
-  it("rejects models that do not support the selected generation mode", () => {
-    expect(
-      validateActionInput(textToVideo, {
-        model: "I2V-01",
-        prompt: "A calm lake at sunrise.",
-      }).valid,
-    ).toBe(false);
-    expect(
-      validateActionInput(textToVideo, {
-        model: "MiniMax-Hailuo-2.3-Fast",
-        prompt: "A calm lake at sunrise.",
-      }).valid,
-    ).toBe(false);
-    expect(
-      validateActionInput(imageToVideo, {
-        model: "T2V-01",
-        first_frame_image: "https://example.com/frame.png",
-      }).valid,
-    ).toBe(false);
-  });
+function createContext(fetcher: typeof fetch) {
+  return {
+    apiKey: "test-key",
+    apiBaseUrl,
+    fetcher,
+  };
+}
 
-  it("rejects unsupported duration and resolution values", () => {
-    expect(
-      validateActionInput(textToVideo, {
-        model: "MiniMax-Hailuo-2.3",
-        prompt: "A calm lake at sunrise.",
-        duration: 7,
-      }).valid,
-    ).toBe(false);
-    expect(
-      validateActionInput(textToVideo, {
-        model: "MiniMax-Hailuo-2.3",
-        prompt: "A calm lake at sunrise.",
-        resolution: "banana",
-      }).valid,
-    ).toBe(false);
-    expect(
-      validateActionInput(imageToVideo, {
-        model: "MiniMax-Hailuo-02",
-        first_frame_image: "https://example.com/frame.png",
-        duration: 10,
-        resolution: "512P",
-      }).valid,
-    ).toBe(true);
-  });
+function jsonFetcher(payload: Record<string, unknown> = {}): typeof fetch {
+  return vi.fn(async () => Response.json(payload)) as typeof fetch;
+}
 
-  it("declares retrieved file ids as strings", () => {
-    expect(downloadVideo.outputSchema).toMatchObject({
-      properties: {
-        file: {
-          properties: {
-            file_id: { type: "string" },
-          },
-        },
-      },
-    });
-  });
+function requestBody(fetcher: typeof fetch): unknown {
+  const init = vi.mocked(fetcher).mock.calls[0]![1] as RequestInit;
+  return JSON.parse(String(init.body));
+}
 
-  it("maps successful HTTP responses with MiniMax error status to failures", async () => {
-    const fetcher: typeof fetch = async () =>
-      new Response(
-        JSON.stringify({
-          base_resp: {
-            status_code: 1004,
-            status_msg: "invalid api key",
-          },
-        }),
-        { status: 200, headers: { "content-type": "application/json" } },
-      );
+describe("MiniMax H3 video generation", () => {
+  it("creates a v2 video generation task with multimodal content", async () => {
+    const fetcher = jsonFetcher({ task_id: "task-1" });
 
-    await expect(
-      minimaxActionHandlers.text_to_video(
-        {
-          model: "MiniMax-Hailuo-2.3",
-          prompt: "A calm lake at sunrise.",
-        },
-        {
-          apiKey: "invalid",
-          apiBaseUrl: "https://api.minimax.io",
-          fetcher,
-        },
-      ),
-    ).rejects.toMatchObject({
-      status: 401,
-      message: "invalid api key",
-    });
-  });
-
-  it("validates China-region credentials against the China API host", async () => {
-    const urls: string[] = [];
-    const fetcher: typeof fetch = async (input) => {
-      urls.push(String(input));
-      return new Response(JSON.stringify({ data: [{ id: "MiniMax-M3" }] }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      });
-    };
-
-    const result = await credentialValidators.apiKey!(
+    await minimaxActionHandlers.create_video_generation_v2(
       {
-        apiKey: "china-key",
-        values: { apiKey: "china-key", region: "china" },
+        model: " MiniMax-H3 ",
+        content: [
+          { type: "text", text: "city skyline" },
+          { type: "image_url", image_url: { url: "https://example.com/frame.png" }, role: "first_frame" },
+          { type: "audio_url", audio_url: { url: "https://example.com/ref.mp3" }, role: "reference_audio" },
+        ],
+        resolution: " 2K ",
+        duration: 12,
+        ratio: " 16:9 ",
+        callback_url: " https://example.com/callback ",
       },
-      { fetcher },
+      createContext(fetcher),
     );
 
-    expect(urls).toEqual(["https://api.minimaxi.com/v1/models"]);
-    expect(result?.metadata).toMatchObject({
-      apiBaseUrl: "https://api.minimaxi.com",
+    expect(fetcher).toHaveBeenCalledWith(
+      `${apiBaseUrl}/v2/video_generation`,
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(requestBody(fetcher)).toMatchObject({
+      model: "MiniMax-H3",
+      resolution: "2K",
+      duration: 12,
+      ratio: "16:9",
+      callback_url: "https://example.com/callback",
+      content: [
+        { type: "text", text: "city skyline" },
+        { type: "image_url", image_url: { url: "https://example.com/frame.png" }, role: "first_frame" },
+        { type: "audio_url", audio_url: { url: "https://example.com/ref.mp3" }, role: "reference_audio" },
+      ],
     });
   });
 
-  it("rejects unsupported credential regions", async () => {
-    const fetcher: typeof fetch = async () => {
-      throw new Error("unexpected request");
+  it("validates the v2 media shape and required text prompt", () => {
+    const action = minimaxActions.find((action) => action.id === "minimax.create_video_generation_v2")!;
+    const input = {
+      model: "MiniMax-H3",
+      content: [
+        { type: "text", text: "city skyline" },
+        { type: "image_url", image_url: { url: "https://example.com/frame.png" }, role: "first_frame" },
+      ],
+      resolution: "768P",
+      duration: 5,
     };
 
-    await expect(
-      credentialValidators.apiKey!(
-        {
-          apiKey: "test-key",
-          values: { apiKey: "test-key", region: "europe" },
-        },
-        { fetcher },
-      ),
-    ).rejects.toMatchObject({
-      status: 400,
-      message: "minimax region must be global or china",
-    });
+    expect(validateActionInput(action, input).valid).toBe(true);
+    expect(
+      validateActionInput(action, {
+        ...input,
+        content: [{ type: "image_url", image_url: { url: "https://example.com/frame.png" } }],
+      }).valid,
+    ).toBe(false);
+    expect(
+      validateActionInput(action, {
+        ...input,
+        content: [
+          { type: "text", text: "city skyline" },
+          { type: "video_url", video_url: "https://example.com/ref.mp4", role: "reference_video" },
+        ],
+      }).valid,
+    ).toBe(false);
+    expect(
+      validateActionInput(action, {
+        ...input,
+        content: [
+          { type: "text", text: "city skyline" },
+          {
+            type: "image_url",
+            image_url: { url: "https://example.com/frame.png" },
+            role: "reference_video",
+          },
+        ],
+      }).valid,
+    ).toBe(false);
+  });
+
+  it("validates v2 list status filters", () => {
+    const action = minimaxActions.find((action) => action.id === "minimax.list_video_generation_v2")!;
+
+    expect(validateActionInput(action, { filter: { status: "succeeded" } }).valid).toBe(true);
+    expect(validateActionInput(action, { filter: { status: "Success" } }).valid).toBe(false);
+  });
+
+  it("routes v2 video query, list, and delete operations", async () => {
+    const fetcher = jsonFetcher({ task_id: "task-1" });
+    const context = createContext(fetcher);
+
+    await minimaxActionHandlers.query_video_generation_v2({ task_id: "task/1" }, context);
+    await minimaxActionHandlers.list_video_generation_v2(
+      {
+        page_num: 2,
+        page_size: 10,
+        filter: { status: "succeeded", task_ids: ["task-1", "task-2"], model: "MiniMax-H3", task_type: "text" },
+      },
+      context,
+    );
+    await minimaxActionHandlers.delete_video_generation_v2({ task_id: "task/1" }, context);
+
+    expect(vi.mocked(fetcher).mock.calls.map(([url, init]) => [String(url), init?.method])).toEqual([
+      [`${apiBaseUrl}/v2/query/video_generation/task%2F1`, "GET"],
+      [
+        `${apiBaseUrl}/v2/query/video_generation?page_num=2&page_size=10&filter.status=succeeded&filter.model=MiniMax-H3&filter.task_type=text&filter.task_ids=task-1&filter.task_ids=task-2`,
+        "GET",
+      ],
+      [`${apiBaseUrl}/v2/video_generation/task%2F1`, "DELETE"],
+    ]);
   });
 });

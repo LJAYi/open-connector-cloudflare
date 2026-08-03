@@ -1,5 +1,5 @@
 import type { GuardedWebSocketFailure, WebSocketLike } from "../../core/guarded-websocket.ts";
-import type { HomeAssistantRegistryName, HomeAssistantWebSocketActionName } from "./actions.ts";
+import type { HomeAssistantRegistryName } from "./actions.ts";
 import type { HomeAssistantActionContext, HomeAssistantActionHandler } from "./runtime.ts";
 
 import { compactObject, objectArray, optionalRecord, optionalString } from "../../core/cast.ts";
@@ -29,10 +29,7 @@ interface HomeAssistantCommand {
   [key: string]: unknown;
 }
 
-export const homeAssistantWebSocketActionHandlers: Record<
-  HomeAssistantWebSocketActionName,
-  HomeAssistantActionHandler
-> = {
+export const homeAssistantWebSocketActionHandlers: Record<string, HomeAssistantActionHandler> = {
   async get_registries(input, context) {
     const requested = readRegistryNames(input.include);
     const results = await runHomeAssistantCommands(
