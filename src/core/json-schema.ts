@@ -1,5 +1,7 @@
 import type { JsonSchema } from "./types.ts";
 
+const optionalSchemas = new WeakSet<object>();
+
 /**
  * Options shared by primitive JSON Schema helper functions.
  */
@@ -56,7 +58,13 @@ export const jsonSchema = {
         : (optionsOrProperties as ObjectOptions);
     const required =
       options.required ??
-      (options.optional ? Object.keys(properties).filter((key) => !options.optional?.includes(key)) : undefined);
+      (options.optional
+        ? Object.keys(properties).filter(
+            (key) => !options.optional?.includes(key) && !optionalSchemas.has(properties[key]!),
+          )
+        : Object.values(properties).some((schema) => optionalSchemas.has(schema))
+          ? Object.keys(properties).filter((key) => !optionalSchemas.has(properties[key]!))
+          : undefined);
     const schema: JsonSchema = {
       type: "object",
       properties,
@@ -68,7 +76,10 @@ export const jsonSchema = {
   },
 
   requiredObject(description: string, properties: Record<string, JsonSchema>): JsonSchema {
-    return this.object(properties, { required: Object.keys(properties), description });
+    return this.object(properties, {
+      required: Object.keys(properties).filter((key) => !optionalSchemas.has(properties[key]!)),
+      description,
+    });
   },
 
   looseRequiredObject(
@@ -134,8 +145,8 @@ export const jsonSchema = {
     return this.string({ format: "uri", description });
   },
 
-  email(description: string): JsonSchema {
-    return this.string({ format: "email", description });
+  email(description: string, options: Omit<StringOptions, "description" | "format"> = {}): JsonSchema {
+    return this.string({ ...options, format: "email", description });
   },
 
   nullableString(description: string, options: Omit<JsonSchemaOptions, "description"> = {}): JsonSchema {
@@ -229,6 +240,32 @@ export const jsonSchema = {
 
   literal(value: string | number | boolean, options: JsonSchemaOptions = {}): JsonSchema {
     return withOptions({ const: value, type: typeof value }, options);
+  },
+
+  optional(schema: JsonSchema): JsonSchema {
+    const optionalSchema = { ...schema };
+    optionalSchemas.add(optionalSchema);
+    return optionalSchema;
+  },
+
+  describe(schema: JsonSchema, description: string): JsonSchema {
+    return cloneSchema(schema, { description });
+  },
+
+  withDefault(schema: JsonSchema, defaultValue: unknown): JsonSchema {
+    return cloneSchema(schema, { default: defaultValue });
+  },
+
+  tuple(items: JsonSchema[], options: JsonSchemaOptions = {}): JsonSchema {
+    return withOptions(
+      {
+        type: "array",
+        prefixItems: items,
+        minItems: items.length,
+        maxItems: items.length,
+      },
+      options,
+    );
   },
 
   anyOf(
@@ -344,6 +381,12 @@ export const jsonSchema = {
     return this.object(properties, { required, description });
   },
 };
+
+function cloneSchema(schema: JsonSchema, properties: Partial<JsonSchema>): JsonSchema {
+  const clone = { ...schema, ...properties };
+  if (optionalSchemas.has(schema)) optionalSchemas.add(clone);
+  return clone;
+}
 
 /**
  * Short alias for provider schema definitions.

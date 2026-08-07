@@ -247,6 +247,10 @@
     "execution": {
       "executable": "可執行",
       "catalogOnly": "僅供目錄查閱"
+    },
+    "categoryFilterLabel": "分類",
+    "categories": {
+      "all": "所有分類"
     }
   },
   "actions": {

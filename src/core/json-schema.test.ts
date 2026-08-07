@@ -85,3 +85,21 @@ describe("jsonSchema.looseRequiredObject", () => {
     ).toMatchObject({ required: ["id"] });
   });
 });
+
+describe("jsonSchema.optional", () => {
+  it("does not make later uses of the base schema optional", () => {
+    const base = jsonSchema.string("A shared identifier.");
+    const optional = jsonSchema.optional(base);
+
+    expect(jsonSchema.requiredObject("Optional use.", { id: optional })).not.toHaveProperty("required");
+    expect(jsonSchema.requiredObject("Required use.", { id: base })).toHaveProperty("required", ["id"]);
+  });
+
+  it("preserves optional markers through description and default wrappers", () => {
+    const optional = jsonSchema.optional(jsonSchema.string("A shared identifier."));
+    const described = jsonSchema.describe(optional, "A renamed identifier.");
+    const defaulted = jsonSchema.withDefault(described, "default-id");
+
+    expect(jsonSchema.requiredObject("Wrapped optional use.", { id: defaulted })).not.toHaveProperty("required");
+  });
+});

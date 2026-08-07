@@ -247,6 +247,10 @@
     "execution": {
       "executable": "実行可能",
       "catalogOnly": "カタログのみ"
+    },
+    "categoryFilterLabel": "カテゴリー",
+    "categories": {
+      "all": "すべてのカテゴリー"
     }
   },
   "actions": {
