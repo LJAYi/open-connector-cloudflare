@@ -10,6 +10,8 @@ const packagePath = new URL("../../package.json", import.meta.url);
 const wranglerExamplePath = new URL("../../wrangler.example.jsonc", import.meta.url);
 const wranglerPath = new URL("../../wrangler.jsonc", import.meta.url);
 const versionPath = new URL("../../.open-connector-version", import.meta.url);
+const webStylePath = new URL("../../web/src/style.css", import.meta.url);
+const webHeadersPath = new URL("../../web/public/_headers", import.meta.url);
 
 const packageJson = JSON.parse(await readFile(packagePath, "utf8"));
 
@@ -64,3 +66,18 @@ if (wranglerConfig.includes("<your-d1-database-id>") || wranglerConfig.includes(
 
 await writeFile(wranglerPath, wranglerConfig);
 await writeFile(versionPath, `${upstreamTag}\n`);
+
+const buildMarkerPattern = /\n?\/\*! open-connector-cloudflare build [^*]* \*\/\n?$/;
+const webStyle = (await readFile(webStylePath, "utf8")).replace(buildMarkerPattern, "").trimEnd();
+await writeFile(webStylePath, `${webStyle}\n\n/*! open-connector-cloudflare build ${upstreamTag} */\n`);
+
+const immutableAssetHeaders = `/assets/*
+  Cache-Control: public, max-age=31536000, immutable`;
+const revalidatedAssetHeaders = `/assets/*
+  Cache-Control: public, max-age=0, must-revalidate
+  Cloudflare-CDN-Cache-Control: public, max-age=0, must-revalidate`;
+const webHeaders = await readFile(webHeadersPath, "utf8");
+if (!webHeaders.includes(immutableAssetHeaders) && !webHeaders.includes(revalidatedAssetHeaders)) {
+  throw new Error("Expected the static asset cache header block in web/public/_headers");
+}
+await writeFile(webHeadersPath, webHeaders.replace(immutableAssetHeaders, revalidatedAssetHeaders));
