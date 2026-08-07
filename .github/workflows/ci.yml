@@ -79,6 +79,8 @@ jobs:
           node --test .github/scripts/configure-existing-resources.test.mjs
 
       - name: Validate Cloudflare Free plan headroom
+        env:
+          CLOUDFLARE_LIMIT_PROFILE: ${{ github.ref_name == 'canary' && 'canary' || '' }}
         run: |
           output_dir="$RUNNER_TEMP/open-connector-cloudflare-free-limits"
           mkdir -p "$output_dir"
