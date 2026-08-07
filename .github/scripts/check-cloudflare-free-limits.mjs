@@ -6,9 +6,9 @@ const MEBIBYTE = 1024 * 1024;
 const ANSI_ESCAPE_PATTERN = new RegExp(`${String.fromCharCode(27)}\\[[0-?]*[ -/]*[@-~]`, "g");
 
 export const DEFAULT_LIMITS = Object.freeze({
-  // Temporary near-limit guards for upstream v1.3.3. Cloudflare's hard limits
-  // are 3,000,000 gzip bytes and 25 MiB per static asset respectively.
-  workerGzipBytes: 2_950_000,
+  // Temporary production exception for upstream v1.3.5. Keep the actual
+  // Cloudflare Worker hard limit while retaining the static-asset guard below.
+  workerGzipBytes: 3_000_000,
   assetBytes: Math.floor(24.75 * MEBIBYTE),
   assetCount: 18_000,
 });
