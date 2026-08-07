@@ -1,4 +1,4 @@
-import { assertPublicHttpUrl, isBlockedIpAddress, isIpAddress, isIpv4Address } from "./request.ts";
+import { assertPublicHttpUrl, classifyIpAddress, isEgressTrustedHost, isIpAddress, isIpv4Address } from "./request.ts";
 
 /**
  * Single resolved address returned by a DNS lookup, mirroring the shape of
@@ -267,6 +267,8 @@ export interface GuardedEgressUrlOptions {
   fieldName: string;
   /** Error factory for guard violations. */
   createError: (message: string) => Error;
+  /** Error factory for DNS resolution failures. Defaults to {@link createError}. */
+  createResolutionError?: (message: string) => Error;
   /** Allow RFC 1918 and other private targets while retaining reserved-target guards. */
   allowPrivateNetwork?: boolean;
   /**
@@ -274,6 +276,12 @@ export interface GuardedEgressUrlOptions {
    * `undefined` uses the module default (`node:dns` where available).
    */
   lookup?: GuardedFetchDnsLookup | null;
+}
+
+/** Normalized URL and DNS answers accepted by the shared provider egress policy. */
+export interface GuardedEgressTarget {
+  url: URL;
+  addresses: ResolvedAddress[];
 }
 
 /**
@@ -288,6 +296,17 @@ export interface GuardedEgressUrlOptions {
  * the same policy instead of growing a second, drifting implementation.
  */
 export async function assertGuardedEgressUrl(value: string, options: GuardedEgressUrlOptions): Promise<URL> {
+  return (await resolveGuardedEgressTarget(value, options)).url;
+}
+
+/**
+ * Apply the shared SSRF policy and return the screened DNS results for a
+ * transport that must pin the connection without resolving the hostname again.
+ */
+export async function resolveGuardedEgressTarget(
+  value: string,
+  options: GuardedEgressUrlOptions,
+): Promise<GuardedEgressTarget> {
   const allowPrivateNetwork = options.allowPrivateNetwork === true;
   const lookup = options.lookup === undefined ? await resolveDefaultLookup() : options.lookup;
   const url = assertPublicHttpUrl(value, {
@@ -295,17 +314,19 @@ export async function assertGuardedEgressUrl(value: string, options: GuardedEgre
     createError: options.createError,
     allowPrivateNetwork,
   });
-  await assertResolvedAddressesAllowed(url.hostname, options.fieldName, {
+  const addresses = await assertResolvedAddressesAllowed(url.hostname, options.fieldName, {
     allowPrivateNetwork,
     createError: options.createError,
+    createResolutionError: options.createResolutionError ?? options.createError,
     lookup,
   });
-  return url;
+  return { url, addresses };
 }
 
 interface ResolvedAddressPolicy {
   allowPrivateNetwork: boolean;
   createError: (message: string) => Error;
+  createResolutionError: (message: string) => Error;
   lookup: GuardedFetchDnsLookup | null | undefined;
 }
 
@@ -313,13 +334,16 @@ async function assertResolvedAddressesAllowed(
   hostname: string,
   fieldName: string,
   policy: ResolvedAddressPolicy,
-): Promise<void> {
+): Promise<ResolvedAddress[]> {
   // Skip resolution only for canonical IPv4 literals, which assertPublicHttpUrl
   // has already address-validated. Looser numeric forms (octal, out-of-range)
   // that it did not recognize as an IP must go through DNS validation, since a
   // resolver may still interpret them as a reserved address.
-  if (!policy.lookup || isIpv4Address(hostname)) {
-    return;
+  if (isIpv4Address(hostname)) {
+    return [{ address: hostname, family: 4 }];
+  }
+  if (!policy.lookup) {
+    return [];
   }
 
   let results: ResolvedAddress[];
@@ -330,19 +354,46 @@ async function assertResolvedAddressesAllowed(
     // silently skip address validation, or a forced-failure / split-resolver
     // could bypass the guard. A genuinely unresolvable host fails here instead
     // of at the transport, with the same net outcome (the request is rejected).
-    throw policy.createError(`${fieldName} could not be resolved for validation`);
+    throw policy.createResolutionError(`${fieldName} could not be resolved for validation`);
   }
   if (!Array.isArray(results)) {
-    throw policy.createError(`${fieldName} could not be resolved for validation`);
+    throw policy.createResolutionError(`${fieldName} could not be resolved for validation`);
   }
   if (results.length === 0) {
-    throw policy.createError(`${fieldName} could not be resolved for validation`);
+    throw policy.createResolutionError(`${fieldName} could not be resolved for validation`);
   }
+  // Deployment-level trusted-host setting, resolved per request so a bootstrap that
+  // configures it after module load is honored. It may open private and
+  // VPN-mapped results, while unsafe special-use targets remain blocked.
+  const trustedHost = isEgressTrustedHost(hostname);
   for (const entry of results) {
-    if (entry && typeof entry.address === "string" && isBlockedIpAddress(entry.address, policy.allowPrivateNetwork)) {
-      throw policy.createError(`${fieldName} must not resolve to private or reserved IP addresses`);
+    if (entry && typeof entry.address === "string") {
+      const addressClass = classifyIpAddress(entry.address);
+      if (addressClass === "always-blocked") {
+        throw policy.createError(`${fieldName} must not resolve to private or reserved IP addresses`);
+      }
+      if (addressClass === "public" || (addressClass === "private" && policy.allowPrivateNetwork)) {
+        continue;
+      }
+      if (trustedHost) {
+        continue;
+      }
+      // Name the way out. This rejection happens before any packet leaves the
+      // process, so on its own it is indistinguishable from a network failure:
+      // the caller sees a sub-100ms error with nothing pointing at DNS, at this
+      // guard, or at the fact that an operator-level opt-out exists. The
+      // resolved address is deliberately NOT included — for hosts that come from
+      // tenant input (mail credentials, self-hosted base URLs) echoing it back
+      // would turn the guard into a DNS/internal-range probe oracle, a property
+      // src/mail/imap-smtp/host-pinning.test.ts asserts.
+      throw policy.createError(
+        `${fieldName} must not resolve to private or reserved IP addresses ` +
+          `(if this host is reached through a corporate VPN or split DNS, add it to ` +
+          `OOMOL_CONNECT_EGRESS_TRUSTED_HOSTS)`,
+      );
     }
   }
+  return results;
 }
 
 async function resolveDefaultLookup(): Promise<GuardedFetchDnsLookup | null | undefined> {
@@ -356,7 +407,7 @@ async function resolveDefaultLookup(): Promise<GuardedFetchDnsLookup | null | un
         // Keep only real addresses. workerd's node:dns resolves over DoH and maps
         // every answer record into an entry without filtering by record type, so a
         // CNAME answer arrives as { address: "target.example.com.", family: 4 }.
-        // isBlockedIpAddress treats unparseable input as blocked, which would
+        // classifyIpAddress treats unparseable input as blocked, which would
         // reject every CNAME'd host (api.tailscale.com, graph.microsoft.com, ...).
         // The real A/AAAA records are present alongside, so dropping non-addresses
         // keeps the resolved-address check intact rather than disabling it.

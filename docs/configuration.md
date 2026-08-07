@@ -20,6 +20,8 @@ OpenConnector is configured with environment variables.
 | `OOMOL_CONNECT_ALLOWED_PROXIES`          | unset                     | Comma-separated provider proxy allowlist. Supports service names and `*`.      |
 | `OOMOL_CONNECT_BLOCKED_PROXIES`          | unset                     | Comma-separated provider proxy denylist. Supports service names and `*`.       |
 | `OOMOL_CONNECT_ALLOW_PRIVATE_NETWORK`    | `false`                   | Allow self-hosted provider connections to target private networks. See below.  |
+| `OOMOL_CONNECT_EGRESS_TRUSTED_HOSTS`     | unset                     | Trusted hosts routed through a corporate VPN. See below.                       |
+| `OOMOL_CONNECT_LOG_LEVEL`                | `info`                    | Pino log level for the local Node server.                                      |
 | `OOMOL_CONNECT_TRANSIT_FILE_TTL_SECONDS` | `86400`                   | Transit file lifetime before cleanup.                                          |
 | `OOMOL_CONNECT_TRANSIT_FILE_MAX_BYTES`   | `104857600`               | Maximum transit file upload size.                                              |
 | `OOMOL_CONNECT_RUN_LIMIT`                | `5000`                    | Maximum number of recent action run audit records to retain.                   |
@@ -81,12 +83,14 @@ private targets are rejected during connection setup.
 
 Some self-hosted services are only reachable over a LAN or an overlay network
 such as Tailscale or NetBird. To allow those connections, set
-`OOMOL_CONNECT_ALLOW_PRIVATE_NETWORK=true`. When enabled, provider connections
-that opt in (currently **Dokploy**) may target:
+`OOMOL_CONNECT_ALLOW_PRIVATE_NETWORK=true`. When enabled, connections for the
+self-hosted providers that opt in (**Dokploy**, **n8n**, **GitLab**,
+**Gitea**, **Home Assistant**, **IMAP Mailbox**, and others) may target:
 
 - RFC 1918 ranges: `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`
 - Carrier-grade NAT / shared address space `100.64.0.0/10` (Tailscale, NetBird)
 - Private hostname suffixes: `.local`, `.internal`, `.home`, `.lan`
+- Plain `http://` instance URLs, for providers that otherwise require HTTPS
 
 The following targets stay blocked even when the flag is enabled:
 
@@ -99,6 +103,25 @@ The following targets stay blocked even when the flag is enabled:
 > On a shared or multi-tenant deployment, turning it on lets any connection
 > owner reach the operator's internal network from the runtime's egress
 > position, so leave it at the `false` default there.
+
+### Corporate VPN host exceptions
+
+Some corporate VPNs map public SaaS domains into private or benchmark address
+space such as `198.18.0.0/15`. If those requests are rejected by the egress
+guard, list the trusted domains in `OOMOL_CONNECT_EGRESS_TRUSTED_HOSTS`:
+
+```bash
+OOMOL_CONNECT_EGRESS_TRUSTED_HOSTS=".feishu.cn,.larksuite.com" npm run dev
+```
+
+An entry starting with `.` matches the domain and its subdomains; any other
+entry matches one exact hostname. The exception allows matching hosts to use
+private and VPN-mapped addresses, but loopback, link-local, cloud-metadata,
+multicast, and other unsafe special-use targets remain blocked.
+
+> **Enable this only on a single-tenant or otherwise trusted runtime.** This is
+> a deployment-wide egress exception, not per-connection authorization. Keep
+> entries narrowly scoped to domains you trust.
 
 ## Cloudflare Workers
 

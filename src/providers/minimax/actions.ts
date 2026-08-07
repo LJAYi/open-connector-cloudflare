@@ -205,6 +205,9 @@ const createResponseOutputSchema = s.looseRequiredObject(
   },
 );
 
+const h3VideoModel = "MiniMax-H3";
+const videoGenerationV2Statuses = ["queued", "running", "succeeded", "failed", "cancelled", "expired"];
+
 const textToVideoModels = ["MiniMax-Hailuo-2.3", "MiniMax-Hailuo-02", "T2V-01-Director", "T2V-01"];
 
 const imageToVideoModels = [
@@ -242,6 +245,61 @@ const videoPromptOptimizerSchema = s.boolean("Whether MiniMax may rewrite the pr
 const videoFastPretreatmentSchema = s.boolean("Whether MiniMax applies fast pre-processing to speed up generation.");
 const videoCallbackUrlSchema = s.url("URL MiniMax calls with asynchronous task status updates.");
 
+const videoGenerationV2TextContentSchema = s.object("MiniMax H3 text content item.", {
+  type: s.literal("text", { description: "Text content item type." }),
+  text: s.string({ description: "Text prompt content.", minLength: 1, maxLength: 7000, pattern: "\\S" }),
+});
+
+const videoGenerationV2ContentSchema = s.anyOf("MiniMax H3 video generation content item.", [
+  videoGenerationV2TextContentSchema,
+  s.object(
+    "MiniMax H3 image content item.",
+    {
+      type: s.literal("image_url", { description: "Image content item type." }),
+      image_url: s.object("Image input location.", {
+        url: trimmedNonEmptyString("Public URL, MiniMax file URI, or image data URI."),
+      }),
+      role: s.stringEnum("Image purpose in the generated video.", ["first_frame", "last_frame", "reference_image"]),
+    },
+    { optional: ["role"] },
+  ),
+  s.object("MiniMax H3 reference video content item.", {
+    type: s.literal("video_url", { description: "Video content item type." }),
+    video_url: s.object("Reference video location.", {
+      url: trimmedNonEmptyString("Public URL, MiniMax file URI, or video data URI."),
+    }),
+    role: s.literal("reference_video", { description: "Reference video content role." }),
+  }),
+  s.object("MiniMax H3 reference audio content item.", {
+    type: s.literal("audio_url", { description: "Audio content item type." }),
+    audio_url: s.object("Reference audio location.", {
+      url: trimmedNonEmptyString("Public URL, MiniMax file URI, or audio data URI."),
+    }),
+    role: s.literal("reference_audio", { description: "Reference audio content role." }),
+  }),
+]);
+
+const videoGenerationV2InputSchema = s.object(
+  "Request body for creating a MiniMax H3 video generation task.",
+  {
+    model: s.literal(h3VideoModel, { description: "MiniMax H3 video generation model." }),
+    content: {
+      ...s.array("Ordered text, image, video, or audio content for generation.", videoGenerationV2ContentSchema, {
+        minItems: 1,
+      }),
+      contains: videoGenerationV2TextContentSchema,
+    },
+    resolution: s.stringEnum(["768P", "2K"], { description: "Generated video resolution.", default: "2K" }),
+    duration: s.integer("Generated video duration in seconds.", { minimum: 4, maximum: 15 }),
+    ratio: s.stringEnum(["adaptive", "21:9", "16:9", "4:3", "1:1", "3:4", "9:16"], {
+      description: "Generated video aspect ratio.",
+      default: "adaptive",
+    }),
+    callback_url: videoCallbackUrlSchema,
+  },
+  { optional: ["ratio", "callback_url"] },
+);
+
 const textToVideoInputSchema = s.object(
   "Request body for creating a MiniMax text-to-video generation task.",
   {
@@ -275,6 +333,25 @@ const queryVideoGenerationInputSchema = s.object("Input parameters for querying 
   task_id: trimmedNonEmptyString("Identifier of the MiniMax video generation task to query."),
 });
 
+const listVideoGenerationV2InputSchema = s.object(
+  "Input parameters for listing MiniMax H3 video generation tasks.",
+  {
+    page_num: s.integer("Page number to retrieve.", { minimum: 1 }),
+    page_size: s.integer("Number of tasks to retrieve per page.", { minimum: 1 }),
+    filter: s.object(
+      "Optional MiniMax H3 video task filters.",
+      {
+        status: s.stringEnum("Task status filter.", videoGenerationV2Statuses),
+        task_ids: s.array("Task identifiers to include.", trimmedNonEmptyString("Task identifier."), { minItems: 1 }),
+        model: s.literal(h3VideoModel, { description: "MiniMax H3 video generation model." }),
+        task_type: optionalTrimmedString("Task type filter."),
+      },
+      { optional: ["status", "task_ids", "model", "task_type"] },
+    ),
+  },
+  { optional: ["page_num", "page_size", "filter"] },
+);
+
 const downloadVideoInputSchema = s.object("Input parameters for retrieving a generated MiniMax video file.", {
   file_id: trimmedNonEmptyString("Identifier of the generated video file to retrieve."),
 });
@@ -307,6 +384,61 @@ const videoTaskStatusOutputSchema = s.looseRequiredObject(
   },
   { optional: ["task_id", "status", "file_id", "base_resp"] },
 );
+
+const videoGenerationV2TaskSchema = s.looseRequiredObject(
+  "MiniMax H3 video generation task response.",
+  {
+    id: s.string("MiniMax H3 video task identifier."),
+    model: s.string("MiniMax model that processed the task."),
+    status: s.stringEnum("Current task status.", videoGenerationV2Statuses),
+    error: s.unknownObject("Task error details when generation fails."),
+    created_at: s.integer("Unix timestamp when MiniMax created the task."),
+    updated_at: s.integer("Unix timestamp when MiniMax last updated the task."),
+    content: s.looseRequiredObject("Generated video content.", {
+      url: s.string("Generated video URL."),
+    }),
+    resolution: s.string("Generated video resolution."),
+    duration: s.integer("Generated video duration in seconds."),
+    usage: s.unknownObject("MiniMax H3 video usage details."),
+    ratio: s.string("Generated video aspect ratio."),
+    task_type: s.string("MiniMax H3 video task type."),
+  },
+  {
+    optional: [
+      "id",
+      "model",
+      "status",
+      "error",
+      "created_at",
+      "updated_at",
+      "content",
+      "resolution",
+      "duration",
+      "usage",
+      "ratio",
+      "task_type",
+    ],
+  },
+);
+
+const videoGenerationV2CreatedOutputSchema = s.looseRequiredObject("MiniMax H3 video task creation response.", {
+  task_id: s.string("Identifier of the asynchronous MiniMax H3 video generation task."),
+});
+
+const videoGenerationV2QueryOutputSchema = s.looseRequiredObject("MiniMax H3 video task query response.", {
+  task: videoGenerationV2TaskSchema,
+});
+
+const videoGenerationV2ListOutputSchema = s.looseRequiredObject("MiniMax H3 video task list response.", {
+  items: s.array("MiniMax H3 video tasks.", videoGenerationV2TaskSchema),
+  total: s.integer("Total matching MiniMax H3 video task count."),
+});
+
+const videoGenerationV2DeleteOutputSchema = s.looseRequiredObject("MiniMax H3 video task deletion response.", {
+  task_id: s.string("Identifier of the deleted MiniMax H3 video generation task."),
+  action: s.stringEnum("Deletion action name.", ["cancel", "delete"]),
+  status: s.string("Deletion status."),
+});
 
 const videoFileOutputSchema = s.looseRequiredObject(
   "MiniMax file retrieval response for a generated video.",
@@ -360,6 +492,12 @@ export const minimaxActions: ActionDefinition[] = [
     }),
   }),
   defineProviderAction(service, {
+    name: "create_video_generation_v2",
+    description: "Create a MiniMax H3 video generation task with text, image, video, or audio content.",
+    inputSchema: videoGenerationV2InputSchema,
+    outputSchema: videoGenerationV2CreatedOutputSchema,
+  }),
+  defineProviderAction(service, {
     name: "text_to_video",
     description: "Create a MiniMax asynchronous text-to-video generation task.",
     inputSchema: textToVideoInputSchema,
@@ -376,6 +514,24 @@ export const minimaxActions: ActionDefinition[] = [
     description: "Query the status of a MiniMax video generation task and read its file id when it completes.",
     inputSchema: queryVideoGenerationInputSchema,
     outputSchema: videoTaskStatusOutputSchema,
+  }),
+  defineProviderAction(service, {
+    name: "query_video_generation_v2",
+    description: "Query a MiniMax H3 video generation task.",
+    inputSchema: queryVideoGenerationInputSchema,
+    outputSchema: videoGenerationV2QueryOutputSchema,
+  }),
+  defineProviderAction(service, {
+    name: "list_video_generation_v2",
+    description: "List MiniMax H3 video generation tasks.",
+    inputSchema: listVideoGenerationV2InputSchema,
+    outputSchema: videoGenerationV2ListOutputSchema,
+  }),
+  defineProviderAction(service, {
+    name: "delete_video_generation_v2",
+    description: "Delete a MiniMax H3 video generation task.",
+    inputSchema: queryVideoGenerationInputSchema,
+    outputSchema: videoGenerationV2DeleteOutputSchema,
   }),
   defineProviderAction(service, {
     name: "download_video",
