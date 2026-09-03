@@ -7,11 +7,39 @@ if (!/^v\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(upstreamTag ?? "")) {
 }
 
 const packagePath = new URL("../../package.json", import.meta.url);
+const providerRegistryGeneratorPath = new URL("../../scripts/generate-provider-registry.ts", import.meta.url);
 const wranglerExamplePath = new URL("../../wrangler.example.jsonc", import.meta.url);
 const wranglerPath = new URL("../../wrangler.jsonc", import.meta.url);
 const versionPath = new URL("../../.open-connector-version", import.meta.url);
 const webStylePath = new URL("../../web/src/style.css", import.meta.url);
 const webHeadersPath = new URL("../../web/public/_headers", import.meta.url);
+
+// Keep the complete catalog visible while leaving the largest unused runtimes
+// out of this personal Cloudflare Free deployment's Worker bundle.
+const cloudflareExcludedProviders = [
+  "agent_mail",
+  "aliyun_oss",
+  "asana",
+  "clickup",
+  "elasticsearch",
+  "excel",
+  "feishu",
+  "feishu_app_bot",
+  "gangtise",
+  "gitea",
+  "googlesheets",
+  "linkfox",
+  "longbridge",
+  "monday",
+  "mqtt",
+  "pixellab",
+  "posthog",
+  "postman",
+  "sunsama_mcp",
+  "tikhub",
+  "twitter",
+  "unifapi",
+];
 
 const packageJson = JSON.parse(await readFile(packagePath, "utf8"));
 
@@ -45,6 +73,30 @@ packageJson.cloudflare = {
 };
 
 await writeFile(packagePath, `${JSON.stringify(packageJson, null, 2)}\n`);
+
+const providerRegistryGenerator = await readFile(providerRegistryGeneratorPath, "utf8");
+const providersDirDeclaration = 'const providersDir = join(process.cwd(), "src/providers");';
+const cloudflareFilter = "providerSources.filter((source) => !source.nodeOnly),";
+const cloudflareExclusionDeclaration = [
+  "const cloudflareExcludedProviders = new Set([",
+  ...cloudflareExcludedProviders.map((service) => `  ${JSON.stringify(service)},`),
+  "]);",
+].join("\n");
+if (
+  !providerRegistryGenerator.includes(providersDirDeclaration) ||
+  !providerRegistryGenerator.includes(cloudflareFilter)
+) {
+  throw new Error("Expected provider registry generator structure was not found");
+}
+await writeFile(
+  providerRegistryGeneratorPath,
+  providerRegistryGenerator
+    .replace(providersDirDeclaration, `${providersDirDeclaration}\n${cloudflareExclusionDeclaration}`)
+    .replace(
+      cloudflareFilter,
+      "providerSources.filter((source) => !source.nodeOnly && !cloudflareExcludedProviders.has(source.service)),",
+    ),
+);
 
 const wranglerExample = await readFile(wranglerExamplePath, "utf8");
 const databaseIdMatches = wranglerExample.match(/^\s*"database_id"\s*:.*$/gm) ?? [];
