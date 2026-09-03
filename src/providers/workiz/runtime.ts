@@ -1,11 +1,11 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
 
 import { optionalBoolean, optionalInteger, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import { createProviderTimeout, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
 
 export const workizApiBaseUrl = "https://api.workiz.com/api/v1";
-const timeoutMs = 30_000;
 
 function setQuery(query: URLSearchParams, name: string, value: unknown) {
   if (value !== undefined) query.set(name, String(value));
@@ -34,7 +34,7 @@ const handler =
   (name: string): ProviderRuntimeHandler<ApiKeyProviderContext> =>
   (input, context) =>
     execute(name, input, context);
-export const workizActionHandlers: Record<string, ProviderRuntimeHandler<ApiKeyProviderContext>> = {
+export const workizActionHandlers: ProviderActionHandlers<"workiz", ProviderRuntimeHandler<ApiKeyProviderContext>> = {
   list_jobs: handler("list_jobs"),
   get_job: handler("get_job"),
   list_leads: handler("list_leads"),
@@ -54,7 +54,7 @@ export async function validateWorkizCredential(
   };
 }
 async function request(path: string, context: ApiKeyProviderContext, phase: "validate" | "execute") {
-  const timeout = createProviderTimeout(context.signal, timeoutMs);
+  const timeout = createProviderTimeout(context.signal);
   try {
     const response = await context.fetcher(`${workizApiBaseUrl}/${encodeURIComponent(context.apiKey)}${path}`, {
       headers: { accept: "application/json", "user-agent": providerUserAgent },

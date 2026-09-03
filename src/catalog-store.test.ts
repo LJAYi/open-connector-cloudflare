@@ -1,3 +1,4 @@
+import type { ProviderSummaryDefinition } from "./catalog-store.ts";
 import type { ProviderDefinition } from "./core/types.ts";
 
 import { describe, expect, it } from "vitest";
@@ -57,7 +58,7 @@ describe("catalog store", () => {
     ];
 
     const catalog = createCatalogStore(providers, { executableActionIds: ["example.ping"] });
-    const summary = catalog.providerSummaries[0];
+    const [summary] = JSON.parse(catalog.providerSummariesJson) as ProviderSummaryDefinition[];
     const summarizedAction = summary?.actions[0];
 
     expect(summarizedAction).not.toHaveProperty("inputSchema");
@@ -66,6 +67,7 @@ describe("catalog store", () => {
     expect(summarizedAction?.requiredScopes).toEqual(["read"]);
     expect(summarizedAction?.execution.locallyExecutable).toBe(true);
     expect(summary?.execution.actionCount).toBe(1);
+    expect(summary?.scenario).toBe("developer");
     // The full catalog still carries schemas for /api/actions/:actionId.
     expect(catalog.actionsById.get("example.ping")?.inputSchema).toEqual({
       type: "object",

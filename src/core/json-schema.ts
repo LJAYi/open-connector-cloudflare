@@ -21,6 +21,7 @@ type ObjectOptions = JsonSchemaOptions & {
 type ArrayOptions = JsonSchemaOptions & {
   minItems?: number;
   maxItems?: number;
+  uniqueItems?: boolean;
   itemDescription?: string;
 };
 
@@ -107,6 +108,7 @@ export const jsonSchema = {
     withOptions(schema, options);
     if (options.minItems != null) schema.minItems = options.minItems;
     if (options.maxItems != null) schema.maxItems = options.maxItems;
+    if (options.uniqueItems != null) schema.uniqueItems = options.uniqueItems;
     return schema;
   },
 
@@ -256,6 +258,13 @@ export const jsonSchema = {
     return cloneSchema(schema, { default: defaultValue });
   },
 
+  /** Require at least one named property while preserving the base object schema. */
+  requireAnyProperty(schema: JsonSchema, propertyNames: readonly [string, ...string[]]): JsonSchema {
+    return cloneSchema(schema, {
+      anyOf: propertyNames.map((propertyName) => ({ required: [propertyName] })),
+    });
+  },
+
   tuple(items: JsonSchema[], options: JsonSchemaOptions = {}): JsonSchema {
     return withOptions(
       {
@@ -337,20 +346,11 @@ export const jsonSchema = {
     };
   },
 
-  stringArray(
-    description: string,
-    options: Omit<JsonSchemaOptions, "description"> & {
-      minItems?: number;
-      maxItems?: number;
-      itemDescription?: string;
-    } = {},
-  ): JsonSchema {
-    return this.array(this.string({ minLength: 1, description: options.itemDescription }), {
+  stringArray(description: string, options: Omit<ArrayOptions, "description"> = {}): JsonSchema {
+    const { itemDescription, ...arrayOptions } = options;
+    return this.array(this.string({ minLength: 1, description: itemDescription }), {
+      ...arrayOptions,
       description,
-      minItems: options.minItems,
-      maxItems: options.maxItems,
-      default: options.default,
-      format: options.format,
     });
   },
 
@@ -392,6 +392,40 @@ function cloneSchema(schema: JsonSchema, properties: Partial<JsonSchema>): JsonS
  * Short alias for provider schema definitions.
  */
 export const s: typeof jsonSchema = jsonSchema;
+
+/**
+ * Render a schema's value domain as the short type label shown to agents, for
+ * example `string`, `"a" | "b"` for an enum, or the literal for a `const`.
+ */
+export function describeSchemaType(schema: JsonSchema | undefined): string {
+  if (!schema) {
+    return "unknown";
+  }
+  if (schema.const !== undefined) {
+    return JSON.stringify(schema.const);
+  }
+  if (Array.isArray(schema.enum)) {
+    return schema.enum.map((value) => JSON.stringify(value)).join(" | ");
+  }
+  if (Array.isArray(schema.anyOf)) {
+    return schema.anyOf.map((value) => describeSchemaType(value as JsonSchema)).join(" | ");
+  }
+  return typeof schema.type === "string" ? schema.type : "unknown";
+}
+
+/** Read an object schema's `properties` map, tolerating a missing or malformed value (including an array). */
+export function readSchemaProperties(schema: JsonSchema): Record<string, JsonSchema> {
+  return schema.properties && typeof schema.properties === "object" && !Array.isArray(schema.properties)
+    ? (schema.properties as Record<string, JsonSchema>)
+    : {};
+}
+
+/** Read an object schema's `required` property names, tolerating a missing or malformed value. */
+export function readSchemaRequired(schema: JsonSchema): string[] {
+  return Array.isArray(schema.required)
+    ? schema.required.filter((value): value is string => typeof value === "string")
+    : [];
+}
 
 function withOptions(schema: JsonSchema, options: JsonSchemaOptions): JsonSchema {
   if (options.description) schema.description = options.description;

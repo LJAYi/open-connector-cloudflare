@@ -2530,7 +2530,7 @@ export const fusionApiOperations: FusionApiOperation[] = [
         kind: "string",
         required: false,
         description: "Video generation model",
-        enumValues: ["doubao-seedance-2-0-260128", "doubao-seedance-2-0-fast-260128"],
+        enumValues: ["doubao-seedance-2-0-260128", "doubao-seedance-2-0-fast-260128", "doubao-seedance-2-5-260628"],
         defaultValue: "doubao-seedance-2-0-260128",
       },
       {
@@ -2609,9 +2609,10 @@ export const fusionApiOperations: FusionApiOperation[] = [
       },
       {
         name: "duration",
-        kind: "unknown",
+        kind: "integer",
         required: false,
-        description: "Video duration in seconds. Use -1 to let the model choose automatically.",
+        description:
+          "Video duration in seconds. Supported values depend on the selected model; use -1 to let the model choose automatically. Unsupported values are rejected by the upstream API.",
         defaultValue: 5,
       },
       {
