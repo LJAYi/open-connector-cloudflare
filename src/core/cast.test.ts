@@ -1,15 +1,41 @@
 import { describe, expect, it } from "vitest";
 import {
   base64Bytes,
+  booleanString,
+  looseArray,
+  nullableBoolean,
+  nullableRawString,
   optionalIntegerOrNull,
+  optionalNumberLike,
   optionalStringArray,
   positiveInteger,
+  rawStringOrNull,
+  recordOrEmpty,
   requiredBoolean,
+  requiredNumber,
   requiredRawString,
   requiredStringArray,
 } from "./cast.ts";
 
 describe("cast helpers", () => {
+  it("reads finite numbers from numbers and numeric strings", () => {
+    expect(optionalNumberLike(1.5)).toBe(1.5);
+    expect(optionalNumberLike("2.5")).toBe(2.5);
+    expect(optionalNumberLike("")).toBeUndefined();
+    expect(optionalNumberLike("not-a-number")).toBeUndefined();
+  });
+
+  it("treats whitespace-only optional numbers as missing", () => {
+    expect(optionalNumberLike(" \t\n")).toBeUndefined();
+  });
+
+  it("preserves present optional numbers including zero and padded decimals", () => {
+    expect(optionalNumberLike(0)).toBe(0);
+    expect(optionalNumberLike("0")).toBe(0);
+    expect(optionalNumberLike(5.5)).toBe(5.5);
+    expect(optionalNumberLike(" 5.5 ")).toBe(5.5);
+  });
+
   it("decodes strict base64 bytes", () => {
     expect(Array.from(base64Bytes("aGVsbG8=", "payload"))).toEqual([104, 101, 108, 108, 111]);
   });
@@ -52,6 +78,12 @@ describe("cast helpers", () => {
     expect(() => requiredBoolean(0, "enabled")).toThrow("enabled must be a boolean");
   });
 
+  it("requires a finite number without coercion", () => {
+    expect(requiredNumber(1.5, "weight")).toBe(1.5);
+    expect(() => requiredNumber("1.5", "weight")).toThrow("weight must be a number");
+    expect(() => requiredNumber(undefined, "weight")).toThrow("weight must be a number");
+  });
+
   it("reads an array containing only strings", () => {
     expect(requiredStringArray(["one", "two"], "values")).toEqual(["one", "two"]);
   });
@@ -67,5 +99,39 @@ describe("cast helpers", () => {
     expect(optionalStringArray([])).toEqual([]);
     expect(optionalStringArray(["one", 2])).toBeUndefined();
     expect(optionalStringArray(undefined)).toBeUndefined();
+  });
+
+  it("reads loose arrays, raw string-or-null, record-or-empty and boolean strings", () => {
+    expect(looseArray([1, "a"])).toEqual([1, "a"]);
+    expect(looseArray("a")).toEqual([]);
+    expect(looseArray(undefined)).toEqual([]);
+
+    expect(rawStringOrNull(" x ")).toBe(" x ");
+    expect(rawStringOrNull("")).toBe("");
+    expect(rawStringOrNull(1)).toBeNull();
+    expect(rawStringOrNull(undefined)).toBeNull();
+
+    expect(recordOrEmpty({ a: 1 })).toEqual({ a: 1 });
+    expect(recordOrEmpty([])).toEqual({});
+    expect(recordOrEmpty(null)).toEqual({});
+
+    expect(booleanString(true)).toBe("true");
+    expect(booleanString(false)).toBe("false");
+    expect(booleanString("true")).toBeUndefined();
+    expect(booleanString(undefined)).toBeUndefined();
+  });
+
+  it("keeps null apart from absent values in the nullable raw string and boolean readers", () => {
+    expect(nullableRawString(null)).toBeNull();
+    expect(nullableRawString("")).toBe("");
+    expect(nullableRawString(" x ")).toBe(" x ");
+    expect(nullableRawString(1)).toBeUndefined();
+    expect(nullableRawString(undefined)).toBeUndefined();
+
+    expect(nullableBoolean(null)).toBeNull();
+    expect(nullableBoolean(false)).toBe(false);
+    expect(nullableBoolean(true)).toBe(true);
+    expect(nullableBoolean("true")).toBeUndefined();
+    expect(nullableBoolean(undefined)).toBeUndefined();
   });
 });

@@ -1,5 +1,6 @@
 import type { ActionDefinition, JsonSchema } from "../../core/types.ts";
 
+import { s } from "../../core/json-schema.ts";
 import { defineProviderAction } from "../../core/provider-definition.ts";
 import { googleDriveFullScope, googleDriveMetadataReadonlyScope, googleDriveReadonlyScope } from "./scopes.ts";
 
@@ -7,6 +8,7 @@ const service = "googledrive";
 
 interface GoogledriveActionSource {
   name: string;
+  operationType: ActionDefinition["operationType"];
   description: string;
   requiredScopes: string[];
   inputSchema: JsonSchema;
@@ -16,6 +18,7 @@ interface GoogledriveActionSource {
 const actionSources: GoogledriveActionSource[] = [
   {
     name: "about.get",
+    operationType: "read",
     description: "Get Drive account information such as user details, quota, and supported capabilities.",
     requiredScopes: [googleDriveReadonlyScope, googleDriveMetadataReadonlyScope],
     inputSchema: {
@@ -38,6 +41,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "apps.get",
+    operationType: "read",
     description: "Get metadata for a specific Google Drive app by app ID.",
     requiredScopes: [googleDriveReadonlyScope, googleDriveMetadataReadonlyScope],
     inputSchema: {
@@ -62,6 +66,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "changes.getStartPageToken",
+    operationType: "read",
     description: "Get the page token for monitoring future Drive changes.",
     requiredScopes: [googleDriveReadonlyScope, googleDriveMetadataReadonlyScope],
     inputSchema: {
@@ -110,6 +115,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "changes.list",
+    operationType: "read",
     description: "List file and drive changes for incremental sync workflows.",
     requiredScopes: [googleDriveReadonlyScope, googleDriveMetadataReadonlyScope],
     inputSchema: {
@@ -389,6 +395,23 @@ const actionSources: GoogledriveActionSource[] = [
                     type: "boolean",
                     description: "Whether the file has been trashed.",
                   },
+                  ownedByMe: {
+                    type: "boolean",
+                    description: "Whether the authenticated user owns the file.",
+                  },
+                  capabilities: {
+                    type: "object",
+                    properties: {
+                      canShare: {
+                        type: "boolean",
+                        description: "Whether the authenticated user may modify the file's sharing settings.",
+                      },
+                    },
+                    required: ["canShare"],
+                    additionalProperties: false,
+                    description:
+                      "The subset of Drive capabilities this provider projects. Absent when Drive did not answer it.",
+                  },
                 },
                 required: [
                   "id",
@@ -438,6 +461,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "comments.get",
+    operationType: "read",
     description: "Get a specific comment on a Drive file by comment ID.",
     requiredScopes: [googleDriveReadonlyScope, googleDriveMetadataReadonlyScope],
     inputSchema: {
@@ -775,6 +799,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "comments.list",
+    operationType: "read",
     description: "List comments on a Drive file with pagination.",
     requiredScopes: [googleDriveReadonlyScope, googleDriveMetadataReadonlyScope],
     inputSchema: {
@@ -1149,6 +1174,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "drives.get",
+    operationType: "read",
     description: "Get a shared drive by drive ID.",
     requiredScopes: [googleDriveReadonlyScope, googleDriveMetadataReadonlyScope],
     inputSchema: {
@@ -1268,6 +1294,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "drives.list",
+    operationType: "read",
     description: "List shared drives accessible to the connected account.",
     requiredScopes: [googleDriveReadonlyScope, googleDriveMetadataReadonlyScope],
     inputSchema: {
@@ -1419,6 +1446,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "files.export",
+    operationType: "read",
     description:
       "Export a Google Workspace file to the requested MIME type and return a transit URL for the exported content.",
     requiredScopes: [googleDriveReadonlyScope, googleDriveMetadataReadonlyScope],
@@ -1508,178 +1536,208 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "files.get",
-    description: "Get metadata for a Drive file by ID.",
+    operationType: "read",
+    description: "Get metadata for a Drive file by ID, or download stored file content with alt=media.",
     requiredScopes: [googleDriveReadonlyScope, googleDriveMetadataReadonlyScope],
-    inputSchema: {
-      $schema: "https://json-schema.org/draft/2020-12/schema",
-      type: "object",
-      properties: {
-        fileId: {
-          type: "string",
-          minLength: 1,
-          description: "The ID of the file.",
-        },
-        includeSharedDrives: {
-          type: "boolean",
-          description: "When true, includes files from shared drives.",
-        },
-      },
-      additionalProperties: false,
-    },
-    outputSchema: {
-      $schema: "https://json-schema.org/draft/2020-12/schema",
-      type: "object",
-      properties: {
-        id: {
-          type: "string",
-          description: "The unique identifier of the file.",
-        },
-        name: {
-          type: "string",
-          description: "The name of the file.",
-        },
-        mimeType: {
-          type: "string",
-          description: "The MIME type of the file.",
-        },
-        webViewLink: {
-          anyOf: [
-            {
-              type: "string",
-            },
-            {
-              type: "null",
-            },
-          ],
-          description: "A link for opening the file in a relevant Google editor or viewer in a browser.",
-        },
-        createdTime: {
-          anyOf: [
-            {
-              type: "string",
-            },
-            {
-              type: "null",
-            },
-          ],
-          description: "The time at which the file was created (RFC 3339 date-time).",
-        },
-        modifiedTime: {
-          anyOf: [
-            {
-              type: "string",
-            },
-            {
-              type: "null",
-            },
-          ],
-          description: "The last time the file was modified by anyone (RFC 3339 date-time).",
-        },
-        sizeBytes: {
-          anyOf: [
-            {
-              type: "integer",
-              minimum: -9007199254740991,
-              maximum: 9007199254740991,
-            },
-            {
-              type: "null",
-            },
-          ],
-          description: "The size of the file's content in bytes.",
-        },
-        driveId: {
-          anyOf: [
-            {
-              type: "string",
-            },
-            {
-              type: "null",
-            },
-          ],
-          description: "The ID of the shared drive the file belongs to.",
-        },
-        parents: {
-          type: "array",
-          items: {
+    inputSchema: s.object("Input parameters for getting Drive file metadata or content.", {
+      fileId: s.nonEmptyString("The ID of the Google Drive file to retrieve."),
+      includeSharedDrives: s.optional(s.boolean("Whether the request supports files in shared drives.")),
+      alt: s.optional(
+        s.literal("media", {
+          description: "Return stored file content instead of metadata.",
+        }),
+      ),
+      acknowledgeAbuse: s.optional(
+        s.boolean("Whether the caller acknowledges the risk of downloading known malware or other abusive files."),
+      ),
+    }),
+    outputSchema: s.anyOf("Drive file metadata or downloaded file content.", [
+      {
+        $schema: "https://json-schema.org/draft/2020-12/schema",
+        type: "object",
+        properties: {
+          id: {
             type: "string",
+            description: "The unique identifier of the file.",
           },
-          description: "The IDs of the parent folders containing the file.",
-        },
-        owners: {
-          type: "array",
-          items: {
+          name: {
+            type: "string",
+            description: "The name of the file.",
+          },
+          mimeType: {
+            type: "string",
+            description: "The MIME type of the file.",
+          },
+          webViewLink: {
+            anyOf: [
+              {
+                type: "string",
+              },
+              {
+                type: "null",
+              },
+            ],
+            description: "A link for opening the file in a relevant Google editor or viewer in a browser.",
+          },
+          createdTime: {
+            anyOf: [
+              {
+                type: "string",
+              },
+              {
+                type: "null",
+              },
+            ],
+            description: "The time at which the file was created (RFC 3339 date-time).",
+          },
+          modifiedTime: {
+            anyOf: [
+              {
+                type: "string",
+              },
+              {
+                type: "null",
+              },
+            ],
+            description: "The last time the file was modified by anyone (RFC 3339 date-time).",
+          },
+          sizeBytes: {
+            anyOf: [
+              {
+                type: "integer",
+                minimum: -9007199254740991,
+                maximum: 9007199254740991,
+              },
+              {
+                type: "null",
+              },
+            ],
+            description: "The size of the file's content in bytes.",
+          },
+          driveId: {
+            anyOf: [
+              {
+                type: "string",
+              },
+              {
+                type: "null",
+              },
+            ],
+            description: "The ID of the shared drive the file belongs to.",
+          },
+          parents: {
+            type: "array",
+            items: {
+              type: "string",
+            },
+            description: "The IDs of the parent folders containing the file.",
+          },
+          owners: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                displayName: {
+                  anyOf: [
+                    {
+                      type: "string",
+                    },
+                    {
+                      type: "null",
+                    },
+                  ],
+                  description: "The display name of the owner.",
+                },
+                emailAddress: {
+                  anyOf: [
+                    {
+                      type: "string",
+                    },
+                    {
+                      type: "null",
+                    },
+                  ],
+                  description: "The email address of the owner.",
+                },
+                permissionId: {
+                  anyOf: [
+                    {
+                      type: "string",
+                    },
+                    {
+                      type: "null",
+                    },
+                  ],
+                  description: "The permission ID of the owner.",
+                },
+                photoLink: {
+                  anyOf: [
+                    {
+                      type: "string",
+                    },
+                    {
+                      type: "null",
+                    },
+                  ],
+                  description: "A link to the owner's profile photo.",
+                },
+              },
+              required: ["displayName", "emailAddress", "permissionId", "photoLink"],
+              additionalProperties: false,
+            },
+            description: "The owners of the file.",
+          },
+          shared: {
+            type: "boolean",
+            description: "Whether the file has been shared.",
+          },
+          starred: {
+            type: "boolean",
+            description: "Whether the user has starred the file.",
+          },
+          trashed: {
+            type: "boolean",
+            description: "Whether the file has been trashed.",
+          },
+          ownedByMe: {
+            type: "boolean",
+            description: "Whether the authenticated user owns the file.",
+          },
+          capabilities: {
             type: "object",
             properties: {
-              displayName: {
-                anyOf: [
-                  {
-                    type: "string",
-                  },
-                  {
-                    type: "null",
-                  },
-                ],
-                description: "The display name of the owner.",
-              },
-              emailAddress: {
-                anyOf: [
-                  {
-                    type: "string",
-                  },
-                  {
-                    type: "null",
-                  },
-                ],
-                description: "The email address of the owner.",
-              },
-              permissionId: {
-                anyOf: [
-                  {
-                    type: "string",
-                  },
-                  {
-                    type: "null",
-                  },
-                ],
-                description: "The permission ID of the owner.",
-              },
-              photoLink: {
-                anyOf: [
-                  {
-                    type: "string",
-                  },
-                  {
-                    type: "null",
-                  },
-                ],
-                description: "A link to the owner's profile photo.",
+              canShare: {
+                type: "boolean",
+                description: "Whether the authenticated user may modify the file's sharing settings.",
               },
             },
-            required: ["displayName", "emailAddress", "permissionId", "photoLink"],
+            required: ["canShare"],
             additionalProperties: false,
+            description:
+              "The subset of Drive capabilities this provider projects. Absent when Drive did not answer it.",
           },
-          description: "The owners of the file.",
         },
-        shared: {
-          type: "boolean",
-          description: "Whether the file has been shared.",
-        },
-        starred: {
-          type: "boolean",
-          description: "Whether the user has starred the file.",
-        },
-        trashed: {
-          type: "boolean",
-          description: "Whether the file has been trashed.",
-        },
+        required: ["id", "name", "mimeType", "webViewLink", "createdTime", "modifiedTime", "sizeBytes", "driveId"],
+        additionalProperties: false,
       },
-      required: ["id", "name", "mimeType", "webViewLink", "createdTime", "modifiedTime", "sizeBytes", "driveId"],
-      additionalProperties: false,
-    },
+      s.object("The downloaded Google Drive file stored in local transit storage.", {
+        fileId: s.nonEmptyString("The Google Drive file ID returned by the metadata request."),
+        name: s.nonEmptyString("The original Google Drive file name."),
+        mimeType: s.nonEmptyString("The Google Drive file MIME type."),
+        sizeBytes: s.nonNegativeInteger("The downloaded file size in bytes."),
+        file: s.object("The downloaded content in local transit file storage.", {
+          fileId: s.nonEmptyString("The local transit file identifier."),
+          downloadUrl: s.url("The local transit URL for downloading the stored file."),
+          sizeBytes: s.nonNegativeInteger("The stored transit file size in bytes."),
+          name: s.nonEmptyString("The stored transit file name."),
+          mimeType: s.nonEmptyString("The stored transit file MIME type."),
+        }),
+      }),
+    ]),
   },
   {
     name: "files.list",
+    operationType: "read",
     description: "List Google Drive files using the official Drive query and pagination parameters.",
     requiredScopes: [googleDriveReadonlyScope, googleDriveMetadataReadonlyScope],
     inputSchema: {
@@ -1898,6 +1956,23 @@ const actionSources: GoogledriveActionSource[] = [
                 type: "boolean",
                 description: "Whether the file has been trashed.",
               },
+              ownedByMe: {
+                type: "boolean",
+                description: "Whether the authenticated user owns the file.",
+              },
+              capabilities: {
+                type: "object",
+                properties: {
+                  canShare: {
+                    type: "boolean",
+                    description: "Whether the authenticated user may modify the file's sharing settings.",
+                  },
+                },
+                required: ["canShare"],
+                additionalProperties: false,
+                description:
+                  "The subset of Drive capabilities this provider projects. Absent when Drive did not answer it.",
+              },
             },
             required: ["id", "name", "mimeType", "webViewLink", "createdTime", "modifiedTime", "sizeBytes", "driveId"],
             additionalProperties: false,
@@ -1922,6 +1997,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "files.listLabels",
+    operationType: "read",
     description: "List the Drive labels currently applied to a file.",
     requiredScopes: [googleDriveReadonlyScope, googleDriveMetadataReadonlyScope],
     inputSchema: {
@@ -2117,6 +2193,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "permissions.get",
+    operationType: "read",
     description: "Get a specific permission on a Drive file or shared drive by permission ID.",
     requiredScopes: [googleDriveReadonlyScope, googleDriveMetadataReadonlyScope],
     inputSchema: {
@@ -2311,6 +2388,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "permissions.list",
+    operationType: "read",
     description: "List permissions on a Drive file or shared drive.",
     requiredScopes: [googleDriveReadonlyScope, googleDriveMetadataReadonlyScope],
     inputSchema: {
@@ -2548,6 +2626,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "replies.get",
+    operationType: "read",
     description: "Get a specific reply under a Drive file comment.",
     requiredScopes: [googleDriveReadonlyScope, googleDriveMetadataReadonlyScope],
     inputSchema: {
@@ -2728,6 +2807,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "replies.list",
+    operationType: "read",
     description: "List replies under a Drive file comment with pagination.",
     requiredScopes: [googleDriveReadonlyScope, googleDriveMetadataReadonlyScope],
     inputSchema: {
@@ -2940,6 +3020,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "revisions.get",
+    operationType: "read",
     description: "Get metadata for a specific Drive file revision.",
     requiredScopes: [googleDriveReadonlyScope, googleDriveMetadataReadonlyScope],
     inputSchema: {
@@ -3159,6 +3240,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "revisions.list",
+    operationType: "read",
     description: "List revision metadata for a Drive file.",
     requiredScopes: [googleDriveReadonlyScope, googleDriveMetadataReadonlyScope],
     inputSchema: {
@@ -3406,6 +3488,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "accessproposals.list",
+    operationType: "read",
     description: "List pending access proposals for a specific Drive file.",
     requiredScopes: [googleDriveReadonlyScope, googleDriveMetadataReadonlyScope],
     inputSchema: {
@@ -3560,6 +3643,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "approvals.list",
+    operationType: "read",
     description: "List approvals associated with a specific Drive file.",
     requiredScopes: [googleDriveReadonlyScope, googleDriveMetadataReadonlyScope],
     inputSchema: {
@@ -3674,6 +3758,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "comments.create",
+    operationType: "write",
     description: "Create a comment on a Drive file, optionally with anchor or quoted file content.",
     requiredScopes: [googleDriveFullScope],
     inputSchema: {
@@ -4021,6 +4106,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "comments.delete",
+    operationType: "destructive",
     description: "Permanently delete a comment thread from a Drive file.",
     requiredScopes: [googleDriveFullScope],
     inputSchema: {
@@ -4064,6 +4150,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "comments.update",
+    operationType: "write",
     description: "Update the content of an existing Drive file comment.",
     requiredScopes: [googleDriveFullScope],
     inputSchema: {
@@ -4410,6 +4497,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "drives.create",
+    operationType: "write",
     description: "Create a new shared drive.",
     requiredScopes: [googleDriveFullScope],
     inputSchema: {
@@ -4576,6 +4664,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "drives.delete",
+    operationType: "destructive",
     description: "Permanently delete a shared drive.",
     requiredScopes: [googleDriveFullScope],
     inputSchema: {
@@ -4619,6 +4708,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "drives.hide",
+    operationType: "destructive",
     description: "Hide a shared drive from the default Drive view.",
     requiredScopes: [googleDriveFullScope],
     inputSchema: {
@@ -4738,6 +4828,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "drives.unhide",
+    operationType: "write",
     description: "Unhide a shared drive and restore it to the default Drive view.",
     requiredScopes: [googleDriveFullScope],
     inputSchema: {
@@ -4857,6 +4948,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "drives.update",
+    operationType: "write",
     description: "Update metadata or restrictions on a shared drive.",
     requiredScopes: [googleDriveFullScope],
     inputSchema: {
@@ -5057,6 +5149,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "files.copy",
+    operationType: "write",
     description: "Copy a Drive file and optionally override official File metadata.",
     requiredScopes: [googleDriveFullScope],
     inputSchema: {
@@ -5266,6 +5359,22 @@ const actionSources: GoogledriveActionSource[] = [
           type: "boolean",
           description: "Whether the file has been trashed.",
         },
+        ownedByMe: {
+          type: "boolean",
+          description: "Whether the authenticated user owns the file.",
+        },
+        capabilities: {
+          type: "object",
+          properties: {
+            canShare: {
+              type: "boolean",
+              description: "Whether the authenticated user may modify the file's sharing settings.",
+            },
+          },
+          required: ["canShare"],
+          additionalProperties: false,
+          description: "The subset of Drive capabilities this provider projects. Absent when Drive did not answer it.",
+        },
       },
       required: ["id", "name", "mimeType", "webViewLink", "createdTime", "modifiedTime", "sizeBytes", "driveId"],
       additionalProperties: false,
@@ -5273,6 +5382,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "files.create",
+    operationType: "write",
     description: "Create a Drive file with official File metadata and optional connector media upload content.",
     requiredScopes: [googleDriveFullScope],
     inputSchema: {
@@ -5306,10 +5416,6 @@ const actionSources: GoogledriveActionSource[] = [
         starred: {
           type: "boolean",
           description: "Whether the user has starred the file.",
-        },
-        trashed: {
-          type: "boolean",
-          description: "Whether to move the file to the trash.",
         },
         appProperties: {
           type: "object",
@@ -5490,6 +5596,22 @@ const actionSources: GoogledriveActionSource[] = [
           type: "boolean",
           description: "Whether the file has been trashed.",
         },
+        ownedByMe: {
+          type: "boolean",
+          description: "Whether the authenticated user owns the file.",
+        },
+        capabilities: {
+          type: "object",
+          properties: {
+            canShare: {
+              type: "boolean",
+              description: "Whether the authenticated user may modify the file's sharing settings.",
+            },
+          },
+          required: ["canShare"],
+          additionalProperties: false,
+          description: "The subset of Drive capabilities this provider projects. Absent when Drive did not answer it.",
+        },
       },
       required: ["id", "name", "mimeType", "webViewLink", "createdTime", "modifiedTime", "sizeBytes", "driveId"],
       additionalProperties: false,
@@ -5497,6 +5619,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "files.delete",
+    operationType: "destructive",
     description: "Permanently delete a Drive file or folder by ID.",
     requiredScopes: [googleDriveFullScope],
     inputSchema: {
@@ -5535,6 +5658,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "files.emptyTrash",
+    operationType: "destructive",
     description: "Permanently empty the user's trash or a shared drive's trash.",
     requiredScopes: [googleDriveFullScope],
     inputSchema: {
@@ -5565,6 +5689,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "files.generateIds",
+    operationType: "write",
     description: "Generate one or more Drive file IDs for later create or copy requests.",
     requiredScopes: [googleDriveFullScope],
     inputSchema: {
@@ -5616,6 +5741,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "files.modifyLabels",
+    operationType: "destructive",
     description: "Add, update, or remove Drive labels on a file.",
     requiredScopes: [googleDriveFullScope],
     inputSchema: {
@@ -5891,6 +6017,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "files.update",
+    operationType: "destructive",
     description:
       "Patch a Drive file with official metadata, parent query parameters, and optional connector media upload content.",
     requiredScopes: [googleDriveFullScope],
@@ -6115,6 +6242,22 @@ const actionSources: GoogledriveActionSource[] = [
           type: "boolean",
           description: "Whether the file has been trashed.",
         },
+        ownedByMe: {
+          type: "boolean",
+          description: "Whether the authenticated user owns the file.",
+        },
+        capabilities: {
+          type: "object",
+          properties: {
+            canShare: {
+              type: "boolean",
+              description: "Whether the authenticated user may modify the file's sharing settings.",
+            },
+          },
+          required: ["canShare"],
+          additionalProperties: false,
+          description: "The subset of Drive capabilities this provider projects. Absent when Drive did not answer it.",
+        },
       },
       required: ["id", "name", "mimeType", "webViewLink", "createdTime", "modifiedTime", "sizeBytes", "driveId"],
       additionalProperties: false,
@@ -6122,6 +6265,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "permissions.create",
+    operationType: "write",
     description: "Create a permission on a Drive file or shared drive.",
     requiredScopes: [googleDriveFullScope],
     inputSchema: {
@@ -6353,6 +6497,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "permissions.delete",
+    operationType: "destructive",
     description: "Delete a permission from a Drive file or shared drive.",
     requiredScopes: [googleDriveFullScope],
     inputSchema: {
@@ -6404,6 +6549,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "permissions.update",
+    operationType: "write",
     description: "Update an existing Drive permission using Google Drive v3 patch semantics.",
     requiredScopes: [googleDriveFullScope],
     inputSchema: {
@@ -6623,6 +6769,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "replies.create",
+    operationType: "write",
     description: "Create a reply under an existing Drive file comment.",
     requiredScopes: [googleDriveFullScope],
     inputSchema: {
@@ -6808,6 +6955,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "replies.delete",
+    operationType: "destructive",
     description: "Permanently delete a specific reply from a Drive file comment thread.",
     requiredScopes: [googleDriveFullScope],
     inputSchema: {
@@ -6860,6 +7008,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "replies.update",
+    operationType: "write",
     description: "Update the content of an existing reply on a Drive file comment.",
     requiredScopes: [googleDriveFullScope],
     inputSchema: {
@@ -7046,6 +7195,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "revisions.delete",
+    operationType: "destructive",
     description: "Permanently delete a specific revision from a Drive file.",
     requiredScopes: [googleDriveFullScope],
     inputSchema: {
@@ -7089,6 +7239,7 @@ const actionSources: GoogledriveActionSource[] = [
   },
   {
     name: "revisions.update",
+    operationType: "write",
     description: "Update revision metadata flags on a specific Drive file revision.",
     requiredScopes: [googleDriveFullScope],
     inputSchema: {

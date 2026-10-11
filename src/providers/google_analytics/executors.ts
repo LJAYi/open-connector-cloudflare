@@ -1,4 +1,5 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { OAuthProviderContext } from "../provider-runtime.ts";
 
 import {
@@ -13,8 +14,16 @@ import {
   optionalStringOrNull,
   requiredRecord,
 } from "../../core/cast.ts";
-import { googleJsonRequest } from "../googledrive/runtime-shared.ts";
-import { defineOAuthProviderExecutors, ProviderRequestError } from "../provider-runtime.ts";
+import {
+  defineGoogleProviderExecutors,
+  googleBearerProxyAuth,
+  googleServiceAccountValidator,
+} from "../googledrive/runtime-auth.ts";
+import { googleJsonRequest } from "../googledrive/runtime-request.ts";
+import { defineProviderProxy, ProviderRequestError } from "../provider-runtime.ts";
+import { googleAnalyticsOAuthScopes } from "./scopes.ts";
+
+const service = "google_analytics";
 
 export const googleAnalyticsDataApiBaseUrl = "https://analyticsdata.googleapis.com/v1beta";
 export const googleAnalyticsDataApiAlphaBaseUrl = "https://analyticsdata.googleapis.com/v1alpha";
@@ -27,7 +36,7 @@ type GoogleAnalyticsActionHandler = (
   context: GoogleAnalyticsRuntimeDeps,
 ) => Promise<unknown>;
 
-export const googleAnalyticsActionHandlers: Record<string, GoogleAnalyticsActionHandler> = {
+export const googleAnalyticsActionHandlers: ProviderActionHandlers<"google_analytics", GoogleAnalyticsActionHandler> = {
   list_account_summaries: listAccountSummaries,
   list_properties: listProperties,
   get_metadata: getMetadata,
@@ -58,10 +67,9 @@ export const googleAnalyticsActionHandlers: Record<string, GoogleAnalyticsAction
   list_data_streams: listDataStreams,
 };
 
-export const executors: ProviderExecutors = defineOAuthProviderExecutors(
-  "google_analytics",
-  googleAnalyticsActionHandlers,
-);
+export const executors: ProviderExecutors = defineGoogleProviderExecutors(service, googleAnalyticsActionHandlers, {
+  scopes: googleAnalyticsOAuthScopes,
+});
 
 export const credentialValidators: CredentialValidators = {
   async oauth2(input, { fetcher }) {
@@ -83,6 +91,7 @@ export const credentialValidators: CredentialValidators = {
       },
     };
   },
+  customCredential: googleServiceAccountValidator(service, googleAnalyticsOAuthScopes),
 };
 
 type BusinessReportOrderBy = {
@@ -1213,3 +1222,9 @@ function extractTrailingResourceId(value: string) {
   }
   return value.slice(separatorIndex + 1);
 }
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: "https://analyticsdata.googleapis.com/v1beta",
+  auth: googleBearerProxyAuth(googleAnalyticsOAuthScopes),
+});
