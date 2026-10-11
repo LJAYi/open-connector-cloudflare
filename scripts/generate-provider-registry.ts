@@ -6,30 +6,6 @@ import { format } from "oxfmt";
 import { loadProviderSources } from "./provider-source.ts";
 
 const providersDir = join(process.cwd(), "src/providers");
-const cloudflareExcludedProviders = new Set([
-  "agent_mail",
-  "aliyun_oss",
-  "asana",
-  "clickup",
-  "elasticsearch",
-  "excel",
-  "feishu",
-  "feishu_app_bot",
-  "gangtise",
-  "gitea",
-  "googlesheets",
-  "linkfox",
-  "longbridge",
-  "monday",
-  "mqtt",
-  "pixellab",
-  "posthog",
-  "postman",
-  "sunsama_mcp",
-  "tikhub",
-  "twitter",
-  "unifapi",
-]);
 
 /**
  * Generate provider registries from definitions already loaded by the caller.
@@ -39,7 +15,7 @@ export async function generateProviderRegistries(providerSources: ProviderSource
     writeRegistry("registry.generated.ts", providerSources),
     writeRegistry(
       "registry.cloudflare.generated.ts",
-      providerSources.filter((source) => !source.nodeOnly && !cloudflareExcludedProviders.has(source.service)),
+      providerSources.filter((source) => !source.nodeOnly),
     ),
     writeActionContracts(providerSources),
   ]);

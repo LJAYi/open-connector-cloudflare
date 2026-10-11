@@ -8,26 +8,25 @@ import {
   CANARY_LIMITS,
   DEFAULT_LIMITS,
   parseWranglerAssetCount,
-  parseWranglerGzipBytes,
+  parseWranglerTotalUploadBytes,
 } from "./check-cloudflare-free-limits.mjs";
 
-test("temporarily admits v1.3.3 while staying below Cloudflare hard limits", () => {
-  assert.ok(DEFAULT_LIMITS.workerGzipBytes > Math.round(2854.75 * 1024));
-  assert.ok(DEFAULT_LIMITS.workerGzipBytes < 3_000_000);
+test("uses Cloudflare's uncompressed Worker size limit", () => {
+  assert.equal(DEFAULT_LIMITS.workerBytes, 64 * 1024 * 1024);
   assert.ok(DEFAULT_LIMITS.assetBytes > Math.round(24.54 * 1024 * 1024));
   assert.ok(DEFAULT_LIMITS.assetBytes < 25 * 1024 * 1024);
 });
 
 test("lets canary use Cloudflare Free hard limits", () => {
-  assert.equal(CANARY_LIMITS.workerGzipBytes, 3_000_000);
+  assert.equal(CANARY_LIMITS.workerBytes, 64 * 1024 * 1024);
   assert.equal(CANARY_LIMITS.assetBytes, 25 * 1024 * 1024);
   assert.equal(CANARY_LIMITS.assetCount, 20_000);
 });
 
-test("parses Wrangler gzip sizes", () => {
-  assert.equal(parseWranglerGzipBytes("Total Upload: 10 KiB / gzip: 2.5 KiB"), 2560);
-  assert.equal(parseWranglerGzipBytes("gzip: 1.25 MiB"), 1_310_720);
-  assert.throws(() => parseWranglerGzipBytes("dry run complete"), /Could not find Wrangler/);
+test("parses Wrangler uncompressed upload sizes", () => {
+  assert.equal(parseWranglerTotalUploadBytes("Total Upload: 10 KiB / gzip: 2.5 KiB"), 10 * 1024);
+  assert.equal(parseWranglerTotalUploadBytes("Total Upload: 1.25 MiB"), 1_310_720);
+  assert.throws(() => parseWranglerTotalUploadBytes("dry run complete"), /Could not find Wrangler/);
 });
 
 test("parses Wrangler asset counts", () => {
@@ -51,10 +50,10 @@ test("reports Worker, asset size, and asset count violations", async (context) =
   const result = await checkCloudflareFreeLimits({
     wranglerOutputPath,
     assetsDirectory,
-    limits: { workerGzipBytes: 4096, assetBytes: 8, assetCount: 1 },
+    limits: { workerBytes: 4096, assetBytes: 8, assetCount: 1 },
   });
 
-  assert.equal(result.workerGzipBytes, 5120);
+  assert.equal(result.workerBytes, 20 * 1024);
   assert.deepEqual(result.largestAsset, { relativePath: "nested/large.txt", sizeBytes: 9 });
   assert.equal(result.violations.length, 3);
 });
@@ -72,7 +71,7 @@ test("passes when every measurement has headroom", async (context) => {
   const result = await checkCloudflareFreeLimits({
     wranglerOutputPath,
     assetsDirectory,
-    limits: { workerGzipBytes: 2048, assetBytes: 8, assetCount: 2 },
+    limits: { workerBytes: 8192, assetBytes: 8, assetCount: 2 },
   });
 
   assert.deepEqual(result.violations, []);
@@ -93,7 +92,7 @@ test("ignores symbolic links when collecting assets", async (context) => {
   const result = await checkCloudflareFreeLimits({
     wranglerOutputPath,
     assetsDirectory,
-    limits: { workerGzipBytes: 2048, assetBytes: 8, assetCount: 2 },
+    limits: { workerBytes: 8192, assetBytes: 8, assetCount: 2 },
   });
 
   assert.deepEqual(result.assets, [{ relativePath: "asset.txt", sizeBytes: 4 }]);
