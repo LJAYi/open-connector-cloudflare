@@ -6,9 +6,9 @@ const MEBIBYTE = 1024 * 1024;
 const ANSI_ESCAPE_PATTERN = new RegExp(`${String.fromCharCode(27)}\\[[0-?]*[ -/]*[@-~]`, "g");
 
 export const DEFAULT_LIMITS = Object.freeze({
-  // Temporary production exception for upstream v1.3.5. Keep the actual
-  // Cloudflare Worker hard limit while retaining the static-asset guard below.
-  workerGzipBytes: 3_000_000,
+  // Cloudflare's Worker size limit is measured before compression. There is no
+  // compressed bundle limit.
+  workerBytes: 64 * MEBIBYTE,
   assetBytes: Math.floor(24.75 * MEBIBYTE),
   assetCount: 18_000,
 });
@@ -16,14 +16,14 @@ export const DEFAULT_LIMITS = Object.freeze({
 export const CANARY_LIMITS = Object.freeze({
   // Canary intentionally uses Cloudflare Free's hard limits so upstream or
   // fork branches can be tested even when they have no production headroom.
-  workerGzipBytes: 3_000_000,
+  workerBytes: 64 * MEBIBYTE,
   assetBytes: 25 * MEBIBYTE,
   assetCount: 20_000,
 });
 
 export async function checkCloudflareFreeLimits({ wranglerOutputPath, assetsDirectory, limits = DEFAULT_LIMITS }) {
   const wranglerOutput = await readFile(wranglerOutputPath, "utf8");
-  const workerGzipBytes = parseWranglerGzipBytes(wranglerOutput);
+  const workerBytes = parseWranglerTotalUploadBytes(wranglerOutput);
   const assets = await collectAssets(assetsDirectory);
   const assetCount = Math.max(parseWranglerAssetCount(wranglerOutput) ?? 0, assets.length);
   const largestAsset = assets.reduce((largest, asset) => (asset.sizeBytes > largest.sizeBytes ? asset : largest), {
@@ -32,9 +32,9 @@ export async function checkCloudflareFreeLimits({ wranglerOutputPath, assetsDire
   });
   const violations = [];
 
-  if (workerGzipBytes > limits.workerGzipBytes) {
+  if (workerBytes > limits.workerBytes) {
     violations.push(
-      `Worker gzip size ${formatBytes(workerGzipBytes)} exceeds the ${formatBytes(limits.workerGzipBytes)} guard`,
+      `Worker uncompressed size ${formatBytes(workerBytes)} exceeds the ${formatBytes(limits.workerBytes)} guard`,
     );
   }
   if (largestAsset.sizeBytes > limits.assetBytes) {
@@ -46,14 +46,14 @@ export async function checkCloudflareFreeLimits({ wranglerOutputPath, assetsDire
     violations.push(`Static asset count ${assetCount} exceeds the ${limits.assetCount.toLocaleString("en-US")} guard`);
   }
 
-  return { workerGzipBytes, assets, assetCount, largestAsset, violations };
+  return { workerBytes, assets, assetCount, largestAsset, violations };
 }
 
-export function parseWranglerGzipBytes(output) {
+export function parseWranglerTotalUploadBytes(output) {
   const plainOutput = output.replace(ANSI_ESCAPE_PATTERN, "");
-  const match = plainOutput.match(/gzip:\s*([0-9]+(?:\.[0-9]+)?)\s*(B|KB|KiB|MB|MiB)\b/i);
+  const match = plainOutput.match(/Total Upload:\s*([0-9]+(?:\.[0-9]+)?)\s*(B|KB|KiB|MB|MiB)\b/i);
   if (!match) {
-    throw new Error("Could not find Wrangler's gzip upload size in the dry-run output.");
+    throw new Error("Could not find Wrangler's uncompressed upload size in the dry-run output.");
   }
 
   return Math.round(Number(match[1]) * unitMultiplier(match[2]));
@@ -129,7 +129,7 @@ async function main() {
   console.log(
     `Cloudflare Free plan headroom check${process.env.CLOUDFLARE_LIMIT_PROFILE === "canary" ? " (canary)" : ""}`,
   );
-  console.log(`  Worker gzip: ${formatBytes(result.workerGzipBytes)} / ${formatBytes(limits.workerGzipBytes)}`);
+  console.log(`  Worker uncompressed: ${formatBytes(result.workerBytes)} / ${formatBytes(limits.workerBytes)}`);
   console.log(
     `  Static assets: ${result.assetCount.toLocaleString("en-US")} / ${limits.assetCount.toLocaleString("en-US")}`,
   );
