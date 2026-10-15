@@ -1,4 +1,5 @@
 import type { CatalogStore, RuntimeProviderDefinition } from "./catalog-store.ts";
+import type { ProviderHttpDispatchOptions } from "./core/provider-http-dispatch.ts";
 import type {
   ApiKeyAuthDefinition,
   AuthType,
@@ -12,12 +13,16 @@ import type {
   RuntimeLogger,
 } from "./core/types.ts";
 import type { MarketplacePricing, MarketplaceService } from "./marketplace/marketplace-service.ts";
-import type { IOAuthCredentialRefresher } from "./oauth/oauth-credential-refresh-service.ts";
+import type { IOAuthCredentialRefresher, OAuthRevocationOutcome } from "./oauth/oauth-credential-refresh-service.ts";
 import type { IProviderLoader } from "./providers/provider-loader.ts";
 
 import { normalizeCredentialValues } from "./core/credential-fields.ts";
 import { apiKeyCredentialFields } from "./core/provider-setup.ts";
-import { providerFetch } from "./providers/provider-runtime.ts";
+import {
+  providerFetch,
+  ProviderDispatchRequestError,
+  withProviderHttpDispatchResult,
+} from "./providers/provider-runtime.ts";
 
 export const defaultConnectionName = "default";
 const connectionNamePattern = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/;
@@ -31,6 +36,8 @@ export interface ConnectionSummary {
   connectionName: string;
   authType: AuthType | "marketplace";
   configured: boolean;
+  /** Known credential state; token expiry alone does not require new consent when refresh is available. */
+  status?: "active" | "reauth_required";
   virtual: boolean;
   default: boolean;
   profile: CredentialProfile;
@@ -59,6 +66,7 @@ export interface ConnectWithoutAuthInput {
 }
 
 export interface ConnectionServiceOptions {
+  providerHttpDispatch?: ProviderHttpDispatchOptions;
   catalog: CatalogStore;
   oauthCredentials?: IOAuthCredentialRefresher;
   providerLoader: IProviderLoader;
@@ -99,10 +107,23 @@ export interface StoredLocalConnection {
   credential: ResolvedCredential;
 }
 
+export interface DisconnectOptions {
+  /**
+   * `true` also revokes the OAuth grant at the provider once the credential is
+   * deleted here, and the answer's `revoked` says how that went. Omitted or
+   * `false` (the default) deletes the credential alone and answers `skipped` —
+   * the right call when another connection of the same account shares the
+   * grant at the provider, where revoking would end the one that stays.
+   */
+  revoke?: boolean;
+}
+
 export interface DisconnectedConnectionSummary {
   service: string;
   connectionName: string;
   configured: false;
+  /** What the disconnect did about the grant at the provider; see {@link OAuthRevocationOutcome}. */
+  revoked: OAuthRevocationOutcome;
 }
 
 export type ExecutionConnection = LocalExecutionConnection | MarketplaceExecutionConnection | SaasExecutionConnection;
@@ -129,6 +150,13 @@ interface SaasExecutionConnection {
  */
 export interface IConnectionStore {
   get(service: string, connectionName: string): Promise<StoredConnection | undefined>;
+  getRetirementGeneration(service: string, connectionName: string): Promise<string>;
+  setIfCurrentGeneration(
+    service: string,
+    connectionName: string,
+    credential: ResolvedCredential,
+    retirementGeneration: string,
+  ): Promise<StoredLocalConnection | undefined>;
   set(service: string, connectionName: string, credential: ResolvedCredential): Promise<StoredLocalConnection>;
   updateCredential(input: StoredLocalConnection, refresh?: boolean): Promise<boolean>;
   delete(service: string, connectionName: string): Promise<void>;
@@ -164,6 +192,7 @@ type OAuthCredential = Extract<ResolvedCredential, { authType: "oauth2" }>;
  * run public actions without configuration.
  */
 export class ConnectionService {
+  private readonly providerHttpDispatch?: ProviderHttpDispatchOptions;
   private readonly catalog: CatalogStore;
   private readonly oauthCredentialRefreshes = new Map<string, Promise<OAuthCredential>>();
   private readonly oauthCredentials?: IOAuthCredentialRefresher;
@@ -173,6 +202,7 @@ export class ConnectionService {
   private readonly marketplace?: MarketplaceService;
 
   constructor(input: ConnectionServiceOptions) {
+    this.providerHttpDispatch = input.providerHttpDispatch;
     this.catalog = input.catalog;
     this.oauthCredentials = input.oauthCredentials;
     this.providerLoader = input.providerLoader;
@@ -428,16 +458,25 @@ export class ConnectionService {
     credential: Extract<ResolvedCredential, { authType: "oauth2" }>,
     connectionNameInput?: string,
     signal?: AbortSignal,
+    retirementGeneration?: string,
   ): Promise<ConnectionSummary> {
-    const storedCredential = await this.prepareOAuthCredential(service, credential, signal);
     const connectionName = normalizeConnectionName(connectionNameInput);
-    const stored = await this.store.set(service, connectionName, storedCredential);
+    const generation = retirementGeneration ?? (await this.store.getRetirementGeneration(service, connectionName));
+    const storedCredential = await this.prepareOAuthCredential(service, credential, signal);
+    const stored = await this.store.setIfCurrentGeneration(service, connectionName, storedCredential, generation);
+    if (!stored)
+      throw new ConnectionError("connection_retired", "The connection was disconnected during authorization.");
     return this.createStoredConnectionSummary(
       this.getAvailableProvider(service),
       stored.id,
       connectionName,
       storedCredential,
     );
+  }
+
+  /** Capture the durable disconnect fence before sending the user to the provider. */
+  async getRetirementGeneration(service: string, connectionName?: string): Promise<string> {
+    return this.store.getRetirementGeneration(service, normalizeConnectionName(connectionName));
   }
 
   async prepareOAuthCredential(
@@ -507,10 +546,7 @@ export class ConnectionService {
       };
     const credential = stored.credential;
     return {
-      status:
-        credential.authType === "oauth2" && !credential.refreshToken && isOAuthCredentialExpired(credential)
-          ? "reauth_required"
-          : "active",
+      status: "active",
       ...this.createConfiguredConnectionSummary(
         this.getProvider(stored.service),
         stored.id,
@@ -560,15 +596,71 @@ export class ConnectionService {
   async disconnect(
     service: string,
     connectionNameInput?: string,
-  ): Promise<ConnectionSummary | DisconnectedConnectionSummary> {
+    options: DisconnectOptions = {},
+  ): Promise<(ConnectionSummary & { revoked: OAuthRevocationOutcome }) | DisconnectedConnectionSummary> {
     const connectionName = normalizeConnectionName(connectionNameInput);
+    // The credential is read before the delete and revoked after it: a delete the store
+    // refuses (a row bound to active Trigger subscriptions) then ends nothing at the provider,
+    // where revoking first would leave a dead grant behind a row that stays.
+    let stored: StoredConnection | undefined;
+    let readFailed = false;
+    if (options.revoke === true) {
+      try {
+        stored = await this.store.get(service, connectionName);
+      } catch (error) {
+        readFailed = true;
+        this.logger?.warn({ service, connectionName, error: describeError(error) }, "oauth token revocation skipped");
+      }
+    }
     await this.store.delete(service, connectionName);
+    const revoked =
+      options.revoke !== true
+        ? "skipped"
+        : readFailed
+          ? "failed"
+          : await this.revokeDeletedCredential(service, connectionName, stored);
     const provider = this.catalog.providers.find((provider) => provider.service === service);
     if (provider && this.supportsAuth(provider, "no_auth")) {
-      return this.connectWithoutAuth(service, { connectionName });
+      return { ...(await this.connectWithoutAuth(service, { connectionName })), revoked };
     }
 
-    return { service, connectionName, configured: false };
+    return { service, connectionName, configured: false, revoked };
+  }
+
+  /**
+   * End the grant at the provider once its credential is deleted here, so a
+   * disconnected provider does not keep an app it no longer sees authorized.
+   * Best effort by design: a provider that refuses or cannot be reached is
+   * logged, and the connection the caller asked to remove is gone either way.
+   */
+  private async revokeDeletedCredential(
+    service: string,
+    connectionName: string,
+    stored: StoredConnection | undefined,
+  ): Promise<OAuthRevocationOutcome> {
+    const refresher = this.oauthCredentials;
+    if (!refresher?.revoke) {
+      return "unsupported";
+    }
+    const logContext = { service, connectionName };
+    if (!stored || stored.source === "saas" || stored.credential.authType !== "oauth2") {
+      return "unsupported";
+    }
+    try {
+      const outcome = await refresher.revoke(service, stored.credential);
+      this.logger?.info({ ...logContext, revoked: outcome }, "oauth token revocation completed");
+      return outcome;
+    } catch (error) {
+      this.logger?.warn(
+        {
+          ...logContext,
+          errorCode: error instanceof ConnectionError ? error.code : "oauth_token_revocation_failed",
+          error: describeError(error),
+        },
+        "oauth token revocation failed",
+      );
+      return "failed";
+    }
   }
 
   private createConfiguredConnectionSummary(
@@ -600,6 +692,12 @@ export class ConnectionService {
       connectionName,
       authType: credential.authType,
       configured: true,
+      status:
+        credential.authType === "oauth2" &&
+        (credential.metadata.oauthReauthRequired === true ||
+          (!credential.refreshToken && isOAuthCredentialExpired(credential)))
+          ? "reauth_required"
+          : "active",
       virtual: false,
       default: connectionName === defaultConnectionName,
       profile: credential.profile,
@@ -762,6 +860,12 @@ export class ConnectionService {
     credential: OAuthCredential,
   ): Promise<OAuthCredential> {
     const service = connection.service;
+    if (credential.metadata.oauthReauthRequired === true) {
+      throw new ConnectionError(
+        "oauth_reauth_required",
+        `OAuth authorization is no longer valid. Reconnect ${service}.`,
+      );
+    }
     if (!isOAuthCredentialExpired(credential)) {
       return credential;
     }
@@ -803,7 +907,29 @@ export class ConnectionService {
     refresher: IOAuthCredentialRefresher,
   ): Promise<OAuthCredential> {
     const { id, revision, service, connectionName } = connection;
-    const nextCredential = await refresher.refresh(service, credential);
+    let nextCredential: OAuthCredential;
+    try {
+      nextCredential = await withProviderHttpDispatchResult(
+        { operation: "oauth", service, connectionId: id, connectionName },
+        () => refresher.refresh(service, credential),
+        this.providerHttpDispatch,
+      );
+    } catch (error) {
+      if (error instanceof ConnectionError && error.code === "oauth_reauth_required") {
+        // The revision fence prevents a late refusal from marking a replacement authorization as expired.
+        await this.store.updateCredential(
+          {
+            id,
+            revision,
+            service,
+            connectionName,
+            credential: { ...credential, metadata: { ...credential.metadata, oauthReauthRequired: true } },
+          },
+          true,
+        );
+      }
+      throw error;
+    }
     const updated = await this.store.updateCredential(
       {
         id,
@@ -830,13 +956,19 @@ export class ConnectionService {
   ): Promise<CredentialValidationResult> {
     this.assertNotCancelled(signal);
     try {
-      const result = (await validate()) ?? {};
+      const result =
+        (await withProviderHttpDispatchResult(
+          { operation: "credential_validation", service },
+          validate,
+          this.providerHttpDispatch,
+        )) ?? {};
       this.assertNotCancelled(signal);
       return result;
     } catch (error) {
       if (signal?.aborted) {
         throw cancelledConnectionError();
       }
+      if (error instanceof ProviderDispatchRequestError) throw error;
       throw new ConnectionError(
         "credential_verification_failed",
         error instanceof Error ? error.message : `${service} credential verification failed.`,
@@ -1003,6 +1135,10 @@ export class ConnectionError extends Error {
     super(message);
     this.code = code;
   }
+}
+
+function describeError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function cancelledConnectionError(): ConnectionError {

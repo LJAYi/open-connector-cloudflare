@@ -4,6 +4,9 @@ Managed provider actions can be configured through the [Connector Marketplace](m
 
 OpenConnector is configured with environment variables.
 
+Embedding hosts can also configure opt-in [provider HTTP dispatch hooks](provider-http-dispatch.md)
+through runtime options to admit, delay or deny each upstream HTTP attempt.
+
 | Variable                                    | Default                   | Purpose                                                                                                                                                                     |
 | ------------------------------------------- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `PORT`                                      | `3000`                    | Local HTTP server port.                                                                                                                                                     |
@@ -43,6 +46,7 @@ OpenConnector is configured with environment variables.
 | `OOMOL_CONNECT_RUN_LIMIT`                   | `5000`                    | Maximum number of recent action run audit records to retain.                                                                                                                |
 | `OOMOL_CONNECT_CATALOG_LAZY_SCHEMAS`        | `false`                   | Read action JSON schemas from the catalog files on demand instead of keeping them in memory. See below.                                                                     |
 | `OOMOL_CONNECT_CATALOG_SCHEMA_CACHE_FILES`  | `64`                      | Provider files whose action schemas stay cached when lazy schemas are on.                                                                                                   |
+| `OOMOL_CONNECT_OAUTH_CLOSE_DELAY_SECONDS`   | `5`                       | Seconds the OAuth completion page waits before closing its window. `0` closes it as soon as it loads.                                                                       |
 
 Example:
 

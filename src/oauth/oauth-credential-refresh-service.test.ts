@@ -120,6 +120,59 @@ describe("OAuthCredentialRefreshService", () => {
     expect(refreshed.expiresAt).toBe(new Date(now + 3600_000).toISOString());
   });
 
+  it("keeps the stored lifetime when a provider runtime reports only an expiry", async () => {
+    const providerLoader = new ProviderLoader({
+      example: async () => ({
+        executors: {},
+        oauth: {
+          async refreshAccessToken() {
+            return {
+              accessToken: "provider-refreshed-token",
+              tokenType: "Bearer",
+              expiresAt: "2026-12-29T00:00:00.000Z",
+              metadata: { refreshedBy: "provider-runtime" },
+            };
+          },
+        },
+      }),
+    });
+
+    const refreshed = await new OAuthCredentialRefreshService(clientConfigs, providerLoader).refresh(
+      "example",
+      expiredCredential({ expires_in: 3600 }),
+    );
+
+    expect(refreshed.metadata.expires_in).toBe(3600);
+    expect(refreshed.expiresAt).toBe("2026-12-29T00:00:00.000Z");
+  });
+
+  it("prefers the lifetime a provider runtime reports without an expiry", async () => {
+    const now = Date.now();
+    vi.spyOn(Date, "now").mockReturnValue(now);
+    const providerLoader = new ProviderLoader({
+      example: async () => ({
+        executors: {},
+        oauth: {
+          async refreshAccessToken() {
+            return {
+              accessToken: "provider-refreshed-token",
+              tokenType: "Bearer",
+              metadata: { expires_in: 120 },
+            };
+          },
+        },
+      }),
+    });
+
+    const refreshed = await new OAuthCredentialRefreshService(clientConfigs, providerLoader).refresh(
+      "example",
+      expiredCredential({ expires_in: 3600 }),
+    );
+
+    expect(refreshed.metadata.expires_in).toBe(120);
+    expect(refreshed.expiresAt).toBe(new Date(now + 120_000).toISOString());
+  });
+
   it("refreshes through a provider OAuth runtime and preserves connection identity", async () => {
     let receivedMetadata: Record<string, unknown> | undefined;
     let receivedProviderSecret: Record<string, unknown> | undefined;
@@ -276,5 +329,127 @@ describe("OAuthCredentialRefreshService", () => {
     await new OAuthCredentialRefreshService(clientConfigs).refresh("example", credential);
 
     expect(String(fetcher.mock.calls[0]?.[1]?.body)).toContain("employer=employer-id");
+  });
+});
+
+describe("OAuthCredentialRefreshService revoke", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  function revokingConfigs(revocationUrl: string | undefined, config: unknown): OAuthClientConfigService {
+    return {
+      getOAuthDefinition: () => ({
+        type: "oauth2",
+        tokenUrl: "https://provider.example.com/oauth/token",
+        revocationUrl,
+        tokenEndpointAuthMethod: "none",
+        scopes: [],
+      }),
+      getConfig: async () => config,
+      resolveEndpointUrl: (_service: string, endpointUrl: string, resolved: { extra: Record<string, string> }) =>
+        endpointUrl.replace("{tenant}", resolved.extra.tenant ?? ""),
+    } as unknown as OAuthClientConfigService;
+  }
+
+  it("answers unsupported, without a request, when the definition names no revocation endpoint", async () => {
+    const fetcher = vi.fn();
+    vi.stubGlobal("fetch", fetcher);
+    const service = new OAuthCredentialRefreshService(revokingConfigs(undefined, undefined));
+
+    await expect(service.revoke("example", expiredCredential({}))).resolves.toBe("unsupported");
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("resolves a templated endpoint through the client configuration the credential was minted under", async () => {
+    const fetcher = vi.fn(
+      async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(null, { status: 200 }),
+    );
+    vi.stubGlobal("fetch", fetcher);
+    const service = new OAuthCredentialRefreshService(
+      revokingConfigs("https://login.example.com/{tenant}/oauth2/revoke", {
+        clientId: "global-client",
+        clientSecret: "",
+        extra: { tenant: "common" },
+      }),
+    );
+
+    await expect(
+      service.revoke(
+        "example",
+        expiredCredential({ oauthClientConfig: { clientId: "connection-client", extra: { tenant: "contoso" } } }),
+      ),
+    ).resolves.toBe("done");
+
+    const [url, init] = fetcher.mock.calls[0] ?? [];
+    expect(url).toBe("https://login.example.com/contoso/oauth2/revoke");
+    const body = init?.body;
+    if (!(body instanceof URLSearchParams)) {
+      throw new Error("Expected the revocation request body to use URLSearchParams");
+    }
+    expect(body.get("client_id")).toBe("connection-client");
+  });
+
+  it("rejects HTTP endpoints even when no client configuration is stored", async () => {
+    const fetcher = vi.fn();
+    vi.stubGlobal("fetch", fetcher);
+    const service = new OAuthCredentialRefreshService(revokingConfigs("http://provider.example.com/revoke", undefined));
+
+    await expect(service.revoke("example", expiredCredential({}))).rejects.toThrow(
+      "OAuth revocation URL must use https.",
+    );
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("refuses a templated endpoint it cannot fill in, so the caller records a failure", async () => {
+    const fetcher = vi.fn();
+    vi.stubGlobal("fetch", fetcher);
+    const service = new OAuthCredentialRefreshService(
+      revokingConfigs("https://login.example.com/{tenant}/oauth2/revoke", undefined),
+    );
+
+    await expect(service.revoke("example", expiredCredential({}))).rejects.toThrow(
+      "Configure an OAuth client for example before revoking its token.",
+    );
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+});
+
+describe("Feishu refresh override integration", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it.each([
+    [20037, "oauth_token_refresh_failed"],
+    [undefined, "provider_error"],
+  ])("preserves the provider classification for error %s through the loader", async (code, expectedCode) => {
+    const providerLoader = new ProviderLoader({ feishu: () => import("../providers/feishu/executors.ts") });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Response.json({ code, error_description: "Rejected" }, { status: 401 })),
+    );
+    await expect(
+      new OAuthCredentialRefreshService(clientConfigs, providerLoader).refresh(
+        "feishu",
+        expiredCredential({ expires_in: 3600 }),
+      ),
+    ).rejects.toMatchObject({ code: expectedCode });
+  });
+
+  it("retains refresh token, scopes and expiry when Feishu rotates only the access token", async () => {
+    const providerLoader = new ProviderLoader({ feishu: () => import("../providers/feishu/executors.ts") });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Response.json({ code: 0, access_token: "rotated" })),
+    );
+    const previous = expiredCredential({ expires_in: 3600, scope: "offline_access" });
+    const refreshed = await new OAuthCredentialRefreshService(clientConfigs, providerLoader).refresh(
+      "feishu",
+      previous,
+    );
+    expect(refreshed.accessToken).toBe("rotated");
+    expect(refreshed.refreshToken).toBe(previous.refreshToken);
+    expect(refreshed.metadata.scope).toBe("offline_access");
+    expect(Date.parse(refreshed.expiresAt!)).toBeGreaterThan(Date.now());
   });
 });

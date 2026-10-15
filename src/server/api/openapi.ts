@@ -97,7 +97,8 @@ const oauthClientConfigRequestSchema = jsonSchema.object(
     }),
     requestedScopes: jsonSchema.array(jsonSchema.string(), {
       minItems: 1,
-      description: "Non-empty provider-declared scope subset to request. Omit to use every provider default.",
+      description:
+        "Complete non-empty scope list replacing the provider defaults. Each scope must be declared in scopes or optionalScopes. Omit to request every default scope and no optional scopes.",
     }),
     redirectUri: jsonSchema.string({
       description:
@@ -1387,6 +1388,22 @@ function createConnectionPath(): Record<string, unknown> {
     delete: {
       tags: ["Connections"],
       summary: "Disconnect a provider.",
+      requestBody: {
+        required: false,
+        content: {
+          "application/json": {
+            schema: jsonSchema.object({
+              connectionName: jsonSchema.string("Named connection. Defaults to default."),
+              revoke: {
+                type: "boolean",
+                default: false,
+                description:
+                  "Also request OAuth token revocation after deleting the local credential. Related connections may lose authorization depending on the provider's revocation policy.",
+              },
+            }),
+          },
+        },
+      },
       responses: {
         200: jsonResponse({
           anyOf: [
@@ -1395,9 +1412,13 @@ function createConnectionPath(): Record<string, unknown> {
               {
                 service: jsonSchema.string(),
                 configured: { const: false, type: "boolean" },
+                revoked: jsonSchema.stringEnum(
+                  "What the disconnect did about the grant at the provider: done (its revocation endpoint accepted the token), failed (it refused or could not be reached; the credential is deleted here regardless), unsupported (no revocation endpoint declared, no OAuth token held, or a SaaS connection) or skipped (the request body did not set revoke: true, the default).",
+                  ["done", "failed", "unsupported", "skipped"],
+                ),
               },
               {
-                required: ["service", "configured"],
+                required: ["service", "configured", "revoked"],
                 description: "Disconnected provider summary.",
               },
             ),
@@ -1432,7 +1453,8 @@ function createOAuthAuthorizationPath(): Record<string, unknown> {
                 }),
                 requestedScopes: jsonSchema.array(jsonSchema.string(), {
                   minItems: 1,
-                  description: "Optional non-empty provider-declared scope subset to request.",
+                  description:
+                    "Optional complete non-empty scope list replacing the provider defaults. Each scope must be declared in scopes or optionalScopes; default scopes are not added automatically.",
                 }),
                 redirectUri: jsonSchema.string({
                   description:
@@ -1487,7 +1509,7 @@ function createOAuthConfigPath(): Record<string, unknown> {
       tags: ["OAuth"],
       summary: "Upsert local OAuth client configuration.",
       description:
-        "Open-source users provide their own OAuth app. requestedScopes may narrow the provider-declared defaults but cannot add scopes. Additional extra fields are declared by provider catalog auth metadata.",
+        "Open-source users provide their own OAuth app. requestedScopes replaces the default scope list with an explicit selection from the provider's scopes and optionalScopes; default scopes are not added automatically. Omit it to use the defaults without optional scopes. Undeclared scopes are refused. Additional extra fields are declared by provider catalog auth metadata.",
       requestBody: {
         required: true,
         content: {
@@ -1765,7 +1787,14 @@ function connectionManagementPaths(): Record<string, unknown> {
             steps: jsonSchema.stringArray("Ordered setup steps."),
           }),
         ),
-        scopes: jsonSchema.optional(jsonSchema.stringArray("Provider scopes the connector requests.")),
+        scopes: jsonSchema.optional(
+          jsonSchema.stringArray("Default provider scopes when no explicit selection is made."),
+        ),
+        optionalScopes: jsonSchema.optional(
+          jsonSchema.stringArray(
+            "Additional provider scopes for explicit selection. requestedScopes replaces the default scope list.",
+          ),
+        ),
         authorizationOptions: jsonSchema.optional(jsonSchema.array(authorizationOption)),
       }),
     ),

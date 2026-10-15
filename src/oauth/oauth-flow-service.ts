@@ -16,8 +16,12 @@ import type {
 import type { OAuthTokenResult } from "./oauth-token.ts";
 
 import { createHash, randomBytes } from "node:crypto";
-import { ConnectionError } from "../connection-service.ts";
-import { providerFetch } from "../providers/provider-runtime.ts";
+import { ConnectionError, normalizeConnectionName } from "../connection-service.ts";
+import {
+  providerFetch,
+  ProviderDispatchRequestError,
+  withProviderHttpDispatchResult,
+} from "../providers/provider-runtime.ts";
 import { requestAuthorizationCodeToken } from "./oauth-token.ts";
 
 /**
@@ -39,6 +43,7 @@ export interface OAuthAuthorizationCompleteInput {
   state: string;
   code: string;
   callbackParameters?: Record<string, string>;
+  callbackQuery?: string;
   signal?: AbortSignal;
 }
 
@@ -48,6 +53,7 @@ export interface OAuthAuthorizationCompleteInput {
 export interface OAuthAuthorizationState {
   service: string;
   connectionName?: string;
+  retirementGeneration: string;
   state: string;
   createdAt: string;
   pkceCodeVerifier?: string;
@@ -198,8 +204,10 @@ export class OAuthFlowService {
     input: OAuthAuthorizationStartInput,
     requestConfig?: OAuthClientConfig,
   ): Promise<{ pending: OAuthAuthorizationState; authorizationUrl: string }> {
-    const { service, connectionName } = input;
+    const { service } = input;
+    const connectionName = normalizeConnectionName(input.connectionName);
     this.connections.assertProviderAvailable(service);
+    const retirementGeneration = await this.connections.getRetirementGeneration(service, connectionName);
     const auth = this.clientConfigs.getOAuthDefinition(service);
     const config =
       requestConfig ??
@@ -222,6 +230,7 @@ export class OAuthFlowService {
     const pending: OAuthAuthorizationState = {
       service,
       connectionName,
+      retirementGeneration,
       state,
       createdAt: now.toISOString(),
       pkceCodeVerifier,
@@ -251,7 +260,9 @@ export class OAuthFlowService {
 
     const providerOAuth = await this.providerLoader.loadProviderOAuthRuntime?.(service);
     const resolvedAuthorizationUrl = providerOAuth?.buildAuthorizationUrl
-      ? await providerOAuth.buildAuthorizationUrl({ authorizationUrl, clientConfig: config, now })
+      ? await withProviderHttpDispatchResult({ operation: "oauth", service }, () =>
+          providerOAuth.buildAuthorizationUrl!({ authorizationUrl, clientConfig: config, now }),
+        )
       : authorizationUrl.toString();
 
     return {
@@ -265,7 +276,7 @@ export class OAuthFlowService {
   ): Promise<{ service: string; connected: true; returnUri?: string }> {
     const request = await this.requests.claim(input.state);
     const pending = request ?? (await this.states.take(input.state));
-    if (!pending) {
+    if (!pending || typeof pending.retirementGeneration !== "string") {
       throw new OAuthFlowError("invalid_oauth_state", "OAuth state is missing or expired.");
     }
     if (!request && isExpiredOAuthState(pending, this.stateMaxAgeMs)) {
@@ -288,34 +299,49 @@ export class OAuthFlowService {
         new OAuthFlowError("oauth_token_exchange_failed", message);
       const providerOAuth = await this.providerLoader.loadProviderOAuthRuntime?.(pending.service);
       let tokenResponse: OAuthTokenResult;
-      if (providerOAuth?.exchangeCode) {
-        tokenResponse = await providerOAuth.exchangeCode({
-          code: input.code,
-          callbackParameters: input.callbackParameters,
-          clientConfig: config,
-          redirectUri,
-          tokenUrl,
-          fetcher: providerFetch,
-          signal: input.signal,
-          createError,
-        });
-      } else {
-        tokenResponse = await requestAuthorizationCodeToken({
-          code: input.code,
-          state: pending.state,
-          clientId: config.clientId,
-          clientSecret: config.clientSecret,
-          redirectUri,
-          responseEnvelope: auth.tokenResponseEnvelope,
-          tokenRequestFields: auth.tokenRequestFields,
-          tokenEndpointAuthMethod: auth.tokenEndpointAuthMethod,
-          tokenRequestFormat: auth.tokenRequestFormat,
-          tokenUrl,
-          extraFields: createTokenExtraFields(pending, auth.tokenRequestCallbackParameters, input.callbackParameters),
-          signal: input.signal,
-          createError,
-        });
-      }
+      tokenResponse = await withProviderHttpDispatchResult(
+        {
+          operation: "oauth",
+          service: pending.service,
+          connectionId: request?.target?.id,
+        },
+        async () => {
+          if (providerOAuth?.exchangeCode) {
+            return providerOAuth.exchangeCode({
+              code: input.code,
+              state: pending.state,
+              callbackQuery: input.callbackQuery,
+              callbackParameters: input.callbackParameters,
+              clientConfig: config,
+              redirectUri,
+              tokenUrl,
+              fetcher: providerFetch,
+              signal: input.signal,
+              createError,
+            });
+          } else {
+            return requestAuthorizationCodeToken({
+              code: input.code,
+              state: pending.state,
+              clientId: config.clientId,
+              clientSecret: config.clientSecret,
+              redirectUri,
+              responseEnvelope: auth.tokenResponseEnvelope,
+              tokenRequestFields: auth.tokenRequestFields,
+              tokenEndpointAuthMethod: auth.tokenEndpointAuthMethod,
+              tokenRequestFormat: auth.tokenRequestFormat,
+              tokenUrl,
+              extraFields: createTokenExtraFields(
+                pending,
+                auth.tokenRequestCallbackParameters,
+                input.callbackParameters,
+              ),
+              signal: input.signal,
+              createError,
+            });
+          }
+        },
+      );
       const refreshParameters = readCallbackParameters(auth.tokenRequestCallbackParameters, input.callbackParameters);
       const providerSecret = mergeOAuthProviderSecret(tokenResponse.providerSecret, refreshParameters);
       const oauthCredential = {
@@ -368,6 +394,7 @@ export class OAuthFlowService {
           oauthCredential,
           pending.connectionName,
           input.signal,
+          pending.retirementGeneration,
         );
       }
       return {
@@ -376,6 +403,16 @@ export class OAuthFlowService {
         ...(request?.returnUri ? { returnUri: callbackReturnUri(request, "success") } : {}),
       };
     } catch (error) {
+      if (error instanceof ProviderDispatchRequestError) {
+        if (!request) throw error;
+        await this.requests.fail(request.connectionRequestId, "rate_limited", error.message);
+        throw new OAuthCallbackError(
+          "rate_limited",
+          error.message,
+          callbackReturnUri(request, "error", "rate_limited", error.message),
+          error,
+        );
+      }
       if (request) {
         const code =
           error instanceof OAuthFlowError &&
