@@ -3,6 +3,7 @@ import type { ProviderActionHandlers } from "../provider-runtime.ts";
 import type { ApiKeyProviderContext } from "../provider-runtime.ts";
 
 import { compactObject, optionalBoolean, optionalString } from "../../core/cast.ts";
+import { selectMinimaxModels } from "../minimax/text-models.ts";
 import {
   defineApiKeyProviderExecutors,
   defineProviderProxy,
@@ -95,8 +96,8 @@ export const openrouterActionHandlers: ProviderActionHandlers<"openrouter", Open
       context,
     );
   },
-  list_available_models(input, context) {
-    return openrouterRequest(
+  async list_available_models(input, context) {
+    const payload = await openrouterRequest(
       context.apiKey,
       {
         path: "/models",
@@ -105,6 +106,7 @@ export const openrouterActionHandlers: ProviderActionHandlers<"openrouter", Open
       },
       context,
     );
+    return input.includeLegacyMinimax === true ? payload : selectMinimaxModels(payload, true);
   },
   list_embedding_models(input, context) {
     return openrouterRequest(context.apiKey, { path: "/embeddings/models", headerSource: input }, context);
@@ -121,8 +123,9 @@ export const openrouterActionHandlers: ProviderActionHandlers<"openrouter", Open
   list_providers(_input, context) {
     return openrouterRequest(context.apiKey, { path: "/providers" }, context);
   },
-  list_user_models(input, context) {
-    return openrouterRequest(context.apiKey, { path: "/models/user", headerSource: input }, context);
+  async list_user_models(input, context) {
+    const payload = await openrouterRequest(context.apiKey, { path: "/models/user", headerSource: input }, context);
+    return input.includeLegacyMinimax === true ? payload : selectMinimaxModels(payload, true);
   },
   list_zdr_endpoints(input, context) {
     return openrouterRequest(context.apiKey, { path: "/endpoints/zdr", headerSource: input }, context);

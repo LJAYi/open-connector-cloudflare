@@ -9,7 +9,8 @@ import type { IntegrationDefinition } from "../../triggers/common/integration.ts
 import type { PollDefinition } from "../../triggers/common/poll.ts";
 import type { ProviderActionHandlers } from "../provider-runtime.ts";
 
-import { compactObject } from "../../core/cast.ts";
+import { compactObject, optionalNumber, optionalString } from "../../core/cast.ts";
+import { encodePathSegment } from "../../core/request.ts";
 import {
   createProviderFetch,
   createProviderProxyUrl,
@@ -21,6 +22,7 @@ import {
   readProviderProxyErrorMessage,
   readProviderProxyResponse,
   requireBearerCredential,
+  requiredInputString,
   toProviderProxyError,
   withRetryAfterSeconds,
 } from "../provider-runtime.ts";
@@ -137,6 +139,50 @@ export const notionActionHandlers: ProviderActionHandlers<"notion", NotionAction
   },
   list_comments(input, context): Promise<unknown> {
     return notionListComments(input, context.accessToken, context.fetcher);
+  },
+  list_views(input, context): Promise<unknown> {
+    const databaseId = optionalString(input.databaseId);
+    const dataSourceId = optionalString(input.dataSourceId);
+    if (!databaseId && !dataSourceId) {
+      throw providerInputError("databaseId or dataSourceId is required");
+    }
+    return notionRequest<NotionObject>(
+      context.accessToken,
+      {
+        path: "/views",
+        query: {
+          database_id: databaseId,
+          data_source_id: dataSourceId,
+          page_size: optionalNumber(input.pageSize),
+          start_cursor: optionalString(input.startCursor),
+        },
+      },
+      context.fetcher,
+    );
+  },
+  retrieve_view(input, context): Promise<unknown> {
+    return notionRequest<NotionObject>(
+      context.accessToken,
+      { path: `/views/${encodePathSegment(requiredInputString(input.viewId, "viewId"))}` },
+      context.fetcher,
+    );
+  },
+  update_view(input, context): Promise<unknown> {
+    return notionRequest<NotionObject>(
+      context.accessToken,
+      {
+        method: "PATCH",
+        path: `/views/${encodePathSegment(requiredInputString(input.viewId, "viewId"))}`,
+        body: {
+          name: input.name,
+          filter: input.filter,
+          sorts: input.sorts,
+          quick_filters: input.quick_filters,
+          configuration: input.configuration,
+        },
+      },
+      context.fetcher,
+    );
   },
   create_comment(input, context): Promise<unknown> {
     return notionCreateComment(input, context.accessToken, context.fetcher);
@@ -811,7 +857,7 @@ async function notionQueryDataSource(input: Record<string, unknown>, accessToken
         sorts: Array.isArray(input.sorts) ? input.sorts : undefined,
         page_size: asNumber(input.pageSize),
         start_cursor: asNonEmptyString(input.startCursor),
-        in_trash: typeof input.in_trash === "boolean" ? input.in_trash : undefined,
+        is_archived: typeof input.is_archived === "boolean" ? input.is_archived : undefined,
         result_type: asNonEmptyString(input.result_type),
       }),
     },
