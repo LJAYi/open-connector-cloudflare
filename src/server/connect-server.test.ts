@@ -1,3 +1,4 @@
+import type { CatalogStore } from "../catalog-store.ts";
 import type { IConnectionStore, StoredConnection } from "../connection-store.ts";
 import type { ActionPolicyService } from "../core/action-policy.ts";
 import type { TokenPolicy } from "../core/action-policy.ts";
@@ -142,6 +143,46 @@ afterEach(() => {
 });
 
 describe("ConnectServer", () => {
+  describe("Microsoft Teams bot event verification", () => {
+    const teamsBotProvider: ProviderDefinition = {
+      service: "microsoft_teams_bot",
+      displayName: "Microsoft Teams Bot",
+      categories: ["Communication"],
+      authTypes: ["custom_credential"],
+      auth: [
+        {
+          type: "custom_credential",
+          fields: [{ key: "appId", label: "App ID", inputType: "text", required: true, secret: false }],
+        },
+      ],
+      actions: [],
+    };
+
+    function verify(app: ReturnType<ConnectServer["createApp"]>, headers: Record<string, string> = {}) {
+      return app.request("/v1/providers/microsoft_teams_bot/events/verify", {
+        method: "POST",
+        headers: { authorization: "Bearer verify-token", ...headers },
+        body: "{}",
+      });
+    }
+
+    it("is disabled without a verification token", async () => {
+      const app = createTestServer([teamsBotProvider]).createApp();
+      expect((await verify(app)).status).toBe(404);
+    });
+
+    it("requires the dedicated verification token", async () => {
+      const app = createTestServer([teamsBotProvider], { eventVerifyToken: "verify-token" }).createApp();
+      expect((await verify(app, { authorization: "Bearer wrong" })).status).toBe(401);
+    });
+
+    it("requires a connected bot, selected the way Actions select a connection", async () => {
+      const app = createTestServer([teamsBotProvider], { eventVerifyToken: "verify-token" }).createApp();
+      expect((await verify(app)).status).toBe(409);
+      expect((await verify(app, { "x-oo-connector-alias": "missing" })).status).toBe(404);
+    });
+  });
+
   describe("Slack inbound event verification", () => {
     const slackProvider: ProviderDefinition = {
       ...oauthProvider,
@@ -4238,6 +4279,25 @@ describe("ConnectServer", () => {
   });
 });
 
+it.each(["missing", "unreadable"])("handles %s definitions in runtime catalog responses", async (state) => {
+  const catalog = createCatalogStore([catalogOnlyProvider]);
+  vi.spyOn(catalog, "getAction").mockImplementation(async () => {
+    if (state === "unreadable") throw new Error("private catalog file path");
+    return undefined;
+  });
+  const app = createTestServer([catalogOnlyProvider], { catalog }).createApp();
+  for (const path of [
+    `/v1/actions?service=${catalogOnlyProvider.service}`,
+    `/v1/actions/${catalogOnlyProvider.actions[0]!.id}`,
+  ]) {
+    const response = await app.request(path);
+    expect(response.status).toBe(state === "missing" ? 404 : 500);
+    const body = await response.json();
+    expect(body.errorCode).toBe(state === "missing" ? "unknown_action" : "internal_error");
+    expect(JSON.stringify(body)).not.toContain("private catalog file path");
+  }
+});
+
 interface TestAuthOptions {
   adminToken?: string;
   runtimeToken?: string;
@@ -4245,6 +4305,7 @@ interface TestAuthOptions {
 }
 
 interface CreateTestServerOptions {
+  catalog?: CatalogStore;
   marketplace?: MarketplaceService;
   auth?: TestAuthOptions;
   publicOrigin?: string;
@@ -4269,9 +4330,11 @@ interface CreateTestServerOptions {
 function createTestServer(providers: ProviderDefinition[], options: CreateTestServerOptions = {}): ConnectServer {
   const requestDatabase = new SqliteRuntimeDatabase(":memory:");
   requestDatabases.push(requestDatabase);
-  const catalog = createCatalogStore(providers, {
-    executableActionIds: ["example.echo"],
-  });
+  const catalog =
+    options.catalog ??
+    createCatalogStore(providers, {
+      executableActionIds: ["example.echo"],
+    });
   const providerLoader: IProviderLoader = options.providerLoader ?? new EmptyProviderLoader();
   const idempotency = options.idempotency ?? new MemoryIdempotencyStore();
   const runtimeTokens = options.runtimeTokens ?? new RuntimeTokenService(new MemoryRuntimeTokenStore());

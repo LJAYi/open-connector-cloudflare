@@ -1,4 +1,4 @@
-import type { ActionDefinition, JsonSchema, ProviderDefinition } from "../../core/types.ts";
+import type { ActionDefinition, JsonSchema } from "../../core/types.ts";
 
 import { z } from "zod";
 import { jsonSchema } from "../../core/json-schema.ts";
@@ -34,9 +34,9 @@ export type OpenApiDocument = {
 /**
  * Controls how much provider action detail is embedded in the OpenAPI document.
  */
-export type OpenApiDocumentOptions = {
-  actionId?: string;
-};
+export interface OpenApiDocumentOptions {
+  action?: ActionDefinition;
+}
 
 const errorPayloadSchema = jsonSchema.object(
   {
@@ -222,15 +222,11 @@ const runtimeConnectionProperties: Record<string, JsonSchema> = {
  *
  * The action catalog remains the source of truth for provider-specific input
  * and output schemas. The default document stays compact and exposes one
- * generic run creation route. Pass `actionId` to embed one concrete action schema for
+ * generic run creation route. Pass `action` to embed one concrete action schema for
  * tool importers that need a small strongly typed OpenAPI document.
  */
-export function createOpenApiDocument(
-  providers: ProviderDefinition[],
-  options: OpenApiDocumentOptions = {},
-): OpenApiDocument {
-  const actions = providers.flatMap((provider) => provider.actions);
-  const concreteAction = options.actionId ? actions.find((action) => action.id === options.actionId) : undefined;
+export function createOpenApiDocument(options: OpenApiDocumentOptions = {}): OpenApiDocument {
+  const concreteAction = options.action;
   const runPath = createRunPath();
   if (concreteAction) {
     runPath.post = createConcreteRunOperation(concreteAction);
@@ -454,6 +450,54 @@ export function createOpenApiDocument(
             runtimeFailureSchema(),
             "webhook_request_too_large: the Slack request body exceeds 64 KiB.",
           ),
+          500: jsonResponse(runtimeFailureSchema(), "Internal verification failure."),
+        },
+      },
+    },
+    "/v1/providers/microsoft_teams_bot/events/verify": {
+      post: {
+        tags: ["Triggers"],
+        summary: "Verify an inbound Microsoft Teams bot activity.",
+        description:
+          "Requires the dedicated OOMOL_CONNECT_EVENT_VERIFY_TOKEN in Authorization. The activity's own Bot Framework bearer token is forwarded in x-botframework-authorization and checked against the selected microsoft_teams_bot connection's Application (client) ID. The token does not sign the body; it is bound to the activity through the serviceUrl claim. No event is stored or scheduled.",
+        security: [{ eventVerificationToken: [] }],
+        parameters: [
+          { name: "x-botframework-authorization", in: "header", required: true, schema: jsonSchema.string() },
+          ...namedConnectionParameters,
+        ],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", additionalProperties: true } } },
+        },
+        responses: {
+          200: jsonResponse(
+            runtimeSuccessSchema({
+              type: "object",
+              properties: {
+                valid: { type: "boolean", const: true },
+                appId: { type: "string" },
+                serviceUrl: { type: "string" },
+                channelId: jsonSchema.nullableString("Channel named by the activity."),
+              },
+              required: ["valid", "appId", "serviceUrl", "channelId"],
+            }),
+          ),
+          400: jsonResponse(runtimeFailureSchema(), "invalid_event_payload: invalid JSON or missing serviceUrl."),
+          401: jsonResponse(
+            runtimeFailureSchema(),
+            "unauthorized, invalid_webhook_signature, or invalid_webhook_timestamp.",
+          ),
+          403: jsonResponse(runtimeFailureSchema(), "webhook_app_mismatch: the token audience is a different bot."),
+          404: jsonResponse(
+            runtimeFailureSchema(),
+            "event_verification_disabled, or the selected connection does not exist.",
+          ),
+          409: jsonResponse(
+            runtimeFailureSchema(),
+            "event_verification_not_configured: no Microsoft Teams Bot connection with an Application (client) ID.",
+          ),
+          413: jsonResponse(runtimeFailureSchema(), "webhook_request_too_large: the body exceeds 64 KiB."),
+          502: jsonResponse(runtimeFailureSchema(), "event_verification_unavailable: signing keys unreachable."),
           500: jsonResponse(runtimeFailureSchema(), "Internal verification failure."),
         },
       },
