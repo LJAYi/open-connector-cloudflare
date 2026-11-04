@@ -3,6 +3,7 @@ WORKDIR /app
 COPY package.json package-lock.json tsconfig.json vitest.config.ts ./
 COPY web ./web
 COPY src ./src
+COPY contracts ./contracts
 COPY scripts ./scripts
 COPY examples ./examples
 RUN npm ci --ignore-scripts
@@ -17,6 +18,7 @@ ENV PORT=3000
 ENV HOST=0.0.0.0
 ENV OOMOL_CONNECT_DATA_DIR=/app/data
 COPY package.json package-lock.json ./
+COPY LICENSE.txt LICENSE-APACHE-2.0.txt NOTICE.md ./
 COPY scripts/healthcheck.ts ./scripts/healthcheck.ts
 COPY scripts/ensure-generated.ts ./scripts/ensure-generated.ts
 COPY scripts/runtime-data.ts ./scripts/runtime-data.ts

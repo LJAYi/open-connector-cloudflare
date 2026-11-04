@@ -1,11 +1,11 @@
 import type { IntegrationDefinition } from "../common/integration.ts";
 import type { ConnectorProxy } from "../common/proxy.ts";
 import type { JsonValue } from "../common/types.ts";
-import type { SourceConfiguration } from "./definition.ts";
+import type { SourceConfiguration, SourceEvent, SourceSubscription } from "./definition.ts";
 
 import { z } from "zod";
 import { IntegrationConnectionError, PermanentIntegrationError } from "../common/integration.ts";
-import { createEventSourceSchema, updateEventSourceSchema, sourceCreateSchema } from "./configuration-schema.ts";
+import { updateEventSourceSchema, sourceCreateSchema } from "./configuration-schema.ts";
 
 const jsonObject = z.record(z.string(), z.json());
 const configuration = z.object({
@@ -15,6 +15,24 @@ const configuration = z.object({
   secrets: jsonObject,
   state: jsonObject,
 });
+export const sourceCallbackFields: {
+  headers: z.ZodType<Record<string, string>>;
+  rawBody: z.ZodType<string>;
+  consumers: z.ZodType<Extract<SourceOperation, { action: "receive" }>["consumers"]>;
+} = {
+  headers: z
+    .record(z.string(), z.string().max(8192))
+    .refine(
+      (headers) => new Set(Object.keys(headers).map((name) => name.toLowerCase())).size === Object.keys(headers).length,
+      "Duplicate webhook header.",
+    ),
+  rawBody: z
+    .string()
+    .max(90000)
+    .regex(/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/),
+  consumers: z.array(z.object({ id: z.string(), config: jsonObject })).max(10000),
+};
+
 export const sourceOperationSchema: z.ZodType<SourceOperation> = z.discriminatedUnion("action", [
   z.strictObject({ action: z.literal("initialize"), input: jsonObject }),
   z.strictObject({ action: z.literal("update"), source: configuration, input: jsonObject }),
@@ -28,18 +46,7 @@ export const sourceOperationSchema: z.ZodType<SourceOperation> = z.discriminated
   z.strictObject({
     action: z.literal("receive"),
     source: configuration,
-    headers: z
-      .record(z.string(), z.string().max(8192))
-      .refine(
-        (headers) =>
-          new Set(Object.keys(headers).map((name) => name.toLowerCase())).size === Object.keys(headers).length,
-        "Duplicate webhook header.",
-      ),
-    rawBody: z
-      .string()
-      .max(90000)
-      .regex(/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/),
-    consumers: z.array(z.object({ id: z.string(), config: jsonObject })).max(10000),
+    ...sourceCallbackFields,
   }),
 ]);
 export type SourceOperation =
@@ -90,13 +97,20 @@ export function sourceMetadata(definition: IntegrationDefinition):
   };
 }
 
+interface SourceOperationResult {
+  source?: SourceConfiguration;
+  subscriptions?: readonly SourceSubscription[];
+  response?: { status: number; body: string; headers: Record<string, string> };
+  event?: SourceEvent & { matches: string[] };
+}
+
 export async function executeSourceOperation(
   definition: IntegrationDefinition,
   request: SourceOperation,
   connector: ConnectorProxy,
   signal: AbortSignal,
   now: number = Date.now(),
-): Promise<unknown> {
+): Promise<SourceOperationResult> {
   const source = definition.source;
   if (source == null) throw new PermanentIntegrationError("This Trigger has no shared event source protocol.");
   const execute = async (operation: {
@@ -130,8 +144,8 @@ export async function executeSourceOperation(
   });
   switch (request.action) {
     case "initialize": {
-      const parsed = createEventSourceSchema.safeParse(request.input);
-      if (!parsed.success) throw new PermanentIntegrationError("Invalid event source configuration.");
+      const parsed = sourceCreateSchema(source.kind).safeParse(request.input);
+      if (!parsed.success) throw invalidSourceInput("Invalid event source configuration", parsed.error);
       const input = parsed.data;
       let configuration = source.initialize(input, connector.providerAccountId);
       if (source.verifyIdentity != null)
@@ -142,7 +156,7 @@ export async function executeSourceOperation(
     }
     case "update": {
       const parsed = updateEventSourceSchema.safeParse(request.input);
-      if (!parsed.success) throw new PermanentIntegrationError("Invalid event source update.");
+      if (!parsed.success) throw invalidSourceInput("Invalid event source update", parsed.error);
       return { source: project(source.update(request.source, parsed.data)) };
     }
     case "inspect":
@@ -197,4 +211,11 @@ export async function executeSourceOperation(
       };
     }
   }
+}
+
+/** Names each failing input field; Zod issue messages describe the expected shape, never the submitted value. */
+function invalidSourceInput(message: string, error: z.ZodError): PermanentIntegrationError {
+  return new PermanentIntegrationError(
+    `${message}: ${error.issues.map((issue) => `${issue.path.join(".") || "input"}: ${issue.message}`).join("; ")}`,
+  );
 }

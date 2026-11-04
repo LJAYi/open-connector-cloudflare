@@ -173,6 +173,21 @@ const namedConnectionParameters = [
   },
 ];
 
+const catalogLocaleParameters = [
+  queryParameter(
+    "locale",
+    "Display language: en or zh-CN. Overrides Accept-Language; unsupported locales use English. Missing translations fall back per field. IDs, schemas and authentication contracts do not change.",
+  ),
+  {
+    name: "Accept-Language",
+    in: "header",
+    required: false,
+    schema: { type: "string" },
+    description:
+      "Weighted language preferences used only when locale is absent. The selected language is returned in Content-Language.",
+  },
+];
+
 const namedConnectionProperties = {
   connectionName: jsonSchema.string({ description: namedConnectionDescription }),
   alias: jsonSchema.string({ description: namedConnectionDescription }),
@@ -189,7 +204,22 @@ const idempotencyKeyParameter = {
 const idempotencyConflictDescription =
   "For idempotency, idempotency_request_in_progress means the original request is still running or its outcome is uncertain, while idempotency_key_conflict means the key was reused for a different action, input, effective connection, or stored runtime token. Other runtime conflicts may return their own error code with the same status.";
 
+const notionConnectionSchema = jsonSchema.optional(
+  jsonSchema.object(
+    {
+      duplicatedTemplateId: jsonSchema.string({
+        description: "Page ID duplicated during Notion OAuth authorization. Preserved during token refresh.",
+      }),
+    },
+    {
+      description: "Present only for Notion OAuth connections with a duplicated template ID.",
+      additionalProperties: false,
+    },
+  ),
+);
+
 const runtimeConnectionProperties: Record<string, JsonSchema> = {
+  notion: notionConnectionSchema,
   id: jsonSchema.string({ description: "Stable local connection identifier." }),
   providerAccountId: jsonSchema.string({
     description: "Provider account identity from the stored credential profile.",
@@ -264,13 +294,23 @@ export function createOpenApiDocument(options: OpenApiDocumentOptions = {}): Ope
         },
       },
     },
-    "/api/providers": getOperation("Catalog", "List provider catalog entries.", {
-      type: "array",
-      items: { $ref: "#/components/schemas/ProviderDefinition" },
-    }),
-    "/api/providers/{service}": getOperation("Catalog", "Get one provider catalog entry.", {
-      $ref: "#/components/schemas/ProviderDefinition",
-    }),
+    "/api/providers": getOperation(
+      "Catalog",
+      "List provider catalog entries.",
+      {
+        type: "array",
+        items: { $ref: "#/components/schemas/ProviderDefinition" },
+      },
+      catalogLocaleParameters,
+    ),
+    "/api/providers/{service}": getOperation(
+      "Catalog",
+      "Get one provider catalog entry.",
+      {
+        $ref: "#/components/schemas/ProviderDefinition",
+      },
+      [...catalogLocaleParameters, { name: "service", in: "path", required: true, schema: { type: "string" } }],
+    ),
     "/api/actions": getOperation("Catalog", "List all catalog actions.", {
       type: "array",
       items: { $ref: "#/components/schemas/ActionDefinition" },
@@ -280,8 +320,10 @@ export function createOpenApiDocument(options: OpenApiDocumentOptions = {}): Ope
       items: { $ref: "#/components/schemas/ActionSearchResult" },
     }),
     "/v1/providers": runtimeGetOperation("Catalog", "List public provider catalog entries.", {
-      description: "Closest HTTP analog of MCP list_apps. Categories are objects; MCP list_apps returns strings.",
+      description:
+        "Closest HTTP analog of MCP list_apps. Category IDs remain stable; displayName is localized. MCP list_apps returns category strings.",
       parameters: [
+        ...catalogLocaleParameters,
         queryParameter(
           "q",
           "Optional case-insensitive filter over service, display name, scenario, category, or auth type.",
@@ -459,7 +501,7 @@ export function createOpenApiDocument(options: OpenApiDocumentOptions = {}): Ope
         tags: ["Triggers"],
         summary: "Verify an inbound Microsoft Teams bot activity.",
         description:
-          "Requires the dedicated OOMOL_CONNECT_EVENT_VERIFY_TOKEN in Authorization. The activity's own Bot Framework bearer token is forwarded in x-botframework-authorization and checked against the selected microsoft_teams_bot connection's Application (client) ID. The token does not sign the body; it is bound to the activity through the serviceUrl claim. No event is stored or scheduled.",
+          "Requires the dedicated OOMOL_CONNECT_EVENT_VERIFY_TOKEN in Authorization. The activity's own Bot Framework bearer token is forwarded in x-botframework-authorization and checked against the selected microsoft_teams_bot connection's Application (client) ID. The token must use RS256, match the Bot Framework issuer and audience, be current, and name the activity's documented Bot Connector serviceUrl. The token does not sign the activity body. No event is stored or scheduled.",
         security: [{ eventVerificationToken: [] }],
         parameters: [
           { name: "x-botframework-authorization", in: "header", required: true, schema: jsonSchema.string() },
@@ -476,10 +518,25 @@ export function createOpenApiDocument(options: OpenApiDocumentOptions = {}): Ope
               properties: {
                 valid: { type: "boolean", const: true },
                 appId: { type: "string" },
+                tenantId: jsonSchema.nullableString("Microsoft Entra tenant ID from the verified activity."),
                 serviceUrl: { type: "string" },
-                channelId: jsonSchema.nullableString("Channel named by the activity."),
+                activityId: jsonSchema.nullableString("Activity ID from the verified activity."),
+                conversationId: jsonSchema.nullableString("Conversation ID from the verified activity."),
+                aadObjectId: jsonSchema.nullableString(
+                  "Sender's Microsoft Entra object ID from the verified activity.",
+                ),
+                channelId: jsonSchema.nullableString("Channel named by the verified activity."),
               },
-              required: ["valid", "appId", "serviceUrl", "channelId"],
+              required: [
+                "valid",
+                "appId",
+                "tenantId",
+                "serviceUrl",
+                "activityId",
+                "conversationId",
+                "aadObjectId",
+                "channelId",
+              ],
             }),
           ),
           400: jsonResponse(runtimeFailureSchema(), "invalid_event_payload: invalid JSON or missing serviceUrl."),
@@ -498,6 +555,57 @@ export function createOpenApiDocument(options: OpenApiDocumentOptions = {}): Ope
           ),
           413: jsonResponse(runtimeFailureSchema(), "webhook_request_too_large: the body exceeds 64 KiB."),
           502: jsonResponse(runtimeFailureSchema(), "event_verification_unavailable: signing keys unreachable."),
+          500: jsonResponse(runtimeFailureSchema(), "Internal verification failure."),
+        },
+      },
+    },
+    "/v1/providers/feishu_app_bot/events/verify": {
+      post: {
+        tags: ["Triggers"],
+        summary: "Verify and decrypt an inbound Feishu event.",
+        description:
+          "Requires the dedicated OOMOL_CONNECT_EVENT_VERIFY_TOKEN in Authorization. The selected feishu_app_bot connection must contain appId, verificationToken and encryptKey. Signed callers must forward the exact original request bytes; re-serializing the JSON body changes the signed content and fails verification. The route validates the Feishu token and required signature, decrypts encrypted envelopes, and returns the trusted decrypted payload. Only URL verification challenges may omit signing headers. No event is stored or scheduled.",
+        security: [{ eventVerificationToken: [] }],
+        parameters: [
+          { name: "x-lark-request-timestamp", in: "header", required: false, schema: jsonSchema.string() },
+          { name: "x-lark-request-nonce", in: "header", required: false, schema: jsonSchema.string() },
+          { name: "x-lark-signature", in: "header", required: false, schema: jsonSchema.string() },
+          ...namedConnectionParameters,
+        ],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", additionalProperties: true } } },
+        },
+        responses: {
+          200: jsonResponse(
+            runtimeSuccessSchema({
+              type: "object",
+              properties: {
+                valid: { type: "boolean", const: true },
+                appId: { type: "string" },
+                tenantKey: { type: "string" },
+                challenge: jsonSchema.optional(jsonSchema.string()),
+                payload: jsonSchema.optional({ type: "object", additionalProperties: true }),
+                signatureVerified: { type: "boolean" },
+              },
+              required: ["valid", "appId", "tenantKey", "signatureVerified"],
+            }),
+          ),
+          400: jsonResponse(runtimeFailureSchema(), "invalid_event_payload."),
+          401: jsonResponse(
+            runtimeFailureSchema(),
+            "unauthorized, invalid_webhook_signature, or invalid_webhook_timestamp.",
+          ),
+          403: jsonResponse(runtimeFailureSchema(), "webhook_app_mismatch."),
+          404: jsonResponse(
+            runtimeFailureSchema(),
+            "event_verification_disabled, or the selected connection does not exist.",
+          ),
+          409: jsonResponse(
+            runtimeFailureSchema(),
+            "event_verification_not_configured: appId, verificationToken or encryptKey is missing.",
+          ),
+          413: jsonResponse(runtimeFailureSchema(), "webhook_request_too_large: the body exceeds 64 KiB."),
           500: jsonResponse(runtimeFailureSchema(), "Internal verification failure."),
         },
       },
@@ -761,6 +869,7 @@ export function createOpenApiDocument(options: OpenApiDocumentOptions = {}): Ope
             service: jsonSchema.string({ description: "Provider service identifier." }),
             authType: jsonSchema.string({ description: "Connection authentication type." }),
             configured: jsonSchema.boolean({ description: "Whether the provider is connected." }),
+            notion: notionConnectionSchema,
             oauthAuthorizationId: jsonSchema.string({
               description: "Completed OAuth consent state. Omitted for legacy and non-OAuth connections.",
             }),
@@ -972,7 +1081,15 @@ export function createOpenApiDocument(options: OpenApiDocumentOptions = {}): Ope
             description: "Local transit file upload response.",
           },
         ),
-        ProviderDefinition: jsonSchema.unknownObject("Public provider catalog definition."),
+        ProviderDefinition: jsonSchema.looseObject(
+          "Public provider catalog definition. Localized responses preserve category IDs and supply their display names separately.",
+          {
+            categoryDisplayNames: jsonSchema.record(
+              "Localized display names keyed by unchanged category ID.",
+              jsonSchema.string(),
+            ),
+          },
+        ),
         RunLog: jsonSchema.object(
           {
             id: jsonSchema.string({ description: "Run identifier." }),
@@ -1670,11 +1787,17 @@ function createOAuthConfigPath(): Record<string, unknown> {
   };
 }
 
-function getOperation(tag: string, summary: string, schema: JsonSchema): Record<string, unknown> {
+function getOperation(
+  tag: string,
+  summary: string,
+  schema: JsonSchema,
+  parameters?: unknown[],
+): Record<string, unknown> {
   return {
     get: {
       tags: [tag],
       summary,
+      parameters,
       responses: {
         200: jsonResponse(schema),
         404: jsonResponse({ $ref: "#/components/schemas/ErrorResponse" }),
@@ -1944,7 +2067,7 @@ function connectionManagementPaths(): Record<string, unknown> {
       "Describe the inputs a provider needs before it can be connected.",
       {
         data: setup,
-        parameters: [parameter("service")],
+        parameters: [parameter("service"), ...catalogLocaleParameters],
         errorStatuses: [401, 403, 404],
         description:
           "Requires administrator authentication. Lists credential fields, OAuth client inputs, scopes, registration help, the callback URL to register and the OAuth client inputs still missing. Never includes saved values.",

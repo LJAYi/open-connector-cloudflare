@@ -20,7 +20,7 @@ through runtime options to admit, delay or deny each upstream HTTP attempt.
 | `OOMOL_CONNECT_NEW_ENCRYPTION_KEY`          | unset                     | New key used by `runtime:data rotate-key`.                                                                                                                                  |
 | `OOMOL_CONNECT_ADMIN_TOKEN`                 | unset                     | Requires bearer-token auth for local admin API, docs, and web console.                                                                                                      |
 | `OOMOL_CONNECT_RUNTIME_TOKEN`               | unset                     | Optional bootstrap runtime bearer token for `/v1` and MCP callers.                                                                                                          |
-| `OOMOL_CONNECT_EVENT_VERIFY_TOKEN`          | unset                     | Dedicated bearer token for the `slackbot` and `microsoft_teams_bot` `/events/verify` routes. When unset they return 404. Separate from the admin and runtime tokens.        |
+| `OOMOL_CONNECT_EVENT_VERIFY_TOKEN`          | unset                     | Dedicated bearer token for the `slackbot`, `microsoft_teams_bot` and `feishu_app_bot` `/events/verify` routes; they return 404 when unset. Not an admin/runtime token.      |
 | `OOMOL_CONNECT_ALLOWED_CUSTOM_OAUTH`        | unset                     | Enables connection-scoped OAuth apps for `*` or a comma-separated service list.                                                                                             |
 | `OOMOL_CONNECT_JWKS_URI`                    | unset                     | Node-only JWKS endpoint for validating runtime JWT access tokens.                                                                                                           |
 | `OOMOL_CONNECT_JWT_ISSUER`                  | unset                     | Expected `iss` claim for runtime JWT access tokens.                                                                                                                         |
@@ -145,7 +145,7 @@ currently available only on the Node server, not Cloudflare Workers.
 
 The Node runtime stores transit files under `data/files` by default. Set
 `OOMOL_CONNECT_TRANSIT_FILE_BACKEND=s3` to share transit files across multiple Node or Docker
-instances through AWS S3 or an S3-compatible service such as MinIO, Cloudflare R2, or Alibaba Cloud
+instances through AWS S3 or an S3-compatible service such as MinIO, Cloudflare R2, Neon, or Alibaba Cloud
 OSS:
 
 ```bash
@@ -167,6 +167,13 @@ For Cloudflare R2, use the account S3 endpoint and set the region to `auto`. For
 use its S3-compatible endpoint (`https://s3.oss-<region>.aliyuncs.com`), set the matching region, and
 leave path-style access disabled. MinIO commonly uses its server URL as the endpoint with
 `OOMOL_CONNECT_S3_FORCE_PATH_STYLE=true`.
+
+For Neon Object Storage, use the branch S3 endpoint
+(`https://<branch-id>.storage.<cell>.<region>.aws.neon.tech`), set the region the branch reports,
+and set `OOMOL_CONNECT_S3_FORCE_PATH_STYLE=true` because Neon only accepts path-style requests. The
+`neon_object_storage.get_branch_storage` action returns the endpoint and region for a branch. Create the bucket with
+`neon_object_storage.create_bucket` or the Neon Console, and use a branch credential's access key ID and secret
+access key for the two credential variables.
 
 Uploads and downloads continue to use `/api/files`; the bucket does not need to be public. All
 instances must use the same bucket and S3 settings. The runtime rejects expired files when they are
@@ -196,7 +203,7 @@ private targets are rejected during connection setup.
 Some self-hosted services are only reachable over a LAN or an overlay network
 such as Tailscale or NetBird. To allow those connections, set
 `OOMOL_CONNECT_ALLOW_PRIVATE_NETWORK=true`. When enabled, connections for the
-self-hosted providers that opt in (**Dokploy**, **n8n**, **GitLab**,
+self-hosted providers that opt in (**Apache Doris**, **Dokploy**, **n8n**, **GitLab**,
 **Gitea**, **Home Assistant**, **IMAP Mailbox**, and others) may target:
 
 - RFC 1918 ranges: `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`
@@ -207,14 +214,80 @@ self-hosted providers that opt in (**Dokploy**, **n8n**, **GitLab**,
 The following targets stay blocked even when the flag is enabled:
 
 - Loopback and localhost (`127.0.0.0/8`, `localhost`, `.localhost`)
-- Link-local and cloud metadata (`169.254.0.0/16`, `100.100.100.200/32`, and
-  metadata hostnames such as `metadata.google.internal`)
-- Reserved, multicast, and broadcast ranges, and all IPv6 targets
+- Link-local and cloud metadata (`169.254.0.0/16`, `100.100.100.200/32`, the Azure
+  platform endpoint `168.63.129.16/32`, the IPv6 metadata endpoints `fd00:ec2::254`,
+  `fd20:ce::254`, and `fd00:c1::a9fe:a9fe`, and metadata hostnames such as
+  `metadata.google.internal`)
+- Reserved, multicast, and broadcast ranges
+- IPv6 address literals in URLs; a hostname that resolves to IPv6 addresses goes through
+  the same checks as one that resolves to IPv4
 
 > **Enable this only on a single-tenant, self-hosted runtime that you operate.**
 > On a shared or multi-tenant deployment, turning it on lets any connection
 > owner reach the operator's internal network from the runtime's egress
 > position, so leave it at the `false` default there.
+
+### Apache Doris
+
+The `doris` provider uses the FE HTTP statement API, with Apache Doris **2.1** as
+the minimum supported version. It provides `execute_query`, `list_databases`,
+`list_tables`, and `get_table_schema`. Configure a `custom_credential` connection
+with `baseUrl` (the FE HTTP endpoint, usually port 8030), `username`, `password`,
+and optionally `defaultDatabase`. Use HTTPS for publicly exposed endpoints.
+
+Use a dedicated account with only `SELECT_PRIV` on the databases it needs:
+
+```sql
+GRANT SELECT_PRIV ON your_db.* TO 'oc_reader'@'%';
+```
+
+The user must already exist. Do not grant administrator or write privileges to
+this account. On Doris versions where `enable_all_http_auth=true` adds an ADMIN
+check to the statement endpoint, a SELECT-only account cannot use this provider.
+That deployment configuration is incompatible with this integration's minimum
+privilege setup; do not elevate the connector account to work around it.
+
+Credential validation runs `SELECT 1`. Query execution uses the action's
+`database`, then `defaultDatabase`, then the built-in `information_schema`.
+Database listing and credential validation use `defaultDatabase` or
+`information_schema`. Table listing and table schema actions require either an
+action `database` or a configured `defaultDatabase`. Table names are unqualified
+identifiers and are quoted by the provider.
+
+`execute_query` accepts one `SELECT`, `WITH ... SELECT`, `SHOW`, `DESC`,
+`DESCRIBE`, or `EXPLAIN` statement, with an optional trailing semicolon. It rejects
+multiple statements and write keywords, including `INTO OUTFILE` even when used
+inside a SELECT. Quoted values and ordinary comments are recognized; SQL hints,
+executable comments and backslash escapes are not supported. Use doubled quotes
+for literal quote characters and backticks for identifiers that use reserved
+words. These checks supplement database permissions; they do not establish a
+sandbox for functions or external resources configured by the Doris operator.
+The provider does not expose an arbitrary HTTP proxy.
+
+All four actions return `columns`, positional `rows`, `rowCount`,
+`executionTimeMs`, and `truncated`. Duplicate column names are preserved. For
+database/table listings each row holds a name; schema lookup returns DESCRIBE
+rows, with `columns` identifying their attributes. A nonzero Doris `code` is an
+error, and an unexpected `exec_status` response is rejected instead of being
+reported as an empty result set.
+
+`maxRows` defaults to 1,000 and accepts 1–10,000. Requests disable Doris streaming
+with `X-Doris-Stream: false` and ask for one extra row through the HTTP body's
+`limit` field so `truncated` is accurate. Response bodies are capped at **8 MiB**
+while being read; exceeding the cap returns an error rather than a partial
+result. The shared request timeout is 30 seconds. These limits do not bound the
+database's scan or guarantee cancellation of a server-side query: use SQL
+`LIMIT`, selective filters and Doris workload controls for expensive queries.
+
+For private FE addresses, enable `OOMOL_CONNECT_ALLOW_PRIVATE_NETWORK=true` on
+the runtime. This applies to both credential validation and action execution,
+including DNS and redirect checks. Loopback and metadata addresses remain
+blocked. Cloudflare Workers cannot route to private addresses; use a Node,
+Docker or Fly deployment with network access to the FE instead.
+
+See the [Doris statement API](https://doris.apache.org/docs/3.x/admin-manual/open-api/fe-http/statement-execution-action/),
+the [HTTP request implementation](https://github.com/apache/doris/blob/branch-3.0/fe/fe-core/src/main/java/org/apache/doris/httpv2/rest/StmtExecutionAction.java),
+and the runnable [local HTTP example](../examples/local-http/doris.ts).
 
 ### Corporate VPN host exceptions
 
@@ -308,6 +381,18 @@ npx wrangler secret put OOMOL_CONNECT_ENCRYPTION_KEY --config wrangler.local.jso
 
 Persistent runtime tokens need explicit `allowedTriggers` grants for Provider Triggers; old and new tokens default to no Trigger access. Trigger grants do not require `allowedProxies`. Stateful subscriptions require a persistent runtime token; environment tokens and verified JWTs support only permitted `options` and `read`. See [Provider Triggers](runtime-api.md#provider-triggers) for lifecycle, cleanup, account recovery and token rotation. Workers must have scheduled maintenance enabled and catalog assets available when Trigger cleanup is pending.
 
+## Channel event verification
+
+`slackbot`, `microsoft_teams_bot` and `feishu_app_bot` expose `POST /v1/providers/{service}/events/verify`. The ingress service that receives a channel's events forwards each original request there, and the route proves that the request came from the configured application. All three routes share these rules:
+
+- Authentication uses only `OOMOL_CONNECT_EVENT_VERIFY_TOKEN`. The routes return 404 when the token is unset, and admin or runtime tokens are rejected.
+- Forward the original request body and the provider headers. Slack and Feishu sign the body, so forward the exact bytes: re-serialized JSON fails their signature checks. Teams does not sign the body. It needs a valid activity whose `serviceUrl` matches the forwarded Bot Framework token.
+- The body limit is 64 KiB.
+- Verification never stores, deduplicates, retries or schedules an event. Your ingress owns those steps and sends any challenge reply to the platform.
+- Errors use one table of codes, listed in each section below.
+
+The sections below describe each channel. For the architecture and the steps to add a channel, see [Channel Event Verification](channel-event-verification.md).
+
 ## Slack event verification
 
 Configure the default Slack Bot OAuth application in the console with its Client ID and Client Secret. Its optional **Slack App ID** and **Slack Signing Secret** fields enable event verification; they are not required for OAuth authorization or ordinary actions. The Signing Secret belongs to the Slack application, not to each workspace installation.
@@ -368,6 +453,8 @@ must point to those generated assets. The host must await `runtime.close()`.
 
 ## Microsoft Teams bot event verification
 
+To have Connector also normalize, filter and identify activities for deduplication, use the `microsoft_teams_bot.on_activity` Trigger with a shared event Source instead of forwarding to this route. See [Provider Triggers](runtime-api.md#provider-triggers).
+
 Connect a Microsoft Teams Bot account with its Application (client) ID, then set `OOMOL_CONNECT_EVENT_VERIFY_TOKEN` as described for Slack. Teams delivers activities to the messaging endpoint of your own ingress, which can forward them for verification. `Authorization` carries the dedicated token, so forward the activity request's own `Authorization` header value in `X-Botframework-Authorization`:
 
 ```http
@@ -382,7 +469,7 @@ Content-Type: application/json
 
 The bot is selected like it is for Actions: `X-OO-Connector-App-Id`, or an alias through `X-OO-Connector-Alias`. An unknown selector never falls back to another bot. The token audience must be that connection's Application (client) ID. Admin and runtime tokens do not grant access to this endpoint, and the dedicated token grants no access to other APIs.
 
-The verifier follows the Bot Connector authentication rules: an RS256 signature from the keys Bot Framework publishes, issuer `https://api.botframework.com` or `https://api.botframework.us`, audience, expiry (with five minutes of clock tolerance), a `serviceurl` claim equal to the activity's `serviceUrl`, and the signing key's channel endorsement. The token does not sign the request body: the `serviceUrl` claim is what binds the two, so treat the activity's other fields as unauthenticated content that only your own ingress has checked.
+The verifier follows the Bot Connector authentication rules: an RS256 signature from the keys Bot Framework publishes, issuer `https://api.botframework.com` or `https://api.botframework.us`, audience, expiry (with five minutes of clock tolerance), a `serviceurl` claim equal to the activity's `serviceUrl`, a `serviceUrl` on a documented Microsoft Teams Bot Connector host, and the signing key's channel endorsement. The token does not sign the request body: the `serviceUrl` claim is what binds the two, so treat the activity's other fields as unauthenticated content that only your own ingress has checked.
 
 Successful responses use the runtime envelope:
 
@@ -393,14 +480,18 @@ Successful responses use the runtime envelope:
   "data": {
     "valid": true,
     "appId": "00000000-0000-0000-0000-000000000001",
+    "tenantId": "00000000-0000-0000-0000-000000000002",
     "serviceUrl": "https://smba.trafficmanager.net/teams/",
+    "activityId": "activity-id",
+    "conversationId": "conversation-id",
+    "aadObjectId": "00000000-0000-0000-0000-000000000003",
     "channelId": "msteams"
   },
   "meta": {}
 }
 ```
 
-Use the returned `serviceUrl` for replies. The body limit is 64 KiB. No event is stored or executed by verification; your ingress owns deduplication, retries and scheduling.
+Use the returned `serviceUrl` for replies. `tenantId`, `activityId`, `conversationId` and `aadObjectId` are extracted from the activity after the Bot Framework token and service URL are verified. The body limit is 64 KiB. No event is stored or executed by verification; your ingress owns deduplication, retries and scheduling.
 
 | HTTP | errorCode                           | Meaning                                                     |
 | ---- | ----------------------------------- | ----------------------------------------------------------- |
@@ -416,3 +507,70 @@ Use the returned `serviceUrl` for replies. The body limit is 64 KiB. No event is
 | 502  | `event_verification_unavailable`    | Bot Framework signing keys could not be fetched             |
 
 Signing keys are cached for an hour and refetched when a token names an unknown key; a failed refresh keeps serving the keys already held. Government-cloud tokens (issuer `https://api.botframework.us`) are verified against that cloud's published keys.
+
+## Feishu App Bot event verification
+
+Connect a Feishu App Bot with its **App ID**, **Event Verification Token** and **Event Encrypt Key**. The last two come from the app's Event Subscription settings and are needed only for event verification. Then set `OOMOL_CONNECT_EVENT_VERIFY_TOKEN` as described for Slack. Forward the original body together with Feishu's signing headers:
+
+```http
+POST /v1/providers/feishu_app_bot/events/verify
+Authorization: Bearer <event-verify-token>
+X-Lark-Request-Timestamp: <original-timestamp>
+X-Lark-Request-Nonce: <original-nonce>
+X-Lark-Signature: <original-signature>
+X-OO-Connector-App-Id: <connection id>
+Content-Type: application/json
+
+<original Feishu request body, without re-serialization>
+```
+
+The bot is selected like it is for Actions: by `X-OO-Connector-App-Id`, or by an alias in `X-OO-Connector-Alias`. An unknown selector never falls back to another bot.
+
+The verifier checks these things:
+
+- The Feishu verification token.
+- The signature, `SHA-256(timestamp + nonce + encryptKey + body)`. The timestamp may differ from server time by at most 300 seconds.
+- That the event's `app_id` is the connection's App ID.
+- The envelope. Encrypted envelopes are decrypted with the Encrypt Key.
+
+Every event must be signed. Only a URL verification challenge may omit the signing headers, and that challenge returns `signatureVerified: false`.
+
+A verified event returns the decrypted envelope. The verification token is removed from the response:
+
+```json
+{
+  "success": true,
+  "message": "OK",
+  "data": {
+    "valid": true,
+    "appId": "cli_a0123456789",
+    "tenantKey": "tenant-key",
+    "signatureVerified": true,
+    "payload": {
+      "schema": "2.0",
+      "header": {
+        "event_id": "event-id",
+        "event_type": "im.message.receive_v1",
+        "tenant_key": "tenant-key",
+        "app_id": "cli_a0123456789"
+      },
+      "event": {}
+    }
+  },
+  "meta": {}
+}
+```
+
+For `url_verification`, `challenge` contains the validated string, and your ingress must send that reply to Feishu. Feishu retries a delivery that did not receive HTTP 200 within three seconds. Deduplicate events by `header.event_id`.
+
+| HTTP | errorCode                           | Meaning                                                        |
+| ---- | ----------------------------------- | -------------------------------------------------------------- |
+| 400  | `invalid_event_payload`             | Invalid JSON, decryption failure, or unsupported envelope      |
+| 401  | `unauthorized`                      | Missing or incorrect dedicated token                           |
+| 401  | `invalid_webhook_signature`         | Wrong verification token, or missing or invalid signature      |
+| 401  | `invalid_webhook_timestamp`         | Timestamp is invalid or outside the 300 second window          |
+| 403  | `webhook_app_mismatch`              | The event's `app_id` is a different app                        |
+| 404  | `event_verification_disabled`       | No verification token configured                               |
+| 404  | `connection_not_found`              | The selected connection does not exist                         |
+| 409  | `event_verification_not_configured` | The connection lacks App ID, verification token or Encrypt Key |
+| 413  | `webhook_request_too_large`         | Body exceeds 64 KiB                                            |

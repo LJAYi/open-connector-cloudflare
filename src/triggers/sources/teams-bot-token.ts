@@ -1,7 +1,15 @@
 import type { CryptoKey as JoseCryptoKey, JWK } from "jose";
 
-import { optionalRecord, optionalString } from "../core/cast.ts";
-import { eventRequestMaximumBodyBytes } from "./event-request-body.ts";
+import { optionalRecord, optionalString, optionalStringOrNull } from "../../core/cast.ts";
+import { createGuardedFetch } from "../../core/guarded-fetch.ts";
+import { readBoundedResponseBytes } from "../../core/request.ts";
+import { isAllowedTeamsBotConnectorHost } from "../../core/teams-bot-connector.ts";
+
+/**
+ * Bot Framework activity authentication shared by the Microsoft Teams Bot event
+ * verifier and its Trigger source, so the two paths cannot drift on the token
+ * rules, the published signing keys or the serviceUrl binding.
+ */
 
 /** Bot Framework publishes RSA keys for RS256 tokens in its OpenID metadata. */
 const allowedAlgorithms = ["RS256"];
@@ -40,7 +48,7 @@ export type BotFrameworkKeyResolver = (
   keyId: string,
 ) => Promise<BotFrameworkSigningKey | undefined>;
 
-export interface TeamsBotEventVerificationInput {
+export interface BotFrameworkActivityInput {
   /** Raw Authorization header value of the inbound activity request. */
   authorization: string;
   /** Raw activity request body bytes. */
@@ -53,11 +61,20 @@ export interface TeamsBotEventVerificationInput {
   now?: number;
 }
 
-export type TeamsBotEventVerificationResult =
-  | { valid: true; appId: string; serviceUrl: string; channelId: string | null }
+export type BotFrameworkActivityResult =
+  | {
+      valid: true;
+      appId: string;
+      tenantId: string | null;
+      serviceUrl: string;
+      activityId: string | null;
+      conversationId: string | null;
+      aadObjectId: string | null;
+      channelId: string | null;
+    }
   | {
       valid: false;
-      reason: "token" | "timestamp" | "app" | "payload" | "service_url" | "channel" | "body_too_large";
+      reason: "token" | "timestamp" | "app" | "payload" | "service_url" | "channel";
     };
 
 /** Raised when Bot Framework's signing keys cannot be fetched; an infrastructure failure, not a rejection. */
@@ -70,12 +87,11 @@ export class BotFrameworkKeysUnavailableError extends Error {}
  * claim and the signing key's channel endorsement, following the Bot Connector
  * authentication rules. The token does not sign the request body: the serviceUrl
  * claim is what binds the two. Verification only; nothing is stored or scheduled.
+ * Callers enforce their own body size limit before calling.
  */
-export async function verifyTeamsBotEventRequest(
-  input: TeamsBotEventVerificationInput,
-): Promise<TeamsBotEventVerificationResult> {
-  if (input.rawBody.byteLength > eventRequestMaximumBodyBytes) return { valid: false, reason: "body_too_large" };
-
+export async function verifyBotFrameworkActivity(
+  input: BotFrameworkActivityInput,
+): Promise<BotFrameworkActivityResult> {
   // jose is loaded on first use so a runtime that never verifies Teams activities does not load it.
   const jose = await import("jose");
 
@@ -120,14 +136,28 @@ export async function verifyTeamsBotEventRequest(
   }
   const serviceUrl = optionalString(activity?.serviceUrl);
   if (!activity || !serviceUrl) return { valid: false, reason: "payload" };
-  if (serviceUrlClaim !== serviceUrl) return { valid: false, reason: "service_url" };
+  if (serviceUrlClaim !== serviceUrl || !allowedConnectorServiceUrl(serviceUrl))
+    return { valid: false, reason: "service_url" };
 
   // A key without endorsements, or an activity naming no channel, asserts nothing to check.
   const channelId = optionalString(activity.channelId) ?? null;
   if (channelId && signingKey.endorsements.length > 0 && !signingKey.endorsements.includes(channelId))
     return { valid: false, reason: "channel" };
 
-  return { valid: true, appId: input.appId, serviceUrl, channelId };
+  const conversation = optionalRecord(activity.conversation);
+  const channelData = optionalRecord(activity.channelData);
+  const from = optionalRecord(activity.from);
+  return {
+    valid: true,
+    appId: input.appId,
+    tenantId:
+      optionalStringOrNull(conversation?.tenantId) ?? optionalStringOrNull(optionalRecord(channelData?.tenant)?.id),
+    serviceUrl,
+    activityId: optionalStringOrNull(activity.id),
+    conversationId: optionalStringOrNull(conversation?.id),
+    aadObjectId: optionalStringOrNull(from?.aadObjectId),
+    channelId,
+  };
 }
 
 function rejectionReason(error: unknown, joseErrors: typeof import("jose").errors): "token" | "timestamp" | "app" {
@@ -215,15 +245,40 @@ async function fetchPublishedKeys(cloud: BotFrameworkCloud): Promise<PublishedKe
       : [];
     keys.set(keyId, { key: (await importJWK(jwk as unknown as JWK, "RS256")) as JoseCryptoKey, endorsements });
   }
+  if (keys.size === 0) throw new Error("Bot Framework keys document has no usable RSA signing keys.");
   const now = Date.now();
   return { keys, fetchedAt: now, expiresAt: now + keysTtlMs, refreshError: undefined };
 }
 
-// The metadata URLs are fixed Microsoft endpoints and the jwks_uri they publish is required to be HTTPS.
+// The metadata URLs are fixed Microsoft endpoints, but the jwks_uri comes from a response, so every hop
+// (including redirects) goes through the SSRF guard with DNS validation kept on.
+const keysFetch = createGuardedFetch();
+
 async function fetchJson(url: string): Promise<unknown> {
-  const response = await fetch(url, { signal: AbortSignal.timeout(keysRequestTimeoutMs) });
+  const response = await keysFetch(url, { signal: AbortSignal.timeout(keysRequestTimeoutMs) });
   if (!response.ok) throw new Error(`Bot Framework keys request failed with HTTP ${response.status}.`);
-  const text = await response.text();
-  if (text.length > keysDocumentMaximumBytes) throw new Error("Bot Framework keys document is too large.");
+  const bytes = await readBoundedResponseBytes(response, {
+    maxBytes: keysDocumentMaximumBytes,
+    fieldName: "Bot Framework keys document",
+    createError: (message) => new Error(message),
+  });
+  const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
   return JSON.parse(text);
+}
+
+function allowedConnectorServiceUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === "https:" &&
+      !url.username &&
+      !url.password &&
+      !url.port &&
+      !url.search &&
+      !url.hash &&
+      isAllowedTeamsBotConnectorHost(url.hostname)
+    );
+  } catch {
+    return false;
+  }
 }

@@ -1,8 +1,8 @@
-import type { BotFrameworkSigningKey } from "./teams-bot-event-verification.ts";
+import type { BotFrameworkSigningKey } from "../../triggers/sources/teams-bot-token.ts";
 
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { verifyTeamsBotEventRequest } from "./teams-bot-event-verification.ts";
+import { verifyTeamsBotEventRequest } from "./microsoft-teams-bot.ts";
 
 const appId = "00000000-0000-0000-0000-000000000001";
 const issuer = "https://api.botframework.com";
@@ -30,7 +30,17 @@ async function token(options: TokenOptions = {}): Promise<string> {
 }
 
 function activity(overrides: Record<string, unknown> = {}): Uint8Array {
-  return new TextEncoder().encode(JSON.stringify({ type: "message", serviceUrl, channelId: "msteams", ...overrides }));
+  return new TextEncoder().encode(
+    JSON.stringify({
+      id: "activity-1",
+      type: "message",
+      serviceUrl,
+      channelId: "msteams",
+      conversation: { id: "conversation-1", tenantId: "tenant-1" },
+      from: { id: "29:user-1", aadObjectId: "aad-object-1" },
+      ...overrides,
+    }),
+  );
 }
 
 async function verify(
@@ -49,8 +59,55 @@ async function verify(
 }
 
 describe("Teams bot inbound activity verification", () => {
-  it("accepts a token for the bot that matches the activity serviceUrl", async () => {
-    await expect(verify()).resolves.toEqual({ valid: true, appId, serviceUrl, channelId: "msteams" });
+  it("accepts a token for the bot and returns trusted activity identifiers", async () => {
+    await expect(verify()).resolves.toEqual({
+      valid: true,
+      appId,
+      tenantId: "tenant-1",
+      serviceUrl,
+      activityId: "activity-1",
+      conversationId: "conversation-1",
+      aadObjectId: "aad-object-1",
+      channelId: "msteams",
+    });
+  });
+
+  it("uses channelData tenant when the conversation has no tenant", async () => {
+    await expect(
+      verify(
+        {},
+        activity({
+          conversation: { id: "conversation-1" },
+          channelData: { tenant: { id: "tenant-from-channel-data" } },
+        }),
+      ),
+    ).resolves.toMatchObject({ valid: true, tenantId: "tenant-from-channel-data" });
+  });
+
+  it.each([
+    "https://smba.trafficmanager.net/teams/",
+    "https://smba.infra.gcc.teams.microsoft.com/",
+    "https://smba.infra.gov.teams.microsoft.us/",
+    "https://smba.infra.dod.teams.microsoft.us/",
+  ])("accepts the documented Bot Connector host %s", async (allowedServiceUrl) => {
+    await expect(
+      verify({ claimServiceUrl: allowedServiceUrl }, activity({ serviceUrl: allowedServiceUrl })),
+    ).resolves.toMatchObject({ valid: true, serviceUrl: allowedServiceUrl });
+  });
+
+  it.each([
+    "https://user@smba.trafficmanager.net/teams/",
+    "https://:password@smba.trafficmanager.net/teams/",
+    "https://smba.trafficmanager.net/teams/#fragment",
+    "https://attacker.example/teams/",
+    "https://smba.trafficmanager.net.evil.example/teams/",
+    "http://smba.trafficmanager.net/teams/",
+    "https://smba.trafficmanager.net:8443/teams/",
+    "https://smba.trafficmanager.net/teams/?redirect=attacker",
+  ])("rejects the unsafe serviceUrl %s", async (disallowedServiceUrl) => {
+    await expect(
+      verify({ claimServiceUrl: disallowedServiceUrl }, activity({ serviceUrl: disallowedServiceUrl })),
+    ).resolves.toEqual({ valid: false, reason: "service_url" });
   });
 
   it("rejects a token signed by another key", async () => {
@@ -94,7 +151,8 @@ describe("Teams bot inbound activity verification", () => {
 });
 
 describe("Bot Framework published signing keys", () => {
-  let verifier: typeof import("./teams-bot-event-verification.ts");
+  let verifier: typeof import("./microsoft-teams-bot.ts");
+  let protocol: typeof import("../../triggers/sources/teams-bot-token.ts");
   let keysDocument: unknown;
   const fetcher = vi.fn(async (url: string) =>
     Response.json(url.endsWith("openidconfiguration") ? { jwks_uri: "https://keys.example/jwks" } : keysDocument),
@@ -102,7 +160,10 @@ describe("Bot Framework published signing keys", () => {
 
   beforeEach(async () => {
     vi.resetModules();
-    verifier = await import("./teams-bot-event-verification.ts");
+    // The fresh guarded-fetch module instance forgets vitest.setup.ts's DNS override; keep tests off real DNS.
+    (await import("../../core/guarded-fetch.ts")).setDefaultGuardedFetchDnsLookup(null);
+    verifier = await import("./microsoft-teams-bot.ts");
+    protocol = await import("../../triggers/sources/teams-bot-token.ts");
     vi.spyOn(Date, "now").mockReturnValue(now);
     fetcher.mockClear();
     keysDocument = { keys: [{ ...(await exportJWK(publicKey)), kid: "key-1", endorsements: ["msteams"] }] };
@@ -128,9 +189,9 @@ describe("Bot Framework published signing keys", () => {
     vi.mocked(Date.now).mockReturnValue(now + 3_600_001);
     fetcher.mockRejectedValueOnce(new Error("Network unavailable"));
 
-    await expect(verifyPublished("new-key")).rejects.toBeInstanceOf(verifier.BotFrameworkKeysUnavailableError);
+    await expect(verifyPublished("new-key")).rejects.toBeInstanceOf(protocol.BotFrameworkKeysUnavailableError);
     await expect(verifyPublished()).resolves.toMatchObject({ valid: true });
-    await expect(verifyPublished("new-key")).rejects.toBeInstanceOf(verifier.BotFrameworkKeysUnavailableError);
+    await expect(verifyPublished("new-key")).rejects.toBeInstanceOf(protocol.BotFrameworkKeysUnavailableError);
     expect(fetcher).toHaveBeenCalledTimes(3);
 
     keysDocument = { keys: [{ ...(await exportJWK(publicKey)), kid: "new-key", endorsements: ["msteams"] }] };
@@ -140,7 +201,7 @@ describe("Bot Framework published signing keys", () => {
     expect(fetcher).toHaveBeenCalledTimes(5);
   });
 
-  it.each([null, {}, { keys: {} }, { error: "unavailable" }])(
+  it.each([null, {}, { keys: {} }, { keys: [] }, { keys: [{ kid: "unused", kty: "EC" }] }, { error: "unavailable" }])(
     "preserves cached keys when the JWKS response is malformed: %j",
     async (document) => {
       await expect(verifyPublished()).resolves.toMatchObject({ valid: true });
@@ -148,17 +209,24 @@ describe("Bot Framework published signing keys", () => {
       keysDocument = document;
 
       await expect(verifyPublished()).resolves.toMatchObject({ valid: true });
-      await expect(verifyPublished("new-key")).rejects.toBeInstanceOf(verifier.BotFrameworkKeysUnavailableError);
+      await expect(verifyPublished("new-key")).rejects.toBeInstanceOf(protocol.BotFrameworkKeysUnavailableError);
       expect(fetcher).toHaveBeenCalledTimes(4);
     },
   );
 
   it("reports malformed JWKS as unavailable when no cache exists", async () => {
     keysDocument = {};
-    await expect(verifyPublished()).rejects.toBeInstanceOf(verifier.BotFrameworkKeysUnavailableError);
+    await expect(verifyPublished()).rejects.toBeInstanceOf(protocol.BotFrameworkKeysUnavailableError);
   });
 
   it("rejects an unknown key after successfully fetching a valid JWKS", async () => {
     await expect(verifyPublished("unknown-key")).resolves.toEqual({ valid: false, reason: "token" });
+  });
+  it("rejects oversized published key documents", async () => {
+    keysDocument = {
+      keys: [{ ...(await exportJWK(publicKey)), kid: "key-1", endorsements: ["msteams"] }],
+      padding: "x".repeat(1024 * 1024 + 1),
+    };
+    await expect(verifyPublished()).rejects.toBeInstanceOf(protocol.BotFrameworkKeysUnavailableError);
   });
 });
