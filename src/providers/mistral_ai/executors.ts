@@ -41,7 +41,7 @@ interface MistralActionSpec {
 }
 
 interface UploadSource {
-  bytes: Uint8Array;
+  file: Blob;
   fileName: string;
   mimeType: string;
 }
@@ -214,7 +214,6 @@ export const credentialValidators: CredentialValidators = {
       profile: {
         displayName: "Mistral AI API Key",
       },
-      grantedScopes: [],
       metadata: {
         validationEndpoint: "/v1/models",
         availableModels: (payload.data ?? [])
@@ -284,10 +283,7 @@ async function executeMultipartMistralAction(
   const { url, remainingInput } = buildMistralUrl(spec, input);
   const uploadSource = await resolveUploadSource(remainingInput, context);
   const formData = new FormData();
-  formData.set(
-    "file",
-    new File([Uint8Array.from(uploadSource.bytes)], uploadSource.fileName, { type: uploadSource.mimeType }),
-  );
+  formData.set("file", new File([uploadSource.file], uploadSource.fileName, { type: uploadSource.mimeType }));
 
   for (const [key, value] of Object.entries(remainingInput)) {
     if (key !== "file") {
@@ -321,10 +317,7 @@ async function executeAudioTranscriptionAction(
     formData.set("file_url", readPublicFileUrl(source.fileUrl, "file.url").toString());
   } else {
     const uploadSource = await resolveUploadSource(remainingInput, context);
-    formData.set(
-      "file",
-      new File([Uint8Array.from(uploadSource.bytes)], uploadSource.fileName, { type: uploadSource.mimeType }),
-    );
+    formData.set("file", new File([uploadSource.file], uploadSource.fileName, { type: uploadSource.mimeType }));
   }
 
   for (const [key, value] of Object.entries(remainingInput)) {
@@ -485,7 +478,7 @@ async function resolveUploadSource(
   }
   if (contentBase64) {
     return {
-      bytes: base64Bytes(contentBase64, "file.content_base64", providerInputError),
+      file: new Blob([base64Bytes(contentBase64, "file.content_base64", providerInputError)]),
       fileName,
       mimeType: mimeType ?? "application/octet-stream",
     };
@@ -500,7 +493,7 @@ async function readTransitUploadSource(
 ): Promise<UploadSource> {
   const stored = await readTransitFileInput(file, { transitFiles });
   return {
-    bytes: new Uint8Array(await stored.file.arrayBuffer()),
+    file: stored.file,
     fileName: stored.name,
     mimeType: stored.mimeType,
   };
@@ -528,11 +521,13 @@ async function readRemoteUploadSource(
   }
 
   return {
-    bytes: await readBoundedResponseBytes(response, {
-      maxBytes: maxRemoteUploadBytes,
-      fieldName: "file.url",
-      createError: (message) => new ProviderRequestError(413, message),
-    }),
+    file: new Blob([
+      await readBoundedResponseBytes(response, {
+        maxBytes: maxRemoteUploadBytes,
+        fieldName: "file.url",
+        createError: (message) => new ProviderRequestError(413, message),
+      }),
+    ]),
     fileName,
     mimeType: mimeType ?? response.headers.get("content-type") ?? "application/octet-stream",
   };

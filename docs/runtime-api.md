@@ -232,7 +232,43 @@ The MCP server exposes a small discovery-oriented tool set:
 - `get_action_guide`
 - `execute_action`
 
-Use `list_connections` to discover configured accounts before selecting one. Both
+Start with `search_actions({ "query": "create issue", "service": "github" })`.
+The query must be nonempty (up to 256 characters). Search returns at most 5 compact
+summaries by default (`limit`: 1–20), with `id`, `description`, and `available`.
+Actions denied by policy are omitted before applying the limit. Availability uses
+known local execution and connection state; it does not validate credentials upstream.
+Schemas are loaded only when requesting a guide or executing an action.
+
+`list_apps` browses provider names, optionally filtered by `query`. Providers with
+no policy-allowed actions are omitted. `list_connections` requires a `service` and
+returns account labels, connection names, default selection, and availability.
+Virtual no-auth entries are omitted because they require no account selection.
+Both lists accept `limit` (default 20, maximum 50) and return a top-level
+`nextCursor` beside `ok` and `data`. Pass that cursor with the same filters to read
+the next page; `null` marks the end. Pages are not snapshots across catalog or
+connection changes. By default, text and structured MCP content contain the same page.
+
+The default `compatible` output mode returns complete JSON in both `content[0].text` and
+`structuredContent` so text-only clients can read every result. To reduce duplicate transmission
+for clients that consume `structuredContent`, explicitly set:
+
+```bash
+OOMOL_CONNECT_MCP_OUTPUT_MODE=compact npm start
+```
+
+Embedding hosts can pass `mcpOutputMode: "compact"` to `createConnectorRuntime` instead. Compact mode
+keeps the complete result in `structuredContent`, including execution metadata and error details.
+The text block contains a short notice on success or the error code and message on failure, with
+the usual `isError` flag. This setting applies to every MCP tool on the deployment. Client names and
+protocol versions do not automatically select it: MCP has no standard client capability confirming
+that the host exposes structured results to its model.
+
+Compact mode reduces duplicate payloads; it does not impose a response size limit or create
+temporary result downloads. A result that exceeds the client's limit as a single copy can still
+be rejected after its action has completed. Do not retry an action that changes external data just
+to retrieve its output.
+
+Use `list_connections` when choosing among accounts for a service. Both
 `get_action_guide` and `execute_action` accept an optional `connectionName`:
 
 `get_action_guide` request:
@@ -260,9 +296,8 @@ Omitting `connectionName` uses the `default` connection. A requested named conne
 the runtime does not silently fall back to another account. Connection results expose only safe
 account identity fields and never include stored credentials. Persistent tokens with a non-empty
 `allowedConnections` list see only those connections in `list_connections` and related discovery;
-`list_apps` omits a provider's default connection identity when that connection's ID is not
-granted. `get_action_guide` and `execute_action` deny ungranted credential connections before lookup.
-Virtual `no_auth` connections remain available.
+`list_apps` contains no account identity. `get_action_guide` and `execute_action` deny ungranted credential connections before lookup.
+No-auth actions remain executable without selecting a connection.
 
 Action input validation runs before credential resolution and provider executor loading. Schema
 errors return `invalid_input` without refreshing OAuth credentials. MCP validation errors include

@@ -7,6 +7,7 @@ import { optionalNumber, optionalRecord, optionalString } from "../../core/cast.
 import {
   providerUserAgent,
   ProviderRequestError,
+  withRetryAfterSeconds,
   requiredInputString,
   runProviderRequest,
 } from "../provider-runtime.ts";
@@ -113,7 +114,6 @@ export async function validateSunoApiCredential(
       accountId: "api_key",
       displayName: "SunoAPI API Key",
     },
-    grantedScopes: [],
     metadata: {
       apiBaseUrl: sunoApiBaseUrl,
       validationEndpoint: "/api/v1/generate/credit",
@@ -229,7 +229,7 @@ async function requestSunoApiJson(input: SunoApiRequest): Promise<unknown> {
       throw new ProviderRequestError(
         response.ok ? 502 : response.status,
         `${extractSunoApiErrorMessage(payload) ?? response.statusText ?? "sunoapi request failed"}${code === undefined ? ` (HTTP ${response.status})` : ` (SunoAPI code ${code}, HTTP ${response.status})`}`,
-        payload,
+        withRetryAfterSeconds(response, payload),
       );
     }
     if (typeof payload === "string") {

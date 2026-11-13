@@ -156,7 +156,6 @@ export async function validateFootballChartsCredential(
       accountId: `football_charts:${apiKey.slice(0, 8)}`,
       displayName: "Football Charts API Key",
     },
-    grantedScopes: [],
     metadata: {
       apiBaseUrl: footballChartsApiBaseUrl,
       validationEndpoint: "/leagues/",
@@ -186,8 +185,9 @@ export async function readFootballChartsError(
     optionalString(errorObj?.message) ??
     optionalString(body?.message) ??
     `Football Charts request failed with HTTP ${status}`;
-  const message = apiKey ? upstreamMessage.replaceAll(apiKey, "[REDACTED]") : upstreamMessage;
-  const containsApiKey = apiKey && JSON.stringify(payload).includes(JSON.stringify(apiKey).slice(1, -1));
+  const secret = apiKey?.trim();
+  const message = secret ? upstreamMessage.replaceAll(secret, "[REDACTED]") : upstreamMessage;
+  const containsApiKey = secret && JSON.stringify(payload).includes(JSON.stringify(secret).slice(1, -1));
   const details = withRetryAfterSeconds(response, containsApiKey ? {} : payload);
 
   if (status === 403 && errorCode === "season_gated") {
@@ -197,7 +197,7 @@ export async function readFootballChartsError(
     return new ProviderRequestError(400, message, details);
   }
   if (status === 401 || status === 403) {
-    return new ProviderRequestError(status, message, details);
+    return new ProviderRequestError(status, message, details, "provider_error");
   }
   if (status === 429) {
     return new ProviderRequestError(429, message, details, "rate_limited");

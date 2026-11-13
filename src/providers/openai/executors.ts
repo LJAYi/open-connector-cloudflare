@@ -11,11 +11,12 @@ import {
   createProviderTimeout,
   isAbortLikeError,
   ProviderRequestError,
+  withRetryAfterSeconds,
   providerUserAgent,
 } from "../provider-runtime.ts";
 
 interface UploadSource {
-  bytes: Uint8Array;
+  bytes: Uint8Array<ArrayBuffer>;
   fileName: string;
   mimeType: string;
 }
@@ -113,7 +114,6 @@ export const credentialValidators: CredentialValidators = {
       profile: {
         displayName: "OpenAI API Key",
       },
-      grantedScopes: [],
       metadata: {
         validationEndpoint: "/models",
         availableModels: (payload.data ?? [])
@@ -399,7 +399,7 @@ async function assertOpenAiResponse(response: Response, mode: "validate" | "exec
   const error = await readOpenAiError(response);
 
   if (response.status === 429) {
-    throw new ProviderRequestError(429, error.message);
+    throw new ProviderRequestError(429, error.message, withRetryAfterSeconds(response));
   }
   if (mode === "validate" && (response.status === 401 || response.status === 403)) {
     throw new ProviderRequestError(400, error.message);
@@ -500,7 +500,7 @@ async function buildOpenAiAudioFormData(
 ): Promise<FormData> {
   const source = await resolveAudioUploadSource(input, context);
   const formData = new FormData();
-  formData.set("file", new File([Buffer.from(source.bytes)], source.fileName, { type: source.mimeType }));
+  formData.set("file", new File([source.bytes], source.fileName, { type: source.mimeType }));
 
   for (const [key, value] of Object.entries(input)) {
     if (key === "file" || value === undefined || value === null) {
@@ -620,7 +620,7 @@ function appendMultipartField(formData: FormData, key: string, value: unknown): 
   formData.append(key, JSON.stringify(value));
 }
 
-function decodeBase64Content(value: string, fieldName: string): Uint8Array {
+function decodeBase64Content(value: string, fieldName: string): Uint8Array<ArrayBuffer> {
   try {
     const bytes = Buffer.from(value, "base64");
     if (bytes.length === 0) {

@@ -130,6 +130,12 @@ export type OAuth2AuthDefinition = {
   type: "oauth2";
   /** Provider authorization endpoint used to build the browser consent URL. */
   authorizationUrl: string;
+  /** Validated authorization server identity for discovered OAuth providers. */
+  issuer?: string;
+  /** Whether authorization responses must include the discovered issuer. */
+  requireIssuer?: boolean;
+  /** MCP resource binding sent in authorization and token requests. */
+  resource?: string;
   /** Provider token endpoint used to exchange an authorization code. */
   tokenUrl: string;
   /** Provider token endpoint used to refresh an access token. Defaults to tokenUrl. */
@@ -413,7 +419,7 @@ export type CredentialValidationResult = {
    * users and agents so they can see which account an action will use.
    */
   profile?: CredentialProfileInput;
-  /** Provider-native scopes granted to this credential, when known. */
+  /** Provider-reported scopes for display only. Upstream APIs enforce credential permissions. */
   grantedScopes?: string[];
   /**
    * Provider-specific non-secret metadata kept for executors.
@@ -438,7 +444,7 @@ export type CredentialProfile = {
   accountId: string;
   /** Human-readable label for local users and agents. */
   displayName: string;
-  /** Provider-native scopes granted to this credential, when known. */
+  /** Provider-reported scopes for display only. Upstream APIs enforce credential permissions. */
   grantedScopes: string[];
 };
 
@@ -450,7 +456,7 @@ export type CredentialProfileInput = {
   accountId?: string;
   /** Human-readable label for local users and agents. */
   displayName?: string;
-  /** Provider-native scopes granted to this credential, when known. */
+  /** Provider-reported scopes for display only. Upstream APIs enforce credential permissions. */
   grantedScopes?: string[];
 };
 

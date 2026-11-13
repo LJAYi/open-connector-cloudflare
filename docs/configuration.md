@@ -2,6 +2,8 @@
 
 Managed provider actions can be configured through the [Connector Marketplace](marketplace.md). Marketplace API keys use the same optional `OOMOL_CONNECT_ENCRYPTION_KEY` protection as other stored credentials.
 
+[Custom MCP services](custom-mcp.md) are managed in the Console and stored in the runtime database.
+
 OpenConnector is configured with environment variables.
 
 Embedding hosts can also configure opt-in [provider HTTP dispatch hooks](provider-http-dispatch.md)
@@ -21,6 +23,7 @@ through runtime options to admit, delay or deny each upstream HTTP attempt.
 | `OOMOL_CONNECT_ADMIN_TOKEN`                 | unset                     | Requires bearer-token auth for local admin API, docs, and web console.                                                                                                                                                                                                                                                                                                                                           |
 | `OOMOL_CONNECT_RUNTIME_TOKEN`               | unset                     | Optional bootstrap runtime bearer token for `/v1` and MCP callers.                                                                                                                                                                                                                                                                                                                                               |
 | `OOMOL_CONNECT_EVENT_VERIFY_TOKEN`          | unset                     | Dedicated bearer token for the `slackbot`, `microsoft_teams_bot` and `feishu_app_bot` `/events/verify` routes; they return 404 when unset. Not an admin/runtime token.                                                                                                                                                                                                                                           |
+| `OOMOL_CONNECT_MCP_OUTPUT_MODE`             | `compatible`              | MCP result format on Node and Cloudflare: `compatible` returns complete JSON text and structured data; `compact` keeps structured data with short text. Enable `compact` only when all clients consume `structuredContent`. Invalid values are rejected. Embedding hosts use `mcpOutputMode`; see [MCP result delivery](runtime-api.md#mcp).                                                                     |
 | `OOMOL_CONNECT_ALLOWED_CUSTOM_OAUTH`        | unset                     | Enables connection-scoped OAuth apps for `*` or a comma-separated service list.                                                                                                                                                                                                                                                                                                                                  |
 | `OOMOL_CONNECT_JWKS_URI`                    | unset                     | Node-only JWKS endpoint for validating runtime JWT access tokens.                                                                                                                                                                                                                                                                                                                                                |
 | `OOMOL_CONNECT_JWT_ISSUER`                  | unset                     | Expected `iss` claim for runtime JWT access tokens.                                                                                                                                                                                                                                                                                                                                                              |
@@ -59,6 +62,14 @@ through runtime options to admit, delay or deny each upstream HTTP attempt.
 | `OOMOL_CONNECT_OAUTH_ALLOW_CIMD`            | `true`                    | Accepts CIMD (Client Id Metadata Document) `client_id` values for OAuth client registration.                                                                                                                                                                                                                                                                                                                     |
 | `OOMOL_CONNECT_OAUTH_TRUST_PROXY_HEADERS`   | `false`                   | Trusts `x-forwarded-for` (rightmost entry), `x-real-ip` and `cf-connecting-ip` when keying the OAuth endpoints' rate-limit buckets. Enable only behind a reverse proxy that overwrites these headers: with the default `false`, a TLS-terminating proxy collapses all callers into one shared bucket, and without such a proxy an enabled flag lets callers spoof their bucket by setting the header themselves. |
 
+Clients that registered through DCR or CIMD before the scope-default change keep their stored
+scopes; when such a client requests a scope outside its registered set (typically `offline_access`
+on top of `mcp:access`), the authorization endpoint rejects it with `invalid_scope`. Widen the
+affected client explicitly with `PUT /api/oauth-clients/:clientId` (or delete it and let the client
+register again). Existing records are never widened automatically: explicitly restricted clients
+store their scopes the same way, so an automatic widening would silently grant them more than they
+asked for.
+
 Example:
 
 ```bash
@@ -69,6 +80,14 @@ OOMOL_CONNECT_ALLOWED_ACTIONS="hackernews.*,github.get_current_user" \
 OOMOL_CONNECT_ALLOWED_PROXIES="github" \
 npm run dev
 ```
+
+When runtime authentication is enabled, management endpoints require a separately configured
+`OOMOL_CONNECT_ADMIN_TOKEN`. If it is missing, admin-scoped requests return `403`, including
+requests to create runtime tokens or modify connections and OAuth configuration. Runtime tokens
+and JWTs do not grant admin access. This also applies to OAuth runtime authentication and stored
+runtime tokens. Configure the admin token before creating the first persistent runtime token;
+once that token exists, anonymous management access is disabled. Unauthenticated local operation
+remains available when no runtime authentication is configured or runtime auth mode is `none`.
 
 Create persistent runtime tokens from the web console Access tab or `POST /api/runtime-tokens`.
 Only token hashes are stored: the Node server stores persistent-token records in its selected SQLite
@@ -213,7 +232,7 @@ Some self-hosted services are only reachable over a LAN or an overlay network
 such as Tailscale or NetBird. To allow those connections, set
 `OOMOL_CONNECT_ALLOW_PRIVATE_NETWORK=true`. When enabled, connections for the
 self-hosted providers that opt in (**Apache Doris**, **Dokploy**, **n8n**, **GitLab**,
-**Gitea**, **Home Assistant**, **IMAP Mailbox**, and others) may target:
+**Gitea**, **Home Assistant**, **IMAP Mailbox**, **Kubernetes**, **SFTP**, and others) may target:
 
 - RFC 1918 ranges: `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`
 - Carrier-grade NAT / shared address space `100.64.0.0/10` (Tailscale, NetBird)
@@ -298,6 +317,23 @@ See the [Doris statement API](https://doris.apache.org/docs/3.x/admin-manual/ope
 the [HTTP request implementation](https://github.com/apache/doris/blob/branch-3.0/fe/fe-core/src/main/java/org/apache/doris/httpv2/rest/StmtExecutionAction.java),
 and the runnable [local HTTP example](../examples/local-http/doris.ts).
 
+### Kubernetes
+
+The `kubernetes` provider connects with a ServiceAccount bearer token, the API
+server URL, and, for a cluster-private certificate authority, the
+`certificate-authority-data` value from kubeconfig or the equivalent PEM. It
+trusts only that CA for the connection; there is no option to skip TLS
+verification. Client certificates, exec and OIDC credential plugins, and kubeconfig
+upload are not supported.
+
+Custom CA trust needs a Node, Docker, Fly or single-binary deployment. Cloudflare
+Workers cannot supply a custom trust store, so a connection with a CA fails there
+with a clear error instead of falling back to the default one; a cluster whose API
+server has a publicly trusted certificate works on Workers without it.
+
+For a private API server address, also enable
+`OOMOL_CONNECT_ALLOW_PRIVATE_NETWORK=true`.
+
 ### Corporate VPN host exceptions
 
 Some corporate VPNs map public SaaS domains into private or benchmark address
@@ -329,8 +365,7 @@ To restore eager loading, which keeps the complete catalog in memory:
 OOMOL_CONNECT_CATALOG_LAZY_SCHEMAS=false npm run dev
 ```
 
-Embedded hosts use `lazySchemas: false` for the same behavior. This default changed
-from eager loading for the standalone server; see the [release notes](../CHANGELOG.md).
+Embedded hosts use `lazySchemas: false` for the same behavior.
 
 Action metadata stays in memory: ids, names, descriptions, required scopes, provider permissions,
 follow-up and async lifecycle links, and execution flags. Only the two schema fields are read back

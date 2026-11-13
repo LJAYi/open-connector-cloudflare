@@ -11,6 +11,7 @@ import {
   compactObject,
   optionalBoolean,
   optionalInteger as asOptionalInteger,
+  optionalRawString,
   optionalRecord as asOptionalObject,
   optionalString as asOptionalString,
   optionalStringArray,
@@ -121,7 +122,7 @@ async function fetchJiraCurrentAccount(
     accountId: string;
     displayName: string;
   };
-  grantedScopes: string[];
+  grantedScopes?: string[];
   metadata: Record<string, unknown>;
 }> {
   const accessibleResourcesResponse = await fetcher(jiraAccessibleResourcesUrl, {
@@ -141,7 +142,6 @@ async function fetchJiraCurrentAccount(
         accountId: "jira",
         displayName: "Jira Cloud",
       },
-      grantedScopes: [],
       metadata: {
         resourceCount: resources.length,
         validationEndpoint: "/oauth/token/accessible-resources",
@@ -160,7 +160,7 @@ async function fetchJiraCurrentAccount(
       accountId: `jira:${cloudId}`,
       displayName: siteName,
     },
-    grantedScopes: mapJiraGrantedScopes(resourceScopes),
+    grantedScopes: resourceScopes,
     metadata: compactObject({
       cloudId,
       siteUrl,
@@ -184,7 +184,7 @@ async function fetchJiraServerCurrentAccount(
     accountId: string;
     displayName: string;
   };
-  grantedScopes: string[];
+  grantedScopes?: string[];
   metadata: Record<string, unknown>;
 }> {
   const currentUser = await jiraJsonRequest<JiraCurrentUserPayload>({
@@ -207,7 +207,6 @@ async function fetchJiraServerCurrentAccount(
       accountId: buildJiraServerAccountId(apiBaseUrl, accountKey),
       displayName,
     },
-    grantedScopes: [],
     metadata: compactObject({
       apiBaseUrl,
       validationEndpoint: jiraCurrentUserPath,
@@ -217,21 +216,6 @@ async function fetchJiraServerCurrentAccount(
       timeZone: asOptionalString(currentUser.timeZone),
     }),
   };
-}
-
-function mapJiraGrantedScopes(providerScopes: string[]): string[] {
-  const scopes: string[] = [];
-
-  if (providerScopes.includes("write:jira-work")) {
-    scopes.push("read:jira-work", "read:jira-user", "write:jira-work");
-    return scopes;
-  }
-
-  if (providerScopes.includes("read:jira-work")) {
-    scopes.push("read:jira-work", "read:jira-user");
-  }
-
-  return scopes;
 }
 
 export const executors: ProviderExecutors = defineProviderExecutors<JiraActionContext>({
@@ -962,7 +946,8 @@ function appendAdfText(value: unknown, parts: string[]): void {
 
   const type = asOptionalString(record.type);
   if (type === "text") {
-    const text = asOptionalString(record.text);
+    // Keep edge whitespace: adjacent text nodes split where marks change, so trimming them joins words.
+    const text = optionalRawString(record.text);
     if (text) {
       parts.push(text);
     }

@@ -24,6 +24,7 @@ import {
   ProviderDispatchRequestError,
   withProviderHttpDispatchResult,
 } from "../providers/provider-runtime.ts";
+import { readOAuthScopes } from "./oauth-scopes.ts";
 import { requestAuthorizationCodeToken } from "./oauth-token.ts";
 
 /**
@@ -59,7 +60,8 @@ export interface OAuthAuthorizationState {
   state: string;
   createdAt: string;
   pkceCodeVerifier?: string;
-  authorizationScopes?: string[];
+  issuer?: string;
+  requireIssuer?: boolean;
   /**
    * `redirect_uri` the authorization request carried. The code exchange must
    * repeat it (RFC 6749 §4.1.3) even when the client config changes while the
@@ -186,9 +188,17 @@ export class OAuthFlowService {
     return this.requests.get(id, owner);
   }
 
-  async rejectAuthorization(state: string, denied: boolean): Promise<string | undefined> {
+  async rejectAuthorization(state: string, denied: boolean, issuer?: string): Promise<string | undefined> {
     const pending = await this.requests.claim(state);
     if (!pending) return undefined;
+    try {
+      assertOAuthIssuer(pending, issuer);
+    } catch (error) {
+      if (error instanceof OAuthFlowError) {
+        await this.requests.fail(pending.connectionRequestId, error.code, error.message);
+      }
+      throw error;
+    }
     await this.requests.fail(
       pending.connectionRequestId,
       denied ? "invalid_input" : "provider_error",
@@ -208,8 +218,11 @@ export class OAuthFlowService {
    * it. Returns false when no such authorization was pending (unknown, or
    * already completed or refused by another callback).
    */
-  async discardAuthorization(state: string): Promise<boolean> {
-    return (await this.states.take(state)) !== undefined;
+  async discardAuthorization(state: string, issuer?: string): Promise<boolean> {
+    const pending = await this.states.take(state);
+    if (!pending) return false;
+    assertOAuthIssuer(pending, issuer);
+    return true;
   }
 
   private async prepareAuthorization(
@@ -246,12 +259,14 @@ export class OAuthFlowService {
       state,
       createdAt: now.toISOString(),
       pkceCodeVerifier,
-      authorizationScopes: auth.authorizationOptions ? authorizationScopes : undefined,
+      issuer: auth.issuer,
+      requireIssuer: auth.requireIssuer,
       redirectUri,
-      clientConfig: input.clientConfig ? config : undefined,
+      clientConfig: input.clientConfig || auth.issuer ? config : undefined,
     };
 
     const authorizationUrl = new URL(this.clientConfigs.resolveEndpointUrl(service, auth.authorizationUrl, config));
+    if (auth.resource) authorizationUrl.searchParams.set("resource", auth.resource);
     for (const [key, value] of Object.entries(auth.authorizationParams ?? {})) {
       authorizationUrl.searchParams.set(key, value);
     }
@@ -296,6 +311,7 @@ export class OAuthFlowService {
     }
 
     try {
+      assertOAuthIssuer(pending, input.callbackParameters?.iss);
       const auth = this.clientConfigs.getOAuthDefinition(pending.service);
       const config = pending.clientConfig ?? (await this.clientConfigs.getConfig(pending.service));
       if (!config) {
@@ -348,6 +364,7 @@ export class OAuthFlowService {
                 pending,
                 auth.tokenRequestCallbackParameters,
                 input.callbackParameters,
+                auth.resource,
               ),
               signal: input.signal,
               createError,
@@ -363,7 +380,7 @@ export class OAuthFlowService {
         profile: {
           accountId: "oauth2",
           displayName: "OAuth Credential",
-          grantedScopes: request ? [] : (pending.authorizationScopes ?? []),
+          grantedScopes: readOAuthScopes(tokenResponse.metadata.scope) ?? [],
         },
         providerSecret,
         metadata: {
@@ -383,10 +400,6 @@ export class OAuthFlowService {
           oauthCredential,
           input.signal,
         );
-        const granted = new Set(credential.profile.grantedScopes);
-        const missing = auth.authorizationOptions?.filter((option) => option.required && !granted.has(option.id)) ?? [];
-        if (missing.length)
-          throw new OAuthFlowError("scope_missing", "The provider did not grant required OAuth scopes.");
         input.signal?.throwIfAborted();
         const appId = await this.requests.complete(request, credential, input.signal);
         if (!appId) {
@@ -401,6 +414,7 @@ export class OAuthFlowService {
           }
           throw new OAuthFlowError("request_key_conflict", "The connection changed during authorization.");
         }
+        await this.connections.connectionSaved(appId);
       } else {
         await this.connections.setOAuthCredential(
           pending.service,
@@ -428,8 +442,7 @@ export class OAuthFlowService {
       }
       if (request) {
         const code =
-          error instanceof OAuthFlowError &&
-          ["app_not_found", "request_key_conflict", "scope_missing"].includes(error.code)
+          error instanceof OAuthFlowError && ["app_not_found", "request_key_conflict"].includes(error.code)
             ? error.code
             : "provider_error";
         const message = "OAuth connection failed.";
@@ -485,8 +498,10 @@ function createTokenExtraFields(
   state: OAuthAuthorizationState,
   parameterNames: readonly string[] | undefined,
   callbackParameters: Record<string, string> | undefined,
+  resource?: string,
 ): Record<string, string> | undefined {
   const fields = readCallbackParameters(parameterNames, callbackParameters);
+  if (resource) fields.resource = resource;
   if (state.pkceCodeVerifier) fields.code_verifier = state.pkceCodeVerifier;
   return Object.keys(fields).length > 0 ? fields : undefined;
 }
@@ -602,4 +617,11 @@ export function callbackReturnUri(
   if (code) url.searchParams.set("code", code);
   if (message) url.searchParams.set("message", message);
   return url.toString();
+}
+
+/** Check both successful and refused authorization responses before using provider-supplied data. */
+function assertOAuthIssuer(pending: OAuthAuthorizationState, issuer: string | undefined): void {
+  if (pending.issuer && ((issuer !== undefined && issuer !== pending.issuer) || (pending.requireIssuer && !issuer))) {
+    throw new OAuthFlowError("invalid_oauth_issuer", "OAuth authorization server identity does not match.");
+  }
 }

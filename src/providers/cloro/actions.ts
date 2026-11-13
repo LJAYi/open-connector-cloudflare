@@ -4,14 +4,13 @@ import { s } from "../../core/json-schema.ts";
 import { defineProviderAction } from "../../core/provider-definition.ts";
 import {
   aiModeMonitorRequest,
+  bingAiModeMonitorRequest,
   chatGPTMonitorRequest,
-  copilotMonitorRequest,
   geminiMonitorRequest,
   googleGotoRequest,
   googleMonitorRequest,
   googleNewsMonitorRequest,
   googleProductRequest,
-  perplexityMonitorRequest,
 } from "./inputs.ts";
 const actionLifecycles: Record<string, ActionDefinition["asyncLifecycle"]> = {
   create_task: { startActionId: "cloro.create_task", statusActionId: "cloro.get_task" },
@@ -68,14 +67,13 @@ const engines = [
     schema: googleNewsMonitorRequest,
     label: "Google News",
   },
-  { name: "copilot", taskType: "COPILOT", schema: copilotMonitorRequest, label: "Copilot" },
-  {
-    name: "perplexity",
-    taskType: "PERPLEXITY",
-    schema: perplexityMonitorRequest,
-    label: "Perplexity",
-  },
   { name: "aimode", taskType: "AIMODE", schema: aiModeMonitorRequest, label: "Google AI Mode" },
+  {
+    name: "bing/aimode",
+    taskType: "BING_AIMODE",
+    schema: bingAiModeMonitorRequest,
+    label: "Bing AI Mode",
+  },
   {
     name: "google/product",
     taskType: "GOOGLE_PRODUCT",
@@ -264,15 +262,7 @@ const endpoints: CloroEndpoint[] = [
     s.object(
       "Country lookup.",
       {
-        model: s.stringEnum("Engine filter.", [
-          "aimode",
-          "aioverview",
-          "chatgpt",
-          "copilot",
-          "gemini",
-          "google",
-          "perplexity",
-        ]),
+        model: s.stringEnum("Engine filter.", ["aimode", "aioverview", "bing_aimode", "chatgpt", "gemini", "google"]),
       },
       { optional: ["model"] },
     ),

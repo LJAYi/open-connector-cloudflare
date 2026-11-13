@@ -7,6 +7,7 @@ import {
   createProviderTimeout,
   isAbortLikeError,
   ProviderRequestError,
+  withRetryAfterSeconds,
   providerUserAgent,
   defaultProviderRequestTimeoutMs,
 } from "../provider-runtime.ts";
@@ -63,7 +64,6 @@ export async function validateTavilyCredential(
       accountId: "tavily-api-key",
       displayName: plan ? `Tavily ${plan}` : "Tavily API Key",
     },
-    grantedScopes: [],
     metadata: compactObject({
       validationEndpoint: "/usage",
       apiBaseUrl: tavilyApiBaseUrl,
@@ -127,7 +127,7 @@ async function tavilyRawRequest(
 async function buildTavilyError(response: Response, phase: "validate" | "execute"): Promise<ProviderRequestError> {
   const payload = await readTavilyPayload(response);
   const message = extractTavilyErrorMessage(payload) ?? `Tavily request failed with ${response.status}`;
-  if (response.status === 429) return new ProviderRequestError(429, message, payload);
+  if (response.status === 429) return new ProviderRequestError(429, message, withRetryAfterSeconds(response, payload));
   if (phase === "validate" && (response.status === 400 || response.status === 401 || response.status === 403)) {
     return new ProviderRequestError(400, message, payload);
   }

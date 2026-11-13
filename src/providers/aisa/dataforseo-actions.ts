@@ -5,11 +5,14 @@ import { defineProviderAction } from "../../core/provider-definition.ts";
 
 const service = "aisa";
 const dataForSeoOutput = s.looseObject("The DataForSEO live response returned by AIsa.");
-
-const message = s.requiredObject("One preceding conversation message.", {
-  role: s.stringEnum("The author of the preceding message.", ["user", "ai"]),
-  message: s.string("The preceding message content.", { maxLength: 500 }),
-});
+const message = s.object(
+  "One preceding conversation message.",
+  {
+    role: s.stringEnum("The author of the preceding message.", ["user", "ai"]),
+    message: s.string("The preceding message content.", { maxLength: 500 }),
+  },
+  { optional: [] },
+);
 
 const llmFields = {
   prompt: s.string("The question or task to send to the model.", { maxLength: 500 }),
@@ -37,8 +40,7 @@ const llmFields = {
   useReasoning: s.boolean("Whether to enable model reasoning when supported."),
   tag: s.string("A caller-defined identifier returned with the result.", { maxLength: 255 }),
 };
-
-const queryChatGptVisibilityAction: ActionDefinition = defineProviderAction(service, {
+const queryChatGptVisibilityAction = defineProviderAction(service, {
   name: "query_dataforseo_chatgpt",
   operationType: "read",
   description: "Run a live ChatGPT response query for GEO research through DataForSEO.",
@@ -76,8 +78,7 @@ const queryChatGptVisibilityAction: ActionDefinition = defineProviderAction(serv
   ),
   outputSchema: dataForSeoOutput,
 });
-
-const queryClaudeVisibilityAction: ActionDefinition = defineProviderAction(service, {
+const queryClaudeVisibilityAction = defineProviderAction(service, {
   name: "query_dataforseo_claude",
   operationType: "read",
   description: "Run a live Claude response query for GEO research through DataForSEO.",
@@ -117,8 +118,7 @@ const queryClaudeVisibilityAction: ActionDefinition = defineProviderAction(servi
   ),
   outputSchema: dataForSeoOutput,
 });
-
-const queryGeminiVisibilityAction: ActionDefinition = defineProviderAction(service, {
+const queryGeminiVisibilityAction = defineProviderAction(service, {
   name: "query_dataforseo_gemini",
   operationType: "read",
   description: "Run a live Gemini response query for GEO research through DataForSEO.",
@@ -152,8 +152,7 @@ const queryGeminiVisibilityAction: ActionDefinition = defineProviderAction(servi
   ),
   outputSchema: dataForSeoOutput,
 });
-
-const queryPerplexityVisibilityAction: ActionDefinition = defineProviderAction(service, {
+const queryPerplexityVisibilityAction = defineProviderAction(service, {
   name: "query_dataforseo_perplexity",
   operationType: "read",
   description: "Run a live Perplexity response query for GEO research through DataForSEO.",
@@ -185,121 +184,35 @@ const queryPerplexityVisibilityAction: ActionDefinition = defineProviderAction(s
   ),
   outputSchema: dataForSeoOutput,
 });
-
-const getAiKeywordVolumeAction: ActionDefinition = defineProviderAction(service, {
+const getAiKeywordVolumeAction = defineProviderAction(service, {
   name: "get_dataforseo_ai_keyword_volume",
   operationType: "read",
   description: "Get AI-search volume estimates for up to 1,000 keywords.",
   requiredScopes: [],
-  inputSchema: {
-    ...s.object(
-      "Keywords, location, language, and optional tag for an AI keyword-volume query.",
-      {
-        keywords: s.array("The keywords to measure.", s.string("A keyword of up to 250 characters."), {
-          minItems: 1,
-          maxItems: 1000,
-          uniqueItems: true,
-        }),
-        locationName: s.string("The full location name; omit when using locationCode."),
-        locationCode: s.integer("The DataForSEO location code; omit when using locationName."),
-        languageName: s.string("The full language name; omit when using languageCode."),
-        languageCode: s.string("The language code; omit when using languageName."),
-        tag: llmFields.tag,
-      },
-      { optional: ["locationName", "locationCode", "languageName", "languageCode", "tag"] },
-    ),
-    allOf: [
-      { anyOf: [{ required: ["locationName"] }, { required: ["locationCode"] }] },
-      { anyOf: [{ required: ["languageName"] }, { required: ["languageCode"] }] },
-    ],
-  },
-  outputSchema: dataForSeoOutput,
-});
-
-const mentionTarget = s.requireAnyProperty(
-  s.object(
-    "One domain or keyword entity used to filter LLM mentions.",
+  inputSchema: s.object(
+    "Keywords, location, language, and optional tag for an AI keyword-volume query.",
     {
-      domain: s.string("The target domain without a scheme or www prefix."),
-      keyword: s.string("The target keyword or brand phrase."),
-      searchFilter: s.stringEnum("Whether to include or exclude this entity.", ["include", "exclude"]),
-      searchScope: s.array(
-        "The LLM response sections in which to search for the entity.",
-        s.string("An LLM response search scope."),
-        { uniqueItems: true },
-      ),
-      includeSubdomains: s.boolean("Whether a domain target includes its subdomains."),
-      matchType: s.stringEnum("How a keyword target is matched.", ["word_match", "partial_match"]),
+      keywords: s.array("The keywords to measure.", s.string("A keyword of up to 250 characters."), {
+        minItems: 1,
+        maxItems: 1000,
+        uniqueItems: true,
+      }),
+      locationName: s.string("The full location name; omit when using locationCode."),
+      locationCode: s.integer("The DataForSEO location code; omit when using locationName."),
+      languageName: s.string("The full language name; omit when using languageCode."),
+      languageCode: s.string("The language code; omit when using languageName."),
+      tag: llmFields.tag,
     },
     {
-      optional: ["domain", "keyword", "searchFilter", "searchScope", "includeSubdomains", "matchType"],
+      optional: ["locationName", "locationCode", "languageName", "languageCode", "tag"],
+      allOf: [
+        { anyOf: [{ required: ["locationName"] }, { required: ["locationCode"] }] },
+        { anyOf: [{ required: ["languageName"] }, { required: ["languageCode"] }] },
+      ],
     },
   ),
-  ["domain", "keyword"],
-);
-
-const mentionFields = {
-  targets: s.array("The one to ten domain or keyword entities to analyze.", mentionTarget, {
-    minItems: 1,
-    maxItems: 10,
-  }),
-  locationName: s.string("The search location name."),
-  locationCode: s.integer("The DataForSEO search location code."),
-  languageName: s.string("The search language name."),
-  languageCode: s.string("The search language code."),
-  platform: s.stringEnum("The AI-answer platform whose mentions should be analyzed.", ["chat_gpt", "google"]),
-  linksScope: s.stringEnum("Which cited links should contribute to aggregation.", ["sources", "search_results"]),
-  limit: s.integer("The maximum number of mention records to return.", {
-    minimum: 1,
-    maximum: 1000,
-  }),
-  tag: llmFields.tag,
-};
-
-const optionalMentionFields = [
-  "locationName",
-  "locationCode",
-  "languageName",
-  "languageCode",
-  "platform",
-  "linksScope",
-  "limit",
-  "tag",
-];
-
-const getLlmMentionMetricsAction: ActionDefinition = defineProviderAction(service, {
-  name: "get_dataforseo_llm_mention_metrics",
-  operationType: "read",
-  description: "Aggregate LLM mention metrics for domains and keyword entities.",
-  requiredScopes: [],
-  inputSchema: s.object("Targets and locale filters for LLM mention aggregation.", mentionFields, {
-    optional: optionalMentionFields,
-  }),
   outputSchema: dataForSeoOutput,
 });
-
-const searchLlmMentionsAction: ActionDefinition = defineProviderAction(service, {
-  name: "search_dataforseo_llm_mentions",
-  operationType: "read",
-  description: "Search individual LLM mention records for domains and keywords.",
-  requiredScopes: [],
-  inputSchema: s.object("Targets and locale filters for searching LLM mentions.", mentionFields, {
-    optional: optionalMentionFields,
-  }),
-  outputSchema: dataForSeoOutput,
-});
-
-const getLlmMentionTopDomainsAction: ActionDefinition = defineProviderAction(service, {
-  name: "get_dataforseo_llm_mention_top_domains",
-  operationType: "read",
-  description: "Get domains cited most often in LLM responses matching target entities.",
-  requiredScopes: [],
-  inputSchema: s.object("Targets and locale filters for ranking cited domains.", mentionFields, {
-    optional: optionalMentionFields,
-  }),
-  outputSchema: dataForSeoOutput,
-});
-
 const getKeywordTrendsAction = defineProviderAction(service, {
   name: "get_dataforseo_keyword_trends",
   operationType: "read",
@@ -354,57 +267,71 @@ const getKeywordTrendsAction = defineProviderAction(service, {
       tasks_error: s.integer("Number of tasks that failed."),
       tasks: s.array(
         "Live task responses, including business errors.",
-        s.looseObject("One upstream task response.", {
-          id: s.string("Upstream task identifier."),
-          status_code: s.integer("Task status code; 20000 indicates success."),
-          status_message: s.string("Task status message."),
-          result: s.nullable(
-            s.array(
-              "Trend results, or null when unavailable.",
-              s.looseObject("A trend result for the requested keywords and location.", {
-                keywords: s.array("Keywords in result order.", s.string("A result keyword.")),
-                items: s.array(
-                  "Trend graphs returned by the upstream service.",
-                  s.looseObject("One keyword popularity graph.", {
-                    keywords: s.array(
-                      "Keywords corresponding to the values and averages arrays.",
-                      s.string("A graph keyword."),
+        s.looseObject(
+          "One upstream task response.",
+          {
+            id: s.string("Upstream task identifier."),
+            status_code: s.integer("Task status code; 20000 indicates success."),
+            status_message: s.string("Task status message."),
+            result: s.nullable(
+              s.array(
+                "Trend results, or null when unavailable.",
+                s.looseObject(
+                  "A trend result for the requested keywords and location.",
+                  {
+                    keywords: s.array("Keywords in result order.", s.string("A result keyword.")),
+                    items: s.array(
+                      "Trend graphs returned by the upstream service.",
+                      s.looseObject(
+                        "One keyword popularity graph.",
+                        {
+                          keywords: s.array(
+                            "Keywords corresponding to the values and averages arrays.",
+                            s.string("A graph keyword."),
+                          ),
+                          averages: s.array(
+                            "Average relative popularity for each keyword over the time window.",
+                            s.number("Average popularity score."),
+                          ),
+                          data: s.array(
+                            "Time buckets; retain both dates because a bucket may span multiple days.",
+                            s.looseObject(
+                              "A popularity time bucket.",
+                              {
+                                date_from: s.string("First date in this bucket."),
+                                date_to: s.string("Last date in this bucket."),
+                                timestamp: s.integer("Bucket Unix timestamp in seconds."),
+                                values: s.array(
+                                  "Relative popularity in keyword order: 100 is the peak, and 0 indicates insufficient data. These are not search volumes.",
+                                  s.number("Relative popularity score."),
+                                ),
+                              },
+                              { required: [] },
+                            ),
+                          ),
+                        },
+                        { required: [] },
+                      ),
                     ),
-                    averages: s.array(
-                      "Average relative popularity for each keyword over the time window.",
-                      s.number("Average popularity score."),
-                    ),
-                    data: s.array(
-                      "Time buckets; retain both dates because a bucket may span multiple days.",
-                      s.looseObject("A popularity time bucket.", {
-                        date_from: s.string("First date in this bucket."),
-                        date_to: s.string("Last date in this bucket."),
-                        timestamp: s.integer("Bucket Unix timestamp in seconds."),
-                        values: s.array(
-                          "Relative popularity in keyword order: 100 is the peak, and 0 indicates insufficient data. These are not search volumes.",
-                          s.number("Relative popularity score."),
-                        ),
-                      }),
-                    ),
-                  }),
+                  },
+                  { required: [] },
                 ),
-              }),
+              ),
             ),
-          ),
-        }),
+          },
+          { required: [] },
+        ),
       ),
     },
+    { required: [] },
   ),
 });
 
-export const dataForSeoActions: ActionDefinition[] = [
+export const dataForSeoActions: readonly ActionDefinition[] = [
   queryChatGptVisibilityAction,
   queryClaudeVisibilityAction,
   queryGeminiVisibilityAction,
   queryPerplexityVisibilityAction,
   getAiKeywordVolumeAction,
   getKeywordTrendsAction,
-  getLlmMentionMetricsAction,
-  searchLlmMentionsAction,
-  getLlmMentionTopDomainsAction,
 ];
