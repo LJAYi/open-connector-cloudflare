@@ -130,6 +130,10 @@ jobs:
         if: steps.state.outputs.skip != 'true'
         run: npm ci
 
+      - name: Format preserved scripts with upstream rules
+        if: steps.state.outputs.skip != 'true'
+        run: ./node_modules/.bin/oxfmt .github/scripts
+
       - name: Validate the canary source
         if: steps.state.outputs.skip != 'true'
         run: |
