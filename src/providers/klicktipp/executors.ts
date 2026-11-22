@@ -1,6 +1,5 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { optionalNumber, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
@@ -22,14 +21,10 @@ export const proxy: ProviderProxyExecutor = defineProviderProxy({
   baseUrl: klicktippApiBaseUrl,
   auth: { type: "api_key_json_body", name: "apikey" },
   skipDnsValidation: true,
-  customizeRequest({ headers }) {
-    if (!headers.has("accept")) headers.set("accept", "application/json");
-    if (!headers.has("content-type")) headers.set("content-type", "application/json");
-  },
+  defaultHeaders: { "accept": "application/json", "content-type": "application/json" },
 });
 
-type KlicktippActionContext = Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
-type KlicktippActionHandler = (input: Record<string, unknown>, context: KlicktippActionContext) => Promise<unknown>;
+type KlicktippActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
 export const klicktippActionHandlers: ProviderActionHandlers<"klicktipp", KlicktippActionHandler> = {
   async signin(input, context): Promise<unknown> {
@@ -95,7 +90,7 @@ function buildSigninBody(input: Record<string, unknown>): Record<string, unknown
 async function requestKlicktippJson(
   path: string,
   body: Record<string, unknown>,
-  context: KlicktippActionContext,
+  context: ApiKeyProviderContext,
 ): Promise<unknown> {
   const timeout = createProviderTimeout(context.signal);
   let response: Response;
@@ -104,7 +99,7 @@ async function requestKlicktippJson(
     response = await context.fetcher(new URL(path, klicktippApiBaseUrl), {
       method: "POST",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "content-type": "application/json",
         "user-agent": providerUserAgent,
       },

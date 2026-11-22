@@ -162,7 +162,7 @@ function normalizeKuaidi100Output(value: unknown): Record<string, unknown> {
 }
 
 function withKuaidi100Client<T>(
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
+  context: ApiKeyProviderContext,
   phase: Kuaidi100Phase,
   run: (client: Client) => Promise<T>,
 ): Promise<T> {
@@ -173,7 +173,7 @@ function withKuaidi100Client<T>(
       endpoint,
       transport: "streamable_http",
       fetcher: context.fetcher,
-      headers: { responseFormat: "json", "user-agent": providerUserAgent },
+      headers: { "responseFormat": "json", "user-agent": providerUserAgent },
       redirect: "manual",
       signal: context.signal,
       mapError: (error) => mapKuaidi100McpError(error, phase),

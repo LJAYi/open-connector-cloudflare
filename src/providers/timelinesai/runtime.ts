@@ -1,6 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import { compactObject, optionalBoolean, optionalRecord, optionalString } from "../../core/cast.ts";
 import {
@@ -156,7 +155,7 @@ export async function validateTimelinesAiCredential(
   };
 }
 
-interface RequestInput extends Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal"> {
+interface RequestInput extends ApiKeyProviderContext {
   path: string;
   phase?: RequestPhase;
   method?: "GET" | "POST";
@@ -177,8 +176,8 @@ async function request(input: RequestInput) {
     const response = await input.fetcher(url, {
       method: input.method ?? "GET",
       headers: {
-        accept: "application/json",
-        authorization: `Bearer ${input.apiKey}`,
+        "accept": "application/json",
+        "authorization": `Bearer ${input.apiKey}`,
         "user-agent": providerUserAgent,
         ...(input.body === undefined ? {} : { "content-type": "application/json" }),
       },

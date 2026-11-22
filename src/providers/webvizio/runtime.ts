@@ -1,6 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import {
@@ -71,10 +70,7 @@ export async function validateWebvizioCredential(
   };
 }
 
-async function requestWebvizioJson(
-  input: WebvizioRequestInput,
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
-): Promise<unknown> {
+async function requestWebvizioJson(input: WebvizioRequestInput, context: ApiKeyProviderContext): Promise<unknown> {
   const timeout = createProviderTimeout(context.signal);
   try {
     const response = await context.fetcher(buildWebvizioUrl(input.path), {
@@ -108,8 +104,8 @@ function buildWebvizioUrl(path: string): string {
 
 function buildWebvizioHeaders(apiKey: string, hasBody: boolean): Record<string, string> {
   const headers: Record<string, string> = {
-    accept: "application/json",
-    authorization: `Bearer ${apiKey}`,
+    "accept": "application/json",
+    "authorization": `Bearer ${apiKey}`,
     "user-agent": providerUserAgent,
   };
   if (hasBody) headers["content-type"] = "application/json";

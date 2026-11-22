@@ -1,6 +1,5 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -146,7 +145,7 @@ export const credentialValidators: CredentialValidators = {
 };
 
 async function requestCallrailJson(input: {
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   path: string;
   phase: CallrailRequestPhase;
   query?: Record<string, string | undefined>;
@@ -176,8 +175,8 @@ async function requestCallrailJson(input: {
 
 function callrailHeaders(apiKey: string): Record<string, string> {
   return {
-    accept: "application/json",
-    authorization: `Token token="${apiKey}"`,
+    "accept": "application/json",
+    "authorization": `Token token="${apiKey}"`,
     "user-agent": providerUserAgent,
   };
 }

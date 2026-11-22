@@ -4,8 +4,7 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { createHash } from "node:crypto";
 import { optionalInteger, optionalRecord, optionalString, rawStringOrNull } from "../../core/cast.ts";
@@ -34,9 +33,7 @@ export const proxy: ProviderProxyExecutor = defineProviderProxy({
   baseUrl: livesessionApiBaseUrl,
   auth: { type: "api_key_authorization", prefix: "Bearer " },
   skipDnsValidation: true,
-  customizeRequest({ headers }) {
-    if (!headers.has("accept")) headers.set("accept", "application/json");
-  },
+  defaultHeaders: { accept: "application/json" },
 });
 
 export const credentialValidators: CredentialValidators = {
@@ -98,7 +95,7 @@ async function listSessions(input: Record<string, unknown>, context: ApiKeyProvi
 async function requestLivesessionJson(input: {
   path: string;
   query: Record<string, string>;
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   mode: "validate" | "execute";
 }): Promise<unknown> {
   const url = new URL(`${livesessionApiBaseUrl}${input.path}`);
@@ -110,8 +107,8 @@ async function requestLivesessionJson(input: {
   try {
     response = await input.context.fetcher(url, {
       headers: {
-        accept: "application/json",
-        authorization: `Bearer ${input.context.apiKey}`,
+        "accept": "application/json",
+        "authorization": `Bearer ${input.context.apiKey}`,
         "user-agent": providerUserAgent,
       },
       signal: input.context.signal,

@@ -1,6 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 import type { ProviderFetch } from "../provider-runtime.ts";
 
 import { compactObject, optionalBoolean, optionalRecord, optionalString } from "../../core/cast.ts";
@@ -16,8 +15,7 @@ export const browseAiApiBaseUrl = "https://api.browse.ai/v2/";
 
 type BrowseAiQueryValue = string | number | boolean | undefined;
 type BrowseAiRequestPhase = "validate" | "execute";
-type BrowseAiActionContext = Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
-type BrowseAiActionHandler = (input: Record<string, unknown>, context: BrowseAiActionContext) => Promise<unknown>;
+type BrowseAiActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 type BrowseAiInputParameterValue = string | number | string[];
 
 interface BrowseAiRobotInputParameterOption {
@@ -267,8 +265,8 @@ async function requestBrowseAiJson(input: BrowseAiRequestInput): Promise<unknown
   let payload: unknown;
   try {
     const headers = new Headers({
-      accept: "application/json",
-      authorization: `Bearer ${input.apiKey}`,
+      "accept": "application/json",
+      "authorization": `Bearer ${input.apiKey}`,
       "user-agent": providerUserAgent,
     });
     if (input.body !== undefined) {

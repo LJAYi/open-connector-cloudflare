@@ -1,6 +1,5 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalBoolean, optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
 import { requireApiKeyCredential } from "../provider-credentials.ts";
@@ -208,9 +207,7 @@ export const proxy: ProviderProxyExecutor = defineProviderProxy({
   baseUrl: basinApiBaseUrl,
   auth: { type: "api_key_authorization", prefix: "Token " },
   skipDnsValidation: true,
-  customizeRequest({ headers }) {
-    if (!headers.has("accept")) headers.set("accept", "application/json");
-  },
+  defaultHeaders: { accept: "application/json" },
 });
 
 export const credentialValidators: CredentialValidators = {
@@ -299,7 +296,7 @@ function pickWebhookFields(input: Record<string, unknown>): Record<string, unkno
 }
 
 async function requestBasinJson(input: {
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   path: string;
   mode: BasinMode;
   method?: string;
@@ -318,7 +315,7 @@ async function requestBasinJson(input: {
 }
 
 async function basinFetch(input: {
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   path: string;
   method?: string;
   query?: Record<string, BasinQueryValue>;
@@ -349,8 +346,8 @@ async function basinFetch(input: {
 
 function basinHeaders(apiKey: string, hasBody: boolean): Record<string, string> {
   return {
-    accept: "application/json",
-    authorization: `Token ${apiKey}`,
+    "accept": "application/json",
+    "authorization": `Token ${apiKey}`,
     ...(hasBody ? { "content-type": "application/json" } : {}),
     "user-agent": providerUserAgent,
   };

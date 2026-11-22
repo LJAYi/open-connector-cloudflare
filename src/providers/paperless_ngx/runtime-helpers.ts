@@ -219,8 +219,8 @@ async function performPaperlessRequest<T>(
 ): Promise<T> {
   const url = buildPaperlessUrl(input.baseUrl, input.path, input.query);
   const headers = new Headers({
-    accept: paperlessAcceptHeader,
-    authorization: `Token ${input.apiKey}`,
+    "accept": paperlessAcceptHeader,
+    "authorization": `Token ${input.apiKey}`,
     "user-agent": providerUserAgent,
   });
   if (input.contentType) {
@@ -488,14 +488,14 @@ export async function validatePaperlessCredential(
   };
 }
 
-export function requirePaperlessFileTransit(context: Pick<PaperlessExecutionContext, "transitFiles">): void {
+export function requirePaperlessFileTransit(context: PaperlessExecutionContext): void {
   if (!context.transitFiles) {
     throw new ProviderRequestError(500, "Paperless-ngx transit file storage is not configured");
   }
 }
 
 export async function transitPaperlessResponse(
-  connection: Pick<PaperlessExecutionContext, "transitFiles">,
+  connection: PaperlessExecutionContext,
   input: PaperlessTransitInput,
 ): Promise<PaperlessTransitResult> {
   const body = input.response.body;

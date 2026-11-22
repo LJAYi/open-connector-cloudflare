@@ -1,6 +1,5 @@
 import type { ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
 import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
@@ -65,7 +64,7 @@ function buildEditRequestBody(input: Record<string, unknown>): Record<string, un
 async function requestClaidAi(
   path: string,
   init: { method: "GET" | "POST"; body?: Record<string, unknown> },
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
+  context: ApiKeyProviderContext,
   phase: ClaidAiRequestPhase,
 ): Promise<unknown> {
   const url = new URL(`/${claidAiApiVersion}${path}`, claidAiApiBaseUrl);
@@ -97,8 +96,8 @@ async function requestClaidAi(
 
 function claidAiHeaders(apiKey: string, hasBody: boolean): Headers {
   const headers = new Headers({
-    accept: "application/json",
-    authorization: `Bearer ${apiKey}`,
+    "accept": "application/json",
+    "authorization": `Bearer ${apiKey}`,
     "user-agent": providerUserAgent,
   });
   if (hasBody) {

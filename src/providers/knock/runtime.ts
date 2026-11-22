@@ -1,6 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalRecord, optionalString, requiredRecord, requiredString } from "../../core/cast.ts";
 import { encodePathSegment } from "../../core/request.ts";
@@ -29,9 +28,9 @@ export const knockActionHandlers: ProviderActionHandlers<"knock", KnockActionHan
         method: "GET",
         path: "/users",
         query: compactObject({
-          after: optionalString(input.after),
-          before: optionalString(input.before),
-          page_size: typeof input.pageSize === "number" ? String(input.pageSize) : undefined,
+          "after": optionalString(input.after),
+          "before": optionalString(input.before),
+          "page_size": typeof input.pageSize === "number" ? String(input.pageSize) : undefined,
           "include[]": optionalStringArray(input.include),
         }),
       },
@@ -148,7 +147,7 @@ async function requestKnockJson(
     body?: Record<string, unknown>;
     idempotencyKey?: string;
   },
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
+  context: ApiKeyProviderContext,
   mode: KnockRequestMode,
 ): Promise<unknown> {
   return runProviderRequest({ signal: context.signal, label: "Knock" }, async (signal) => {
@@ -197,8 +196,8 @@ function buildKnockUrl(path: string, query: Record<string, string | string[] | u
 
 function knockHeaders(apiKey: string): Record<string, string> {
   return {
-    accept: "application/json",
-    authorization: `Bearer ${apiKey}`,
+    "accept": "application/json",
+    "authorization": `Bearer ${apiKey}`,
     "content-type": "application/json",
     "user-agent": providerUserAgent,
   };

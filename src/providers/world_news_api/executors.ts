@@ -1,6 +1,5 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import { compactObject, optionalNumber, optionalString, requiredString } from "../../core/cast.ts";
 import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
@@ -19,22 +18,22 @@ export const worldNewsApiActionHandlers: ProviderActionHandlers<"world_news_api"
     return requestWorldNewsApiJson(
       "/search-news",
       compactObject({
-        text: optionalString(input.text),
-        language: optionalString(input.language),
+        "text": optionalString(input.text),
+        "language": optionalString(input.language),
         "source-countries": optionalString(input.sourceCountries),
-        categories: optionalString(input.categories),
+        "categories": optionalString(input.categories),
         "earliest-publish-date": optionalString(input.earliestPublishDate),
         "latest-publish-date": optionalString(input.latestPublishDate),
         "news-sources": optionalString(input.newsSources),
-        authors: optionalString(input.authors),
+        "authors": optionalString(input.authors),
         "location-filter": optionalString(input.locationFilter),
-        entities: optionalString(input.entities),
-        sort: optionalString(input.sort),
+        "entities": optionalString(input.entities),
+        "sort": optionalString(input.sort),
         "sort-direction": optionalString(input.sortDirection),
         "min-sentiment": optionalNumber(input.minSentiment),
         "max-sentiment": optionalNumber(input.maxSentiment),
-        offset: optionalNumber(input.offset),
-        number: optionalNumber(input.number),
+        "offset": optionalNumber(input.offset),
+        "number": optionalNumber(input.number),
       }),
       context,
       "execute",
@@ -45,8 +44,8 @@ export const worldNewsApiActionHandlers: ProviderActionHandlers<"world_news_api"
       "/top-news",
       compactObject({
         "source-country": requiredString(input.sourceCountry, "sourceCountry", providerInputError),
-        language: optionalString(input.language),
-        date: optionalString(input.date),
+        "language": optionalString(input.language),
+        "date": optionalString(input.date),
       }),
       context,
       "execute",
@@ -67,8 +66,8 @@ export const worldNewsApiActionHandlers: ProviderActionHandlers<"world_news_api"
     return requestWorldNewsApiJson(
       "/search-news-sources",
       compactObject({
-        name: optionalString(input.name),
-        language: optionalString(input.language),
+        "name": optionalString(input.name),
+        "language": optionalString(input.language),
         "source-country": optionalString(input.sourceCountry),
       }),
       context,
@@ -95,9 +94,7 @@ export const proxy: ProviderProxyExecutor = defineProviderProxy({
   baseUrl: worldNewsApiBaseUrl,
   auth: { type: "api_key_header", name: "x-api-key" },
   skipDnsValidation: true,
-  customizeRequest({ headers }) {
-    if (!headers.has("accept")) headers.set("accept", "application/json");
-  },
+  defaultHeaders: { accept: "application/json" },
 });
 
 export const credentialValidators: CredentialValidators = {
@@ -133,7 +130,7 @@ export const credentialValidators: CredentialValidators = {
 async function requestWorldNewsApiJson(
   path: string,
   query: Record<string, WorldNewsApiQueryValue>,
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
+  context: ApiKeyProviderContext,
   phase: "validate" | "execute",
 ): Promise<unknown> {
   let response: Response;
@@ -141,7 +138,7 @@ async function requestWorldNewsApiJson(
     response = await context.fetcher(buildWorldNewsApiUrl(path, query), {
       method: "GET",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "user-agent": providerUserAgent,
         "x-api-key": context.apiKey,
       },

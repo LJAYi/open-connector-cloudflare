@@ -224,13 +224,10 @@ function buildGongUrl(baseUrl: string, path: string, query?: Record<string, Gong
   return url.toString();
 }
 
-function buildGongHeaders(
-  context: Pick<GongContext, "accessKey" | "accessKeySecret">,
-  hasBody: boolean,
-): Record<string, string> {
+function buildGongHeaders(context: GongContext, hasBody: boolean): Record<string, string> {
   return {
-    accept: "application/json",
-    authorization: `Basic ${Buffer.from(`${context.accessKey}:${context.accessKeySecret}`).toString("base64")}`,
+    "accept": "application/json",
+    "authorization": `Basic ${Buffer.from(`${context.accessKey}:${context.accessKeySecret}`).toString("base64")}`,
     "user-agent": providerUserAgent,
     ...(hasBody ? { "content-type": "application/json" } : {}),
   };

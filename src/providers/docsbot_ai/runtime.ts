@@ -1,6 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -23,8 +22,7 @@ export const docsbotAiAdminBaseUrl = "https://docsbot.ai/api";
 export const docsbotAiApiBaseUrl = "https://api.docsbot.ai";
 
 type DocsbotAiPhase = "validate" | "execute";
-type DocsbotAiContext = Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
-type DocsbotAiActionHandler = (input: Record<string, unknown>, context: DocsbotAiContext) => Promise<unknown>;
+type DocsbotAiActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
 export const docsbotAiActionHandlers: ProviderActionHandlers<"docsbot_ai", DocsbotAiActionHandler> = {
   async list_teams(_input, context) {
@@ -152,15 +150,15 @@ async function requestDocsbotAiJson(input: {
   baseUrl: string;
   path: string;
   method: "GET" | "POST";
-  context: DocsbotAiContext;
+  context: ApiKeyProviderContext;
   body?: Record<string, unknown>;
   phase: DocsbotAiPhase;
 }): Promise<unknown> {
   const timeout = createProviderTimeout(input.context.signal);
   try {
     const headers: Record<string, string> = {
-      authorization: `Bearer ${input.context.apiKey}`,
-      accept: "application/json",
+      "authorization": `Bearer ${input.context.apiKey}`,
+      "accept": "application/json",
       "user-agent": providerUserAgent,
     };
     if (input.body) {

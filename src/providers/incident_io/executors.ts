@@ -1,6 +1,5 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalInteger, optionalRecord, optionalString, stringArray } from "../../core/cast.ts";
 import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
@@ -16,8 +15,7 @@ const service = "incident_io";
 const incidentIoApiBaseUrl = "https://api.incident.io";
 
 type RequestPhase = "validate" | "execute";
-type IncidentIoActionContext = Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
-type IncidentIoActionHandler = (input: Record<string, unknown>, context: IncidentIoActionContext) => Promise<unknown>;
+type IncidentIoActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
 interface IncidentIoRequestInput {
   path: string;
@@ -53,10 +51,7 @@ export const proxy: ProviderProxyExecutor = defineProviderProxy({
   baseUrl: incidentIoApiBaseUrl,
   auth: { type: "api_key_authorization", prefix: "Bearer " },
   skipDnsValidation: true,
-  customizeRequest({ headers }) {
-    if (!headers.has("accept")) headers.set("accept", "application/json");
-    if (!headers.has("content-type")) headers.set("content-type", "application/json");
-  },
+  defaultHeaders: { "accept": "application/json", "content-type": "application/json" },
 });
 
 export const credentialValidators: CredentialValidators = {
@@ -90,7 +85,7 @@ export const credentialValidators: CredentialValidators = {
   },
 };
 
-async function listIncidents(input: Record<string, unknown>, context: IncidentIoActionContext): Promise<unknown> {
+async function listIncidents(input: Record<string, unknown>, context: ApiKeyProviderContext): Promise<unknown> {
   const payload = await requestJson(
     {
       path: "/v2/incidents",
@@ -106,7 +101,7 @@ async function listIncidents(input: Record<string, unknown>, context: IncidentIo
   };
 }
 
-async function getIncident(input: Record<string, unknown>, context: IncidentIoActionContext): Promise<unknown> {
+async function getIncident(input: Record<string, unknown>, context: ApiKeyProviderContext): Promise<unknown> {
   const payload = await requestJson(
     {
       path: `/v2/incidents/${encodeURIComponent(readRequiredInputString(input.id, "id"))}`,
@@ -120,7 +115,7 @@ async function getIncident(input: Record<string, unknown>, context: IncidentIoAc
   };
 }
 
-async function listActions(input: Record<string, unknown>, context: IncidentIoActionContext): Promise<unknown> {
+async function listActions(input: Record<string, unknown>, context: ApiKeyProviderContext): Promise<unknown> {
   const payload = await requestJson(
     {
       path: "/v2/actions",
@@ -138,7 +133,7 @@ async function listActions(input: Record<string, unknown>, context: IncidentIoAc
   };
 }
 
-async function getAction(input: Record<string, unknown>, context: IncidentIoActionContext): Promise<unknown> {
+async function getAction(input: Record<string, unknown>, context: ApiKeyProviderContext): Promise<unknown> {
   const payload = await requestJson(
     {
       path: `/v2/actions/${encodeURIComponent(readRequiredInputString(input.id, "id"))}`,
@@ -152,7 +147,7 @@ async function getAction(input: Record<string, unknown>, context: IncidentIoActi
   };
 }
 
-async function listSeverities(context: IncidentIoActionContext): Promise<unknown> {
+async function listSeverities(context: ApiKeyProviderContext): Promise<unknown> {
   const payload = await requestJson(
     {
       path: "/v1/severities",
@@ -166,7 +161,7 @@ async function listSeverities(context: IncidentIoActionContext): Promise<unknown
   };
 }
 
-async function listIncidentStatuses(context: IncidentIoActionContext): Promise<unknown> {
+async function listIncidentStatuses(context: ApiKeyProviderContext): Promise<unknown> {
   const payload = await requestJson(
     {
       path: "/v1/incident_statuses",
@@ -182,10 +177,10 @@ async function listIncidentStatuses(context: IncidentIoActionContext): Promise<u
 
 function buildListIncidentsQuery(input: Record<string, unknown>): Record<string, string | undefined> {
   const query: Record<string, string | undefined> = compactObject({
-    page_size: stringifyOptionalNumber(optionalInteger(input.pageSize)),
-    after: optionalString(input.after),
-    sort_by: optionalString(input.sortBy),
-    filter_mode: optionalString(input.filterMode),
+    "page_size": stringifyOptionalNumber(optionalInteger(input.pageSize)),
+    "after": optionalString(input.after),
+    "sort_by": optionalString(input.sortBy),
+    "filter_mode": optionalString(input.filterMode),
     "status_category[one_of]": optionalString(input.statusCategoryOneOf),
     "status_category[not_in]": optionalString(input.statusCategoryNotIn),
     "severity[one_of]": optionalString(input.severityOneOf),
@@ -199,14 +194,14 @@ function buildListIncidentsQuery(input: Record<string, unknown>): Record<string,
   return query;
 }
 
-async function requestJson(input: IncidentIoRequestInput, context: IncidentIoActionContext): Promise<unknown> {
+async function requestJson(input: IncidentIoRequestInput, context: ApiKeyProviderContext): Promise<unknown> {
   const timeout = createProviderTimeout(context.signal);
   try {
     const response = await context.fetcher(buildUrl(input.path, input.query), {
       method: "GET",
       headers: {
-        accept: "application/json",
-        authorization: `Bearer ${context.apiKey}`,
+        "accept": "application/json",
+        "authorization": `Bearer ${context.apiKey}`,
         "user-agent": providerUserAgent,
       },
       signal: timeout.signal,

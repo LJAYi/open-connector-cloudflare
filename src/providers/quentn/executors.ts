@@ -381,7 +381,7 @@ async function requestQuentnJson(input: {
 }
 
 function buildQuentnUrl(input: {
-  context: Pick<QuentnActionContext, "apiBaseUrl">;
+  context: QuentnActionContext;
   path: string;
   query?: Record<string, QuentnQueryValue>;
 }): URL {
@@ -401,8 +401,8 @@ function buildQuentnUrl(input: {
 
 function buildQuentnHeaders(apiKey: string, hasBody: boolean): Record<string, string> {
   const headers: Record<string, string> = {
-    accept: "application/json",
-    authorization: `Bearer ${apiKey}`,
+    "accept": "application/json",
+    "authorization": `Bearer ${apiKey}`,
     "user-agent": providerUserAgent,
   };
   if (hasBody) {

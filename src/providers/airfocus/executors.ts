@@ -20,7 +20,7 @@ type AirfocusHandler = ProviderRuntimeHandler<ApiKeyProviderContext>;
 
 interface AirfocusRequestInput {
   path: string;
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   phase: RequestPhase;
   method?: "GET" | "POST" | "PUT" | "DELETE";
   body?: Record<string, unknown>;
@@ -156,8 +156,8 @@ async function requestAirfocusJson(input: AirfocusRequestInput): Promise<unknown
     response = await input.context.fetcher(`${airfocusApiBaseUrl}${input.path}`, {
       method: input.method ?? "GET",
       headers: compactHeaders({
-        accept: "application/json",
-        authorization: `Bearer ${input.context.apiKey}`,
+        "accept": "application/json",
+        "authorization": `Bearer ${input.context.apiKey}`,
         "content-type": hasBody ? "application/json" : undefined,
         "user-agent": providerUserAgent,
       }),

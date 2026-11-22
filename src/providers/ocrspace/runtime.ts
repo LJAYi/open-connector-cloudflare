@@ -1,6 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { optionalBoolean, optionalIntegerLike, optionalRecord, optionalString } from "../../core/cast.ts";
 import { assertPublicHttpUrl } from "../../core/request.ts";
@@ -120,7 +119,7 @@ function buildOcrspaceConversionStatsFormData(input: Record<string, unknown>): F
 
 async function requestOcrspaceParse(
   formData: FormData,
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
+  context: ApiKeyProviderContext,
   phase: OcrspaceRequestPhase,
 ): Promise<unknown> {
   const response = await context.fetcher(new URL(ocrspaceParsePath, ocrspaceApiBaseUrl), {
@@ -136,10 +135,7 @@ async function requestOcrspaceParse(
   return payload;
 }
 
-async function requestOcrspaceConversionStats(
-  formData: FormData,
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
-): Promise<unknown> {
+async function requestOcrspaceConversionStats(formData: FormData, context: ApiKeyProviderContext): Promise<unknown> {
   const response = await context.fetcher(new URL(ocrspaceConversionsPath, ocrspaceMyApiBaseUrl), {
     method: "POST",
     headers: ocrspaceHeaders(context.apiKey),
@@ -155,8 +151,8 @@ async function requestOcrspaceConversionStats(
 
 function ocrspaceHeaders(apiKey: string): Record<string, string> {
   return {
-    accept: "application/json",
-    apikey: apiKey,
+    "accept": "application/json",
+    "apikey": apiKey,
     "user-agent": providerUserAgent,
   };
 }
@@ -255,14 +251,14 @@ function normalizeOptionalMessage(value: unknown): string | null {
   return optionalString(value) ?? null;
 }
 
-function joinParsedText(pages: Array<Pick<OcrspacePage, "parsedText" | "fileParseExitCode">>): string {
+function joinParsedText(pages: OcrspacePage[]): string {
   return pages
     .filter((page) => page.fileParseExitCode === 1 && page.parsedText.length > 0)
     .map((page) => page.parsedText)
     .join("\n\n");
 }
 
-function hasSuccessfulPage(pages: Array<Pick<OcrspacePage, "fileParseExitCode">>): boolean {
+function hasSuccessfulPage(pages: OcrspacePage[]): boolean {
   return pages.some((page) => page.fileParseExitCode === 1);
 }
 

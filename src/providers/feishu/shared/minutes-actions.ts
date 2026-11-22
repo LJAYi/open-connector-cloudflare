@@ -4,6 +4,7 @@ import { s } from "../../../core/json-schema.ts";
 import { defineProviderAction } from "../../../core/provider-definition.ts";
 const minuteToken = s.string("The Feishu Minutes token.", { minLength: 1 });
 const meetingId = s.string("The Feishu video meeting ID.", { minLength: 1 });
+
 const pageSize = s.positiveInteger("The maximum number of results on this page.", {
   maximum: 30,
 });
@@ -321,24 +322,40 @@ export function createFeishuMinutesActions(service: string): readonly ActionDefi
     defineProviderAction(service, {
       name: "get_vc_meeting",
       operationType: "read",
-      description: "Get Feishu video meeting metadata and participant data.",
-      requiredScopes: ["vc:meeting.meetingevent:read"],
-      providerPermissions: ["vc:meeting.meetingevent:read"],
+      description:
+        "Get Feishu video meeting metadata and participant data. With includeArtifacts, use the meeting's note_id to fetch note details and return note and verbatim document tokens. Requires vc:note:read for note details; meetings without a note return empty relatedArtifacts.",
+      requiredScopes: ["vc:meeting.meetingevent:read", "vc:note:read"],
+      providerPermissions: ["vc:meeting.meetingevent:read", "vc:note:read"],
       inputSchema: s.object(
         "Identify the meeting.",
         {
           meetingId,
           includeParticipants: s.boolean("Whether to include participant data."),
+          includeArtifacts: s.boolean(
+            "Whether to also return the meeting's related artifacts (note and verbatim document tokens).",
+          ),
         },
         {
-          optional: ["includeParticipants"],
+          optional: ["includeParticipants", "includeArtifacts"],
         },
       ),
       outputSchema: s.object(
-        "The requested meeting.",
-        { meeting: item },
+        "The requested meeting, and its related artifacts when includeArtifacts is set.",
         {
-          optional: [],
+          meeting: item,
+          relatedArtifacts: s.looseRequiredObject(
+            "Document tokens extracted from note details. Empty when the meeting has no note; a missing document token is an empty string. Unified notes may require download_vc_note_transcript instead of a verbatim document.",
+            {
+              note_doc_token: s.string("The document token of the meeting notes."),
+              verbatim_doc_token: s.string("The document token of the verbatim transcript."),
+            },
+            {
+              optional: ["note_doc_token", "verbatim_doc_token"],
+            },
+          ),
+        },
+        {
+          optional: ["relatedArtifacts"],
         },
       ),
     }),

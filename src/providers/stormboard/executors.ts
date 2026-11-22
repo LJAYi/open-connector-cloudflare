@@ -1,6 +1,5 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, objectArray, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
 import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
@@ -166,7 +165,7 @@ function buildStormboardPath(path: string, query: Record<string, unknown>): stri
 
 async function requestStormboardObject(
   path: string,
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
+  context: ApiKeyProviderContext,
   mode: StormboardRequestMode,
 ): Promise<Record<string, unknown>> {
   let response: Response;
@@ -191,7 +190,7 @@ async function requestStormboardObject(
 
 function stormboardHeaders(apiKey: string): Record<string, string> {
   return {
-    accept: "application/json",
+    "accept": "application/json",
     "x-api-key": apiKey,
     "user-agent": providerUserAgent,
   };

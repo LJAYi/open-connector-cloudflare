@@ -1,5 +1,4 @@
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalRecord } from "../../core/cast.ts";
 import { providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
@@ -250,7 +249,7 @@ export async function validateTextitApiKey(input: {
 async function requestTextitJson(input: {
   path: string;
   method: "DELETE" | "GET" | "POST";
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   query?: Record<string, unknown>;
   body?: unknown;
 }): Promise<unknown> {
@@ -260,8 +259,8 @@ async function requestTextitJson(input: {
   }
 
   const headers: Record<string, string> = {
-    accept: "application/json",
-    authorization: `Token ${input.context.apiKey}`,
+    "accept": "application/json",
+    "authorization": `Token ${input.context.apiKey}`,
     "user-agent": providerUserAgent,
   };
   const body = input.body === undefined ? undefined : JSON.stringify(input.body);

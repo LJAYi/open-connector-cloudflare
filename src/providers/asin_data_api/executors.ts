@@ -1,6 +1,5 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -213,7 +212,7 @@ export const credentialValidators: CredentialValidators = {
 async function requestAsinDataApiJson(input: {
   path: string;
   method: AsinDataApiRequestMethod;
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   phase: AsinDataApiRequestPhase;
   params?: Record<string, string | undefined>;
   body?: Record<string, unknown>;
@@ -225,7 +224,7 @@ async function requestAsinDataApiJson(input: {
     response = await input.context.fetcher(buildAsinDataApiUrl(input.path, input.context.apiKey, input.params), {
       method: input.method,
       headers: compactHeaders({
-        accept: "application/json",
+        "accept": "application/json",
         "content-type": input.body ? "application/json" : undefined,
         "user-agent": providerUserAgent,
       }),

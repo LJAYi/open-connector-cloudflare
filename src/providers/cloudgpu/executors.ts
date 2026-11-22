@@ -21,7 +21,6 @@ const apiBaseUrl = "https://cloudgpu.app/v1";
 const inferenceTimeoutMs = 300_000;
 
 type ActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
-type RequestContext = Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
 
 interface CloudgpuRequest {
   path: "/models" | "/chat/completions" | "/gpu/account";
@@ -63,7 +62,7 @@ export const credentialValidators: CredentialValidators = {
   },
 };
 
-function requestCloudgpu(input: CloudgpuRequest, context: RequestContext): Promise<Record<string, unknown>> {
+function requestCloudgpu(input: CloudgpuRequest, context: ApiKeyProviderContext): Promise<Record<string, unknown>> {
   return runProviderRequest(
     {
       signal: context.signal,
@@ -74,7 +73,7 @@ function requestCloudgpu(input: CloudgpuRequest, context: RequestContext): Promi
       const response = await context.fetcher(`${apiBaseUrl}${input.path}`, {
         method: input.body === undefined ? "GET" : "POST",
         headers: {
-          authorization: `Bearer ${context.apiKey}`,
+          "authorization": `Bearer ${context.apiKey}`,
           "content-type": "application/json",
           "user-agent": providerUserAgent,
         },

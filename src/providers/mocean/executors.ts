@@ -1,6 +1,5 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
 import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
@@ -20,9 +19,7 @@ export const proxy: ProviderProxyExecutor = defineProviderProxy({
   baseUrl: moceanApiBaseUrl,
   auth: { type: "api_key_authorization", prefix: "Bearer " },
   skipDnsValidation: true,
-  customizeRequest({ headers }) {
-    if (!headers.has("accept")) headers.set("accept", "application/json");
-  },
+  defaultHeaders: { accept: "application/json" },
 });
 
 type MoceanRequestPhase = "validate" | "execute";
@@ -113,7 +110,7 @@ export const credentialValidators: CredentialValidators = {
 async function requestMocean(
   method: "GET" | "POST",
   path: string,
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
+  context: ApiKeyProviderContext,
   params: Record<string, unknown>,
   phase: MoceanRequestPhase,
 ): Promise<unknown> {
@@ -159,8 +156,8 @@ async function requestMocean(
 
 function moceanHeaders(apiKey: string, method: "GET" | "POST"): Record<string, string> {
   return {
-    accept: "application/json",
-    authorization: `Bearer ${apiKey}`,
+    "accept": "application/json",
+    "authorization": `Bearer ${apiKey}`,
     "user-agent": providerUserAgent,
     ...(method === "POST" ? { "content-type": "application/x-www-form-urlencoded;charset=UTF-8" } : {}),
   };

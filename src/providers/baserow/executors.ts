@@ -1,6 +1,5 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -167,9 +166,7 @@ export const proxy: ProviderProxyExecutor = defineProviderProxy({
   baseUrl: baserowApiBaseUrl,
   auth: { type: "api_key_authorization", prefix: "Token " },
   skipDnsValidation: true,
-  customizeRequest({ headers }) {
-    if (!headers.has("accept")) headers.set("accept", "application/json");
-  },
+  defaultHeaders: { accept: "application/json" },
 });
 
 export const credentialValidators: CredentialValidators = {
@@ -206,7 +203,7 @@ export const credentialValidators: CredentialValidators = {
 };
 
 async function requestBaserowJson(input: {
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   path: string;
   phase: BaserowPhase;
   method?: "GET" | "POST" | "PATCH" | "DELETE";
@@ -246,8 +243,8 @@ async function requestBaserowJson(input: {
 
 function baserowHeaders(apiKey: string, hasBody: boolean): Headers {
   const headers = new Headers({
-    Authorization: `Token ${apiKey}`,
-    Accept: "application/json",
+    "Authorization": `Token ${apiKey}`,
+    "Accept": "application/json",
     "User-Agent": providerUserAgent,
   });
   if (hasBody) {

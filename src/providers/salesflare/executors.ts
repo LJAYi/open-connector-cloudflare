@@ -4,8 +4,7 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -29,7 +28,7 @@ type SalesflareActionHandler = (input: Record<string, unknown>, context: ApiKeyP
 interface SalesflareRequestInput {
   method: "GET" | "POST" | "PUT";
   path: string;
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   phase?: SalesflareRequestPhase;
   query?: Record<string, unknown>;
   body?: unknown;
@@ -227,8 +226,8 @@ async function salesflareRequestJson(input: SalesflareRequestInput): Promise<unk
 
 function salesflareHeaders(apiKey: string, hasBody: boolean): Record<string, string> {
   return {
-    authorization: `Bearer ${apiKey}`,
-    accept: "application/json",
+    "authorization": `Bearer ${apiKey}`,
+    "accept": "application/json",
     "user-agent": providerUserAgent,
     ...(hasBody ? { "content-type": "application/json" } : {}),
   };

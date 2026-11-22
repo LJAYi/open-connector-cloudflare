@@ -1,6 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import { compactObject, optionalBoolean, optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
 import {
@@ -162,17 +161,14 @@ export async function validateZepCredential(
   };
 }
 
-async function requestZepJson(
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
-  input: ZepRequestInput,
-): Promise<unknown> {
+async function requestZepJson(context: ApiKeyProviderContext, input: ZepRequestInput): Promise<unknown> {
   const url = new URL(`${zepApiBaseUrl}${input.path}`);
   for (const [name, value] of Object.entries(input.query ?? {})) {
     if (value !== undefined) url.searchParams.set(name, String(value));
   }
   const headers = new Headers({
-    accept: "application/json",
-    authorization: `Api-Key ${context.apiKey}`,
+    "accept": "application/json",
+    "authorization": `Api-Key ${context.apiKey}`,
     "user-agent": providerUserAgent,
   });
   let body: string | undefined;

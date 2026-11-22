@@ -365,7 +365,7 @@ function extractKrakenMessage(payload: unknown): string | undefined {
 async function downloadKrakenFile(
   krakedUrl: string,
   fileName: string,
-  context: Pick<KrakenIoActionContext, "fetcher" | "signal" | "transitFiles">,
+  context: KrakenIoActionContext,
 ): Promise<{ bytes: Uint8Array; contentType: string }> {
   if (!context.transitFiles) {
     throw new ProviderRequestError(400, "Transit file storage is not enabled.");
@@ -464,14 +464,14 @@ function buildKrakenAuth(apiKey: string, apiSecret: string): { api_key: string; 
 function krakenJsonHeaders(): Record<string, string> {
   return {
     "content-type": "application/json",
-    accept: "application/json",
+    "accept": "application/json",
     "user-agent": providerUserAgent,
   };
 }
 
 function krakenMultipartHeaders(): Record<string, string> {
   return {
-    accept: "application/json",
+    "accept": "application/json",
     "user-agent": providerUserAgent,
   };
 }

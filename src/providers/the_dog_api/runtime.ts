@@ -1,6 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -189,7 +188,7 @@ function buildAccountRecordQuery(input: Record<string, unknown>): Record<string,
 async function requestTheDogApiJson(input: {
   method: TheDogApiMethod;
   path: string;
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   query?: Record<string, string | undefined>;
   body?: Record<string, unknown>;
   phase?: "validate" | "execute";
@@ -203,7 +202,7 @@ async function requestTheDogApiJson(input: {
     const response = await input.context.fetcher(url, {
       method: input.method,
       headers: compactObject({
-        accept: "application/json",
+        "accept": "application/json",
         "content-type": input.body ? "application/json" : undefined,
         "user-agent": providerUserAgent,
         "x-api-key": input.context.apiKey,

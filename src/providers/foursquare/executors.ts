@@ -1,6 +1,5 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalBoolean, optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
 import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
@@ -162,7 +161,7 @@ export const credentialValidators: CredentialValidators = {
 async function requestFoursquareJson(input: {
   path: string;
   query: Record<string, string | number | boolean | undefined>;
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   phase: "validate" | "execute";
 }): Promise<unknown> {
   let response: Response;
@@ -204,8 +203,8 @@ function buildFoursquareUrl(path: string, query: Record<string, string | number 
 
 function foursquareHeaders(apiKey: string): Headers {
   return new Headers({
-    accept: "application/json",
-    authorization: `fsq3 ${apiKey}`,
+    "accept": "application/json",
+    "authorization": `fsq3 ${apiKey}`,
     "user-agent": providerUserAgent,
   });
 }

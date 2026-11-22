@@ -1,6 +1,5 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalString, requiredString } from "../../core/cast.ts";
 import { encodePathSegment } from "../../core/request.ts";
@@ -76,10 +75,7 @@ export const proxy: ProviderProxyExecutor = defineProviderProxy({
   baseUrl: lightfieldApiBaseUrl,
   auth: { type: "api_key_authorization", prefix: "Bearer " },
   skipDnsValidation: true,
-  customizeRequest({ headers }) {
-    if (!headers.has("accept")) headers.set("accept", "application/json");
-    if (!headers.has("lightfield-version")) headers.set("lightfield-version", lightfieldApiVersion);
-  },
+  defaultHeaders: { "accept": "application/json", "lightfield-version": lightfieldApiVersion },
 });
 
 export const credentialValidators: CredentialValidators = {
@@ -158,7 +154,7 @@ async function getLightfieldRecord(
 
 async function requestLightfield(input: {
   path: string;
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   mode: LightfieldRequestMode;
   query?: Record<string, string>;
 }): Promise<unknown> {
@@ -190,8 +186,8 @@ async function requestLightfield(input: {
 
 function lightfieldHeaders(apiKey: string): Record<string, string> {
   return {
-    accept: "application/json",
-    authorization: `Bearer ${apiKey}`,
+    "accept": "application/json",
+    "authorization": `Bearer ${apiKey}`,
     "lightfield-version": lightfieldApiVersion,
     "user-agent": providerUserAgent,
   };

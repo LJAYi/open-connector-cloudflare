@@ -1,6 +1,5 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalString, requiredRecord, requiredString } from "../../core/cast.ts";
 import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
@@ -131,7 +130,7 @@ export const credentialValidators: CredentialValidators = {
 
 async function requestStayAiJson(input: {
   path: string;
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   phase: StayAiRequestPhase;
   searchParams?: URLSearchParams;
 }): Promise<unknown> {
@@ -145,7 +144,7 @@ async function requestStayAiJson(input: {
 
 async function requestStayAi(input: {
   path: string;
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   searchParams?: URLSearchParams;
 }): Promise<Response> {
   const url = stayAiUrl(input.path);
@@ -157,7 +156,7 @@ async function requestStayAi(input: {
     return await input.context.fetcher(url, {
       method: "GET",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "user-agent": providerUserAgent,
         "x-retextion-access-token": input.context.apiKey,
       },

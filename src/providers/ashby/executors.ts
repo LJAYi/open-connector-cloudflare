@@ -1,6 +1,5 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { Buffer } from "node:buffer";
 import { compactObject, objectArray, optionalRecord, optionalString, requiredRecord } from "../../core/cast.ts";
@@ -139,7 +138,7 @@ export const credentialValidators: CredentialValidators = {
 async function requestAshbyJson(input: {
   endpoint: string;
   body: Record<string, unknown>;
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   phase: AshbyPhase;
 }): Promise<Record<string, unknown>> {
   let response: Response;
@@ -147,8 +146,8 @@ async function requestAshbyJson(input: {
     response = await input.context.fetcher(new URL(input.endpoint, `${ashbyApiBaseUrl}/`), {
       method: "POST",
       headers: {
-        accept: "application/json; version=1",
-        authorization: createAshbyAuthorization(input.context.apiKey),
+        "accept": "application/json; version=1",
+        "authorization": createAshbyAuthorization(input.context.apiKey),
         "content-type": "application/json",
         "user-agent": providerUserAgent,
       },

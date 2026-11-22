@@ -1,5 +1,4 @@
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import { optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
 import { ProviderRequestError } from "../provider-runtime.ts";
@@ -73,14 +72,14 @@ export async function validateHybridAnalysisCredential(
 
 async function request(
   path: string,
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
+  context: ApiKeyProviderContext,
   query?: Record<string, string>,
   validating = false,
 ): Promise<unknown> {
   const url = new URL(path.startsWith("/") ? path.slice(1) : path, `${hybridAnalysisApiBaseUrl}/`);
   for (const [name, value] of Object.entries(query ?? {})) url.searchParams.set(name, value);
   const response = await context.fetcher(url, {
-    headers: { accept: "application/json", "api-key": context.apiKey },
+    headers: { "accept": "application/json", "api-key": context.apiKey },
     signal: context.signal,
   });
   const text = await response.text();

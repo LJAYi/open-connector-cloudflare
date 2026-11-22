@@ -741,10 +741,7 @@ async function getStatsArray(
   };
 }
 
-async function listMailtrapAccounts(
-  context: Pick<MailtrapActionContext, "apiKey" | "fetcher" | "signal">,
-  phase: MailtrapPhase,
-) {
+async function listMailtrapAccounts(context: MailtrapActionContext, phase: MailtrapPhase) {
   return requestMailtrapResourceArray({
     ...context,
     path: "/api/accounts",
@@ -824,7 +821,7 @@ async function requestMailtrapText(input: Omit<MailtrapRequestOptions, "method" 
 
 function buildMailtrapHeaders(apiKey: string, accept: string, hasBody: boolean): Headers {
   const headers = new Headers({
-    authorization: `Bearer ${apiKey}`,
+    "authorization": `Bearer ${apiKey}`,
     accept,
     "user-agent": providerUserAgent,
   });
@@ -881,8 +878,8 @@ function buildMailtrapMessageListQuery(input: Record<string, unknown>): Record<s
 
 function buildMailtrapStatsQuery(input: Record<string, unknown>): Record<string, MailtrapQueryValue> {
   return compactObject({
-    start_date: requiredString(input.startDate, "startDate"),
-    end_date: requiredString(input.endDate, "endDate"),
+    "start_date": requiredString(input.startDate, "startDate"),
+    "end_date": requiredString(input.endDate, "endDate"),
     "sending_domain_ids[]": readPositiveIntegerArray(input.sendingDomainIds, "sendingDomainIds"),
     "sending_streams[]": readStringArray(input.sendingStreams, "sendingStreams"),
     "categories[]": readStringArray(input.categories, "categories"),

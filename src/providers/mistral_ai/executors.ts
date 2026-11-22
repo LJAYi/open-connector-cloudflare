@@ -10,6 +10,7 @@ import type {
   ProviderActionName,
   ProviderActionSources,
 } from "../provider-executors.ts";
+import type { ProviderRequestContext } from "../provider-runtime.ts";
 
 import { base64Bytes, compactObject, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import {
@@ -250,7 +251,7 @@ async function executeMistralAction(
 async function executeJsonMistralAction(
   input: Record<string, unknown>,
   spec: MistralActionSpec,
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
+  context: ApiKeyProviderContext,
 ): Promise<unknown> {
   const { url, remainingInput } = buildMistralUrl(spec, input);
   const requestInit: RequestInit = {
@@ -503,12 +504,12 @@ async function readRemoteUploadSource(
   fileUrl: string,
   fileName: string,
   mimeType: string | undefined,
-  context: Pick<ApiKeyProviderContext, "fetcher" | "signal">,
+  context: ProviderRequestContext,
 ): Promise<UploadSource> {
   const url = readPublicFileUrl(fileUrl, "file.url");
   const response = await context.fetcher(url, {
     headers: {
-      accept: "*/*",
+      "accept": "*/*",
       "user-agent": providerUserAgent,
     },
     signal: context.signal,
@@ -565,7 +566,7 @@ function serializeMultipartValue(value: unknown): string {
 
 function mistralHeaders(apiKey: string, includeJsonContentType = true): Record<string, string> {
   return compactObject({
-    authorization: `Bearer ${apiKey}`,
+    "authorization": `Bearer ${apiKey}`,
     "content-type": includeJsonContentType ? "application/json" : undefined,
     "user-agent": providerUserAgent,
   }) as Record<string, string>;
@@ -573,7 +574,7 @@ function mistralHeaders(apiKey: string, includeJsonContentType = true): Record<s
 
 function mistralMultipartHeaders(apiKey: string): Record<string, string> {
   return {
-    authorization: `Bearer ${apiKey}`,
+    "authorization": `Bearer ${apiKey}`,
     "user-agent": providerUserAgent,
   };
 }

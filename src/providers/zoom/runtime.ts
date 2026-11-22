@@ -1,6 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { OAuthProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
+import type { ProviderActionHandlers, OAuthProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
 import type { ProviderFetch } from "../provider-runtime.ts";
 
 import { compactObject, optionalBoolean, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
@@ -24,7 +23,7 @@ type ZoomRequestPhase = "validate" | "execute";
 type ZoomActionHandler = ProviderRuntimeHandler<OAuthProviderContext>;
 
 interface ZoomRequestInput {
-  context: Pick<OAuthProviderContext, "accessToken" | "fetcher" | "signal">;
+  context: OAuthProviderContext;
   path: string;
   phase: ZoomRequestPhase;
   method?: "GET" | "POST" | "PATCH";
@@ -98,6 +97,7 @@ export const zoomActionHandlers: ProviderActionHandlers<"zoom", ZoomActionHandle
     } catch (error) {
       if (
         error instanceof ProviderRequestError &&
+        error.status === 403 &&
         optionalRecord(error.details)?.code === zoomSummaryNotAccessibleCode
       ) {
         return {
@@ -175,8 +175,8 @@ export async function fetchZoomCurrentAccount(
 async function requestZoomJson(input: ZoomRequestInput): Promise<Record<string, unknown>> {
   return runProviderRequest({ signal: input.context.signal, label: "Zoom" }, async (signal) => {
     const headers: Record<string, string> = {
-      accept: "application/json",
-      authorization: `Bearer ${input.context.accessToken}`,
+      "accept": "application/json",
+      "authorization": `Bearer ${input.context.accessToken}`,
       "user-agent": providerUserAgent,
     };
     if (input.body) {
@@ -242,7 +242,12 @@ function createZoomError(status: number, payload: unknown, phase: ZoomRequestPha
     return new ProviderRequestError(400, message, payload);
   }
   if (status === 401 || status === 403) {
-    return new ProviderRequestError(401, message, payload);
+    return new ProviderRequestError(
+      status,
+      message,
+      payload,
+      status === 401 && optionalRecord(payload)?.code === 124 ? "authorization_failed" : "provider_error",
+    );
   }
   if (status >= 400 && status < 500) {
     return new ProviderRequestError(400, message, payload);
@@ -341,6 +346,7 @@ function encodeMeetingUuid(meetingUuid: string): string {
 
 function normalizeSummaryMeeting(record: Record<string, unknown>): Record<string, unknown> {
   return {
+    raw: record,
     meetingUuid: optionalString(record.meeting_uuid) ?? null,
     meetingId: maybeMeetingId(record.meeting_id),
     meetingHostId: optionalString(record.meeting_host_id) ?? null,

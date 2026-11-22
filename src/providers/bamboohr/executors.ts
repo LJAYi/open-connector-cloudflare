@@ -5,8 +5,7 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ProviderRuntimeHandler } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import { Buffer } from "node:buffer";
 import { optionalInteger, optionalRecord, optionalString, recordOrEmpty, requiredString } from "../../core/cast.ts";
@@ -58,7 +57,7 @@ export const bamboohrActionHandlers: ProviderActionHandlers<"bamboohr", Provider
       context,
       path: "/api/v1/employees",
       query: {
-        fields: joinFields(input.fields),
+        "fields": joinFields(input.fields),
         "page[limit]": optionalInteger(input.limit),
         "page[after]": optionalString(input.after),
         "page[before]": optionalString(input.before),
@@ -233,7 +232,7 @@ function buildBamboohrApiBaseUrl(companyDomain: string): string {
 }
 
 async function requestBamboohrJson(input: {
-  context: Pick<BamboohrContext, "authorization" | "companyDomain" | "fetcher" | "signal">;
+  context: BamboohrContext;
   path: string;
   query?: Record<string, string | number | boolean | undefined>;
 }): Promise<unknown> {
@@ -281,7 +280,7 @@ function buildBamboohrUrl(
 
 function buildBamboohrHeaders(authorization: string): Record<string, string> {
   return {
-    accept: "application/json",
+    "accept": "application/json",
     authorization,
     "user-agent": providerUserAgent,
   };

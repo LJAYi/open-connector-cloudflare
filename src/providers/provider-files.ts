@@ -1,5 +1,5 @@
 import type { TransitFileWriter } from "../core/types.ts";
-import type { ProviderFetch } from "./provider-runtime.ts";
+import type { ProviderRequestContext } from "./provider-runtime.ts";
 
 import { optionalRecord, optionalString, requiredString } from "../core/cast.ts";
 import { readBoundedResponseBytes } from "../core/request.ts";
@@ -14,10 +14,8 @@ import {
   readProviderErrorTextBody,
 } from "./provider-runtime.ts";
 
-interface FileTransferContext {
-  fetcher: ProviderFetch;
+interface FileTransferContext extends ProviderRequestContext {
   transitFiles?: TransitFileWriter;
-  signal?: AbortSignal;
 }
 
 export interface ProviderTransitFile {
@@ -88,7 +86,7 @@ export async function uploadProviderUrlToTransitFile(
   try {
     response = await context.fetcher(input.url, {
       headers: {
-        accept: "*/*",
+        "accept": "*/*",
         "user-agent": providerUserAgent,
       },
       signal: context.signal,

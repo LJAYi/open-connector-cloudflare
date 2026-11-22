@@ -1,6 +1,5 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -24,8 +23,7 @@ const companycamApiBaseUrl = "https://api.companycam.com/v2";
 const companycamApiOrigin = "https://api.companycam.com";
 
 type CompanycamRequestPhase = "validate" | "execute";
-type CompanycamContext = Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
-type CompanycamActionHandler = (input: Record<string, unknown>, context: CompanycamContext) => Promise<unknown>;
+type CompanycamActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
 interface CompanycamRequest {
   apiKey: string;
@@ -201,9 +199,7 @@ export const proxy: ProviderProxyExecutor = defineProviderProxy({
   baseUrl: companycamApiBaseUrl,
   auth: { type: "api_key_authorization", prefix: "Bearer " },
   skipDnsValidation: true,
-  customizeRequest({ headers }) {
-    if (!headers.has("accept")) headers.set("accept", "application/json");
-  },
+  defaultHeaders: { accept: "application/json" },
 });
 
 export const credentialValidators: CredentialValidators = {
@@ -281,8 +277,8 @@ function companycamHeaders(input: {
   currentUserEmail?: string;
 }): Record<string, string> {
   return compactObject({
-    accept: "application/json",
-    authorization: `Bearer ${input.apiKey}`,
+    "accept": "application/json",
+    "authorization": `Bearer ${input.apiKey}`,
     "content-type": input.body === undefined ? undefined : "application/json",
     "user-agent": providerUserAgent,
     "x-companycam-user": input.currentUserEmail,

@@ -1,6 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -23,7 +22,7 @@ const teableCurrentUserPath = "/auth/user";
 
 type TeableRequestPhase = "validate" | "execute";
 
-interface TeableRequestInput extends Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal"> {
+interface TeableRequestInput extends ApiKeyProviderContext {
   method: string;
   phase: TeableRequestPhase;
   searchParams?: URLSearchParams;
@@ -216,8 +215,8 @@ async function teableRequest(path: string, input: TeableRequestInput) {
 
 function teableHeaders(apiKey: string, hasBody: boolean) {
   const headers: Record<string, string> = {
-    Authorization: `Bearer ${apiKey}`,
-    accept: "application/json",
+    "Authorization": `Bearer ${apiKey}`,
+    "accept": "application/json",
     "user-agent": providerUserAgent,
   };
   if (hasBody) {

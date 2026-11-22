@@ -1,6 +1,6 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderRequestContext } from "../provider-runtime.ts";
 
 import { compactObject, optionalInteger, optionalRecord, optionalString, rawStringOrNull } from "../../core/cast.ts";
 import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
@@ -85,7 +85,7 @@ export const openalexActionHandlers: ProviderActionHandlers<"openalex", OpenAlex
       apiKey: context.apiKey,
       params: compactObject({
         search,
-        filter: entity ? `entity_type:${entity}` : undefined,
+        "filter": entity ? `entity_type:${entity}` : undefined,
         "per-page": readOptionalIntegerString(input.perPage),
       }),
       context,
@@ -149,14 +149,14 @@ async function requestOpenAlexJson(input: {
   path: string;
   apiKey: string;
   params: Record<string, string | undefined>;
-  context: Pick<ApiKeyProviderContext, "fetcher" | "signal">;
+  context: ProviderRequestContext;
   phase: OpenAlexPhase;
 }): Promise<Record<string, unknown>> {
   return runProviderRequest({ signal: input.context.signal, label: "OpenAlex" }, async (signal) => {
     const response = await input.context.fetcher(buildOpenAlexUrl(input.path, input.apiKey, input.params), {
       method: "GET",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "user-agent": providerUserAgent,
       },
       signal,
@@ -181,16 +181,16 @@ function buildOpenAlexUrl(path: string, apiKey: string, params: Record<string, s
 
 function buildListParams(input: Record<string, unknown>): Record<string, string | undefined> {
   return compactObject({
-    search: optionalString(input.search),
-    filter: optionalString(input.filter),
-    sort: optionalString(input.sort),
-    cursor: optionalString(input.cursor),
-    page: readOptionalIntegerString(input.page),
+    "search": optionalString(input.search),
+    "filter": optionalString(input.filter),
+    "sort": optionalString(input.sort),
+    "cursor": optionalString(input.cursor),
+    "page": readOptionalIntegerString(input.page),
     "per-page": readOptionalIntegerString(input.perPage),
-    select: readStringArrayParam(input.select),
-    group_by: optionalString(input.groupBy),
-    sample: readOptionalIntegerString(input.sample),
-    seed: readOptionalIntegerString(input.seed),
+    "select": readStringArrayParam(input.select),
+    "group_by": optionalString(input.groupBy),
+    "sample": readOptionalIntegerString(input.sample),
+    "seed": readOptionalIntegerString(input.seed),
   });
 }
 

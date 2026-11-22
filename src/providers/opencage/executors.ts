@@ -1,6 +1,5 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -86,7 +85,7 @@ export const credentialValidators: CredentialValidators = {
 async function opencageRequest(
   format: "json" | "geojson",
   query: Record<string, string | undefined>,
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
+  context: ApiKeyProviderContext,
   phase: OpencagePhase,
 ): Promise<unknown> {
   let response: Response;
@@ -94,7 +93,7 @@ async function opencageRequest(
     response = await context.fetcher(buildOpencageUrl(format, query, context.apiKey), {
       method: "GET",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "user-agent": providerUserAgent,
       },
       signal: context.signal,

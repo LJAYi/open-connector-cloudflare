@@ -1,5 +1,4 @@
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { OAuthProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, OAuthProviderContext } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -13,7 +12,7 @@ import { ProviderRequestError, providerInputError, providerResponseError } from 
 const tencentDocsUserInfoUrl = "https://docs.qq.com/oauth/v2/userinfo";
 export const tencentDocsApiBaseUrl: string = "https://docs.qq.com";
 
-interface TencentDocsActionContext extends Pick<OAuthProviderContext, "accessToken" | "fetcher" | "signal"> {
+interface TencentDocsActionContext extends OAuthProviderContext {
   clientId: string;
   openID: string;
 }
@@ -428,7 +427,7 @@ async function requestTencentDocsOpenApi(
   }
 
   const headers = new Headers({
-    accept: "application/json",
+    "accept": "application/json",
     "Access-Token": context.accessToken,
     "Client-Id": context.clientId,
     "Open-Id": context.openID,

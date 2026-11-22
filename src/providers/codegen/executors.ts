@@ -4,8 +4,8 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderRequestContext } from "../provider-runtime.ts";
 
 import { optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
 import { requireApiKeyCredential } from "../provider-credentials.ts";
@@ -234,14 +234,14 @@ async function requestCodegenJson(input: {
   method: "GET";
   path: string;
   phase: CodegenPhase;
-  context: Pick<ApiKeyProviderContext, "fetcher" | "signal">;
+  context: ProviderRequestContext;
 }): Promise<unknown> {
   return runProviderRequest({ signal: input.context.signal, label: "Codegen" }, async (signal) => {
     const response = await input.context.fetcher(new URL(input.path, codegenApiBaseUrl), {
       method: input.method,
       headers: {
-        accept: "application/json",
-        authorization: `Bearer ${input.apiKey}`,
+        "accept": "application/json",
+        "authorization": `Bearer ${input.apiKey}`,
         "user-agent": providerUserAgent,
       },
       signal,

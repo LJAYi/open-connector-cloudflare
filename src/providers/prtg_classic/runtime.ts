@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderRequestContext } from "../provider-runtime.ts";
 
 import { compactObject, optionalBoolean, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
 import { assertPublicHttpUrl } from "../../core/request.ts";
@@ -23,7 +23,7 @@ interface PrtgClassicRequestOptions {
   apiBaseUrl: string;
   content: "sensors" | "devices";
   columns: readonly string[];
-  context: Pick<PrtgClassicActionContext, "fetcher" | "signal">;
+  context: ProviderRequestContext;
   mode: PrtgClassicRequestMode;
   query?: Record<string, QueryValue>;
 }
@@ -184,7 +184,7 @@ async function requestPrtgClassicTableJson(options: PrtgClassicRequestOptions): 
     const response = await options.context.fetcher(url, {
       method: "GET",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "user-agent": providerUserAgent,
       },
       signal,

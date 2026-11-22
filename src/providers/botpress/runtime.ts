@@ -1,6 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
 import type { ProviderFetch } from "../provider-runtime.ts";
 
 import { compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
@@ -11,7 +10,7 @@ import {
   providerUserAgent,
 } from "../provider-runtime.ts";
 
-export interface BotpressContext extends Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal"> {
+export interface BotpressContext extends ApiKeyProviderContext {
   workspaceId: string;
 }
 
@@ -134,8 +133,8 @@ function buildBotpressUrl(path: string): URL {
 
 function botpressHeaders(apiKey: string, workspaceId?: string): Record<string, string> {
   return compactObject({
-    accept: "application/json",
-    authorization: `Bearer ${apiKey}`,
+    "accept": "application/json",
+    "authorization": `Bearer ${apiKey}`,
     "user-agent": providerUserAgent,
     "x-workspace-id": workspaceId,
   }) as Record<string, string>;

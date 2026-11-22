@@ -1,7 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
-import type { ProviderFetch } from "../provider-runtime.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderRequestContext, ProviderFetch } from "../provider-runtime.ts";
 
 import {
   compactObject,
@@ -88,7 +87,7 @@ export async function validateOpenHandsCredential(
   fetcher: ProviderFetch,
   signal?: AbortSignal,
 ): Promise<CredentialValidationResult> {
-  const context: Pick<ApiKeyProviderContext, "fetcher" | "signal"> = { fetcher, signal };
+  const context: ProviderRequestContext = { fetcher, signal };
   await openHandsRequest(apiKey, openHandsValidationPath, context, {
     query: { limit: 1 },
   });
@@ -134,7 +133,7 @@ function buildMessageBody(input: Record<string, unknown>): Record<string, unknow
 async function openHandsRequest(
   apiKey: string,
   path: string,
-  context: Pick<ApiKeyProviderContext, "fetcher" | "signal">,
+  context: ProviderRequestContext,
   options: {
     method?: OpenHandsRequestMethod;
     query?: Record<string, unknown>;
@@ -150,8 +149,8 @@ async function openHandsRequest(
     response = await context.fetcher(url, {
       method: options.method ?? "GET",
       headers: {
-        accept: "application/json",
-        authorization: `Bearer ${token}`,
+        "accept": "application/json",
+        "authorization": `Bearer ${token}`,
         ...(options.body ? { "content-type": "application/json" } : {}),
         "user-agent": providerUserAgent,
       },

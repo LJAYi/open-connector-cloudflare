@@ -14,7 +14,6 @@ const service = "baixiao";
 const origin = "https://mcp.know-pa.cn";
 const endpoint = `${origin}/mcp`;
 const timeoutMs = 60_000;
-type Context = Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
 type Result = Awaited<ReturnType<Client["callTool"]>>;
 
 const toolNames: Record<string, string> = {
@@ -40,16 +39,16 @@ const toolNames: Record<string, string> = {
 
 const handlers = mapProviderActionHandlers(service, baixiaoActions, (action) => {
   if (action.name === "list_tools") {
-    return async (_input: Record<string, unknown>, context: Context): Promise<unknown> => ({
+    return async (_input: Record<string, unknown>, context: ApiKeyProviderContext): Promise<unknown> => ({
       tools: (await withClient(context, (client) => client.listTools({}, { timeout: timeoutMs }))).tools,
     });
   }
   if (action.name === "call_tool") {
-    return async (input: Record<string, unknown>, context: Context): Promise<unknown> => ({
+    return async (input: Record<string, unknown>, context: ApiKeyProviderContext): Promise<unknown> => ({
       result: await callTool(context, String(input.toolName), recordOrEmpty(input.arguments)),
     });
   }
-  return (input: Record<string, unknown>, context: Context): Promise<unknown> =>
+  return (input: Record<string, unknown>, context: ApiKeyProviderContext): Promise<unknown> =>
     callTool(context, toolNames[action.name]!, input);
 });
 
@@ -63,10 +62,7 @@ export const proxy: ProviderProxyExecutor = defineProviderProxy({
   allowedEndpoint: (value) => value === "/mcp",
   timeoutMs,
   skipDnsValidation: true,
-  customizeRequest({ headers }) {
-    if (!headers.has("accept")) headers.set("accept", "application/json, text/event-stream");
-    if (!headers.has("content-type")) headers.set("content-type", "application/json");
-  },
+  defaultHeaders: { "accept": "application/json, text/event-stream", "content-type": "application/json" },
 });
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, options) {
@@ -80,7 +76,7 @@ export const credentialValidators: CredentialValidators = {
   },
 };
 
-async function callTool(context: Context, name: string, args: Record<string, unknown>): Promise<unknown> {
+async function callTool(context: ApiKeyProviderContext, name: string, args: Record<string, unknown>): Promise<unknown> {
   const result = await withClient(context, (client) =>
     client.callTool({ name, arguments: args }, { timeout: timeoutMs }),
   );
@@ -93,8 +89,8 @@ async function callTool(context: Context, name: string, args: Record<string, unk
     );
   return result;
 }
-function withClient<T>(context: Context, run: (client: Client) => Promise<T>): Promise<T> {
-  const headers = new Headers({ authorization: `Bearer ${context.apiKey}`, "user-agent": providerUserAgent });
+function withClient<T>(context: ApiKeyProviderContext, run: (client: Client) => Promise<T>): Promise<T> {
+  const headers = new Headers({ "authorization": `Bearer ${context.apiKey}`, "user-agent": providerUserAgent });
   return withMcpClient(
     {
       endpoint: new URL(endpoint),

@@ -1,6 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 import type { ProviderFetch } from "../provider-runtime.ts";
 
 import {
@@ -18,8 +17,7 @@ export const loopReturnsApiBaseUrl = "https://api.loopreturns.com/api/v1";
 
 type LoopReturnsRequestPhase = "validate" | "execute";
 type QueryValue = string | number | boolean | undefined;
-type LoopReturnsContext = Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
-type LoopReturnsActionHandler = (input: Record<string, unknown>, context: LoopReturnsContext) => Promise<unknown>;
+type LoopReturnsActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
 interface LoopReturnsRequestOptions {
   apiKey: string;
@@ -208,7 +206,7 @@ async function requestLoopReturnsJson(options: LoopReturnsRequestOptions): Promi
     const response = await options.fetcher(url, {
       method: "GET",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "user-agent": providerUserAgent,
         "x-authorization": options.apiKey,
       },

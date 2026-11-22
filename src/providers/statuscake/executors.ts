@@ -1,6 +1,6 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderRequestContext } from "../provider-runtime.ts";
 
 import { optionalBoolean, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
 import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
@@ -230,7 +230,7 @@ async function listUptimeLocations(context: ApiKeyProviderContext): Promise<unkn
 async function requestStatuscakeJson<T>(input: {
   apiKey: string;
   path: string;
-  context: Pick<ApiKeyProviderContext, "fetcher" | "signal">;
+  context: ProviderRequestContext;
   phase: StatuscakePhase;
   method?: "GET" | "POST" | "PUT" | "DELETE";
   query?: URLSearchParams;
@@ -247,7 +247,7 @@ async function requestStatuscakeJson<T>(input: {
 async function statuscakeFetch(input: {
   apiKey: string;
   path: string;
-  context: Pick<ApiKeyProviderContext, "fetcher" | "signal">;
+  context: ProviderRequestContext;
   method?: "GET" | "POST" | "PUT" | "DELETE";
   query?: URLSearchParams;
   body?: URLSearchParams;
@@ -281,8 +281,8 @@ async function statuscakeFetch(input: {
 
 function buildStatuscakeHeaders(apiKey: string, body?: URLSearchParams): Record<string, string> {
   return {
-    Authorization: `Bearer ${apiKey}`,
-    Accept: "application/json",
+    "Authorization": `Bearer ${apiKey}`,
+    "Accept": "application/json",
     "User-Agent": providerUserAgent,
     ...(body ? { "content-type": "application/x-www-form-urlencoded" } : {}),
   };

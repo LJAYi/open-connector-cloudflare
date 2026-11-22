@@ -1,6 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, looseArray, optionalRecord, optionalString } from "../../core/cast.ts";
 import { ProviderRequestError, providerUserAgent, requiredResponseRecord } from "../provider-runtime.ts";
@@ -68,7 +67,7 @@ async function theirstackRequestJson(
   method: "GET" | "POST",
   path: string,
   body: Record<string, unknown> | undefined,
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
+  context: ApiKeyProviderContext,
   phase: "validate" | "execute" = "execute",
 ): Promise<unknown> {
   let response: Response;
@@ -77,8 +76,8 @@ async function theirstackRequestJson(
     response = await context.fetcher(`${theirstackApiBaseUrl}${path}`, {
       method,
       headers: compactObject({
-        accept: "application/json",
-        authorization: `Bearer ${context.apiKey}`,
+        "accept": "application/json",
+        "authorization": `Bearer ${context.apiKey}`,
         "user-agent": providerUserAgent,
         "content-type": body !== undefined ? "application/json" : undefined,
       }) as HeadersInit,

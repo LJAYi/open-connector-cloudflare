@@ -1,6 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalBoolean, optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
 import {
@@ -157,7 +156,7 @@ export async function validateMemberstackCredential(
 }
 
 async function requestMemberstackJson(input: {
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   path: string;
   method: "DELETE" | "GET" | "PATCH" | "POST";
   params?: Record<string, string | undefined>;
@@ -168,7 +167,7 @@ async function requestMemberstackJson(input: {
   return runProviderRequest({ signal: input.context.signal, label: "Memberstack" }, async (signal) => {
     const body = input.body && Object.keys(input.body).length > 0 ? input.body : undefined;
     const headers: Record<string, string> = {
-      accept: "application/json",
+      "accept": "application/json",
       "user-agent": providerUserAgent,
       "x-api-key": input.context.apiKey,
     };

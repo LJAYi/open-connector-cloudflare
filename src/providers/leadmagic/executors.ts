@@ -4,8 +4,7 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -146,9 +145,7 @@ export const credentialValidators: CredentialValidators = {
   },
 };
 
-async function validateLeadmagicCredential(
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
-): Promise<CredentialValidationResult> {
+async function validateLeadmagicCredential(context: ApiKeyProviderContext): Promise<CredentialValidationResult> {
   const account = normalizeCredits(
     await requestLeadmagicJson(
       {
@@ -175,7 +172,7 @@ async function validateLeadmagicCredential(
 
 async function requestLeadmagicJson(
   input: LeadmagicRequestInput,
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
+  context: ApiKeyProviderContext,
 ): Promise<Record<string, unknown>> {
   return runProviderRequest({ signal: context.signal, label: "LeadMagic" }, async (signal) => {
     const response = await context.fetcher(buildLeadmagicUrl(input.path), {
@@ -205,7 +202,7 @@ function buildLeadmagicUrl(path: string): string {
 
 function buildLeadmagicHeaders(apiKey: string, hasBody: boolean): Record<string, string> {
   return compactObject({
-    accept: "application/json",
+    "accept": "application/json",
     "content-type": hasBody ? "application/json" : undefined,
     "user-agent": providerUserAgent,
     "X-API-Key": apiKey,

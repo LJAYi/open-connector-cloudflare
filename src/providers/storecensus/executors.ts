@@ -1,6 +1,5 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
@@ -116,7 +115,7 @@ export const credentialValidators: CredentialValidators = {
 };
 
 async function requestStorecensusJson(input: {
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   method: "GET" | "POST";
   path: string;
   phase: StorecensusPhase;
@@ -125,8 +124,8 @@ async function requestStorecensusJson(input: {
 }): Promise<unknown> {
   return runProviderRequest({ signal: input.context.signal, label: "StoreCensus" }, async (signal) => {
     const headers: Record<string, string> = {
-      accept: "application/json",
-      authorization: `Bearer ${input.context.apiKey}`,
+      "accept": "application/json",
+      "authorization": `Bearer ${input.context.apiKey}`,
       "user-agent": providerUserAgent,
     };
     let body: BodyInit | undefined;

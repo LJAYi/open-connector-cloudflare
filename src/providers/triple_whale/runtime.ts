@@ -1,6 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -106,7 +105,7 @@ export async function validateTripleWhaleCredential(
 async function requestTripleWhaleJson(input: {
   path: string;
   method: "GET" | "POST";
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   phase: TripleWhaleRequestPhase;
   body?: Record<string, unknown>;
 }): Promise<unknown> {
@@ -122,13 +121,13 @@ async function requestTripleWhaleJson(input: {
 async function requestTripleWhale(input: {
   path: string;
   method: "GET" | "POST";
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   body?: Record<string, unknown>;
 }): Promise<Response> {
   const normalizedPath = input.path.startsWith("/") ? input.path.slice(1) : input.path;
   const url = new URL(normalizedPath, tripleWhaleApiBaseUrl);
   const headers: Record<string, string> = {
-    accept: "application/json",
+    "accept": "application/json",
     "user-agent": providerUserAgent,
     "x-api-key": input.context.apiKey,
   };

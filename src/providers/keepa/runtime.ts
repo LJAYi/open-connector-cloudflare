@@ -1,6 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
 import type { ProviderFetch } from "../provider-runtime.ts";
 import type { keepaDealPriceTypes, keepaHistoryTypes, keepaMarketplaces } from "./actions.ts";
 
@@ -29,7 +28,7 @@ interface KeepaRequest {
   path: string;
   query?: Record<string, string | number | boolean | undefined>;
   body?: Record<string, unknown>;
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   phase: KeepaPhase;
 }
 
@@ -596,7 +595,7 @@ async function requestKeepa(input: KeepaRequest): Promise<Record<string, unknown
     response = await input.context.fetcher(url, {
       method: input.body ? "POST" : "GET",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         ...(input.body ? { "content-type": "application/json;charset=UTF-8" } : {}),
         "user-agent": providerUserAgent,
       },

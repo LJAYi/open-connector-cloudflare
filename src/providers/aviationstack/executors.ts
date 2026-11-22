@@ -1,6 +1,5 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -222,7 +221,7 @@ async function listCollection(
 async function requestAviationstackJson(input: {
   path: string;
   query: Record<string, AviationstackQueryValue>;
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   phase: AviationstackPhase;
 }): Promise<Record<string, unknown>> {
   let response: Response;
@@ -230,7 +229,7 @@ async function requestAviationstackJson(input: {
     response = await input.context.fetcher(buildAviationstackUrl(input.path, input.query, input.context.apiKey), {
       method: "GET",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "user-agent": providerUserAgent,
       },
       signal: input.context.signal,

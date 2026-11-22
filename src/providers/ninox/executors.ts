@@ -1,6 +1,5 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
 import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
@@ -18,7 +17,7 @@ type NinoxActionHandler = (input: Record<string, unknown>, context: ApiKeyProvid
 
 interface NinoxRequestInput {
   path: string;
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   phase: NinoxPhase;
   method?: "GET" | "POST" | "DELETE";
   query?: Record<string, NinoxQueryValue>;
@@ -327,8 +326,8 @@ async function requestNinoxJson(input: NinoxRequestInput): Promise<unknown> {
     const response = await input.context.fetcher(buildNinoxUrl(input.path, input.query), {
       method: input.method ?? "GET",
       headers: {
-        accept: "application/json",
-        authorization: `Bearer ${input.context.apiKey}`,
+        "accept": "application/json",
+        "authorization": `Bearer ${input.context.apiKey}`,
         "content-type": "application/json",
         "user-agent": providerUserAgent,
       },

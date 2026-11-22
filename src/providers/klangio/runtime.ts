@@ -1,6 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { optionalRecord, optionalString } from "../../core/cast.ts";
 import { assertPublicHttpUrl, readBoundedResponseBytes, storeResponseInTransit } from "../../core/request.ts";
@@ -130,9 +129,7 @@ export const klangioActionHandlers: ProviderActionHandlers<"klangio", KlangioAct
   },
 };
 
-export async function validateKlangioCredential(
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
-): Promise<CredentialValidationResult> {
+export async function validateKlangioCredential(context: ApiKeyProviderContext): Promise<CredentialValidationResult> {
   const validationEndpoint = `/job/${klangioValidationJobId}/status`;
   const response = await context.fetcher(buildKlangioUrl(validationEndpoint), {
     method: "GET",
@@ -256,7 +253,7 @@ async function createFileFormData(value: unknown, context: ApiKeyProviderContext
 
 async function resolveKlangioUploadSource(
   value: unknown,
-  context: Pick<ApiKeyProviderContext, "signal">,
+  context: ApiKeyProviderContext,
 ): Promise<KlangioUploadSource> {
   const file = requireInputObject(value, "file");
   const fileUrl = optionalString(file.url);
@@ -428,7 +425,7 @@ function extractKlangioErrorMessage(payload: unknown): string | undefined {
 
 function buildKlangioHeaders(apiKey: string, input: { accept: string }): Headers {
   return new Headers({
-    accept: input.accept,
+    "accept": input.accept,
     "kl-api-key": apiKey,
     "user-agent": providerUserAgent,
   });

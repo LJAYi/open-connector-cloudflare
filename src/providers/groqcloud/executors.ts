@@ -1,6 +1,5 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { createHash } from "node:crypto";
 import { base64Bytes, compactObject, optionalRecord, optionalScalarString, optionalString } from "../../core/cast.ts";
@@ -103,7 +102,7 @@ export const credentialValidators: CredentialValidators = {
 };
 
 async function groqcloudRequest(input: {
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   phase: GroqcloudRequestPhase;
   method?: "GET" | "POST";
   path: string;
@@ -139,8 +138,8 @@ async function groqcloudRequest(input: {
 
 function groqcloudHeaders(apiKey: string, hasBody: boolean): Record<string, string> {
   return {
-    authorization: `Bearer ${apiKey}`,
-    accept: "application/json",
+    "authorization": `Bearer ${apiKey}`,
+    "accept": "application/json",
     ...(hasBody ? { "content-type": "application/json" } : {}),
     "user-agent": providerUserAgent,
   };

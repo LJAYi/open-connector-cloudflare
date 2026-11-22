@@ -1,6 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import { Buffer } from "node:buffer";
 import { createHash } from "node:crypto";
@@ -21,7 +20,7 @@ type PostalyticsRequestPhase = "validate" | "execute";
 
 interface PostalyticsRequestInput {
   path: string;
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   phase: PostalyticsRequestPhase;
   query?: Record<string, number | undefined>;
 }
@@ -174,8 +173,8 @@ async function requestPostalyticsJson(input: PostalyticsRequestInput): Promise<u
     const response = await input.context.fetcher(url, {
       method: "GET",
       headers: {
-        accept: "application/json",
-        authorization: buildPostalyticsAuthorizationHeader(input.context.apiKey),
+        "accept": "application/json",
+        "authorization": buildPostalyticsAuthorizationHeader(input.context.apiKey),
         "user-agent": providerUserAgent,
       },
       signal: timeout.signal,

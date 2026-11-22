@@ -1,6 +1,5 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -59,10 +58,7 @@ export const proxy: ProviderProxyExecutor = defineProviderProxy({
   service,
   baseUrl: altovizApiBaseUrl,
   auth: { type: "api_key_header", name: "x-api-key" },
-  customizeRequest({ headers }) {
-    if (!headers.has("accept")) headers.set("accept", "application/json");
-    if (!headers.has("user-agent")) headers.set("user-agent", providerUserAgent);
-  },
+  defaultHeaders: { "accept": "application/json", "user-agent": providerUserAgent },
 });
 
 async function listCustomers(input: Record<string, unknown>, context: ApiKeyProviderContext): Promise<unknown> {
@@ -126,7 +122,7 @@ async function createCustomer(input: Record<string, unknown>, context: ApiKeyPro
   return { customer: readObject(response.payload, "Altoviz customer") };
 }
 
-interface AltovizRequestContext extends Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal"> {
+interface AltovizRequestContext extends ApiKeyProviderContext {
   phase: AltovizPhase;
   init?: RequestInit;
 }
@@ -141,7 +137,7 @@ async function requestAltoviz(
     response = await context.fetcher(new URL(path, altovizApiBaseUrl), {
       ...context.init,
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "content-type": "application/json",
         "user-agent": providerUserAgent,
         "x-api-key": context.apiKey,

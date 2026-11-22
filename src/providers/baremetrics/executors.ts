@@ -1,6 +1,5 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -322,7 +321,7 @@ function normalizeSubscriptionPayload(payload: unknown): Record<string, unknown>
 async function baremetricsGetJson(
   path: string,
   query: Record<string, unknown>,
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
+  context: ApiKeyProviderContext,
   phase: BaremetricsPhase,
 ): Promise<unknown> {
   const url = new URL(path, baremetricsApiBaseUrl);
@@ -358,7 +357,7 @@ async function baremetricsSendJson(
 async function baremetricsRequestJson(
   url: URL,
   init: RequestInit,
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
+  context: ApiKeyProviderContext,
   phase: BaremetricsPhase,
 ): Promise<unknown> {
   let response: Response;
@@ -386,8 +385,8 @@ async function baremetricsRequestJson(
 
 function baremetricsHeaders(apiKey: string, extraHeaders?: HeadersInit): Record<string, string> {
   return {
-    accept: "application/json",
-    authorization: `Bearer ${apiKey}`,
+    "accept": "application/json",
+    "authorization": `Bearer ${apiKey}`,
     "user-agent": providerUserAgent,
     ...Object.fromEntries(new Headers(extraHeaders).entries()),
   };

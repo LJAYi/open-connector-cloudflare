@@ -1,6 +1,5 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalIntegerLike, optionalRecord, optionalString, requiredRecord } from "../../core/cast.ts";
 import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
@@ -18,14 +17,13 @@ const jotformApiBaseUrl = "https://api.jotform.com";
 
 type JotformRequestPhase = "validate" | "execute";
 type JotformQueryValue = string | number | undefined;
-type JotformActionContext = Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
-type JotformActionHandler = (input: Record<string, unknown>, context: JotformActionContext) => Promise<unknown>;
+type JotformActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
 interface JotformEnvelope {
-  responseCode?: unknown;
-  message?: unknown;
-  content?: unknown;
-  resultSet?: unknown;
+  "responseCode"?: unknown;
+  "message"?: unknown;
+  "content"?: unknown;
+  "resultSet"?: unknown;
   "limit-left"?: unknown;
 }
 
@@ -247,8 +245,8 @@ async function requestJotformEnvelope(input: JotformRequestInput): Promise<Jotfo
   }
 
   const headers = new Headers({
-    accept: "application/json",
-    APIKEY: input.apiKey,
+    "accept": "application/json",
+    "APIKEY": input.apiKey,
     "user-agent": providerUserAgent,
   });
   if (input.body) {

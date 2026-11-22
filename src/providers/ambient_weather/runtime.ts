@@ -159,7 +159,7 @@ async function requestAmbientWeatherJson(
   try {
     response = await context.fetcher(url, {
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "user-agent": providerUserAgent,
       },
       signal: context.signal,
@@ -178,7 +178,7 @@ async function requestAmbientWeatherJson(
 
 function buildAmbientWeatherUrl(
   path: string,
-  context: Pick<AmbientWeatherContext, "apiKey" | "applicationKey">,
+  context: AmbientWeatherContext,
   query?: Record<string, string | number | undefined>,
 ) {
   const url = new URL(path, ambientWeatherApiBaseUrl);

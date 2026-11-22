@@ -4,8 +4,7 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { optionalBoolean, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
@@ -150,9 +149,7 @@ export const proxy: ProviderProxyExecutor = defineProviderProxy({
   baseUrl: laravelCloudApiBaseUrl,
   auth: { type: "api_key_authorization", prefix: "Bearer " },
   skipDnsValidation: true,
-  customizeRequest({ headers }) {
-    if (!headers.has("accept")) headers.set("accept", "application/json");
-  },
+  defaultHeaders: { accept: "application/json" },
 });
 
 export const credentialValidators: CredentialValidators = {
@@ -165,9 +162,7 @@ export const credentialValidators: CredentialValidators = {
   },
 };
 
-async function validateLaravelCloudCredential(
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
-): Promise<CredentialValidationResult> {
+async function validateLaravelCloudCredential(context: ApiKeyProviderContext): Promise<CredentialValidationResult> {
   const payload = await requestLaravelCloud({ path: "/meta/organization" }, context);
   const organization = normalizeOrganization(readObject(payload.data));
   const label = organization.name ?? organization.slug ?? "Laravel Cloud Account";
@@ -186,10 +181,7 @@ async function validateLaravelCloudCredential(
   };
 }
 
-async function requestLaravelCloud(
-  request: LaravelCloudRequest,
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
-): Promise<JsonObject> {
+async function requestLaravelCloud(request: LaravelCloudRequest, context: ApiKeyProviderContext): Promise<JsonObject> {
   const url = new URL(`${laravelCloudApiBaseUrl}${request.path}`);
   if (request.search) {
     for (const [key, value] of request.search) {
@@ -202,8 +194,8 @@ async function requestLaravelCloud(
     response = await context.fetcher(url, {
       method: "GET",
       headers: {
-        accept: "application/json",
-        authorization: `Bearer ${context.apiKey}`,
+        "accept": "application/json",
+        "authorization": `Bearer ${context.apiKey}`,
         "user-agent": providerUserAgent,
       },
       signal: context.signal,

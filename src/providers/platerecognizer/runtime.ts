@@ -1,6 +1,5 @@
 import type { CredentialValidationResult, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -72,7 +71,7 @@ export async function validatePlaterecognizerCredential(
 }
 
 async function requestPlateRecognizerJson(input: {
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   method: "GET" | "POST";
   path: string;
   phase: PlateRecognizerPhase;
@@ -83,8 +82,8 @@ async function requestPlateRecognizerJson(input: {
     response = await input.context.fetcher(new URL(input.path, platerecognizerApiBaseUrl), {
       method: input.method,
       headers: {
-        accept: "application/json",
-        authorization: `Token ${input.context.apiKey}`,
+        "accept": "application/json",
+        "authorization": `Token ${input.context.apiKey}`,
         "user-agent": providerUserAgent,
       },
       body: input.body,

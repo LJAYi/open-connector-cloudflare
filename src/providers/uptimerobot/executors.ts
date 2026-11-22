@@ -1,6 +1,5 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
 import { requireApiKeyCredential } from "../provider-credentials.ts";
@@ -171,7 +170,7 @@ export const credentialValidators: CredentialValidators = {
 };
 
 async function requestUptimerobotJson(input: {
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   endpoint: string;
   phase: UptimerobotRequestPhase;
   body?: URLSearchParams;
@@ -186,7 +185,7 @@ async function requestUptimerobotJson(input: {
 }
 
 async function uptimerobotFetch(input: {
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   endpoint: string;
   body?: URLSearchParams;
 }): Promise<Response> {
@@ -198,7 +197,7 @@ async function uptimerobotFetch(input: {
     return await input.context.fetcher(new URL(input.endpoint, `${uptimerobotApiBaseUrl}/`), {
       method: "POST",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "content-type": "application/x-www-form-urlencoded",
         "user-agent": providerUserAgent,
       },

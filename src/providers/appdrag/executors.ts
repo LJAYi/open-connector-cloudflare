@@ -4,8 +4,8 @@ import type {
   ProviderProxyExecutor,
   ProxyExecutionResult,
 } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderRequestContext } from "../provider-runtime.ts";
 
 import { compactObject, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import { requireApiKeyCredential } from "../provider-credentials.ts";
@@ -212,7 +212,7 @@ function buildFunctionRoute(input: { folder: string; functionName: string; envir
 
 function buildRequest(route: URL, method: AppdragHttpMethod, parameters: Record<string, unknown>): RequestInit {
   const headers: Record<string, string> = {
-    accept: "application/json, text/plain;q=0.9, */*;q=0.8",
+    "accept": "application/json, text/plain;q=0.9, */*;q=0.8",
     "user-agent": providerUserAgent,
   };
 
@@ -252,7 +252,7 @@ function appendSearchParam(route: URL, key: string, value: unknown): void {
 async function requestAppdrag(
   route: URL,
   init: RequestInit,
-  context: Pick<ApiKeyProviderContext, "fetcher" | "signal">,
+  context: ProviderRequestContext,
 ): Promise<AppdragResponse> {
   const timeoutSignal = AbortSignal.timeout(defaultProviderRequestTimeoutMs);
   const signal = context.signal ? AbortSignal.any([context.signal, timeoutSignal]) : timeoutSignal;

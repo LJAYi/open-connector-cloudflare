@@ -4,8 +4,7 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { optionalRecord, optionalString } from "../../core/cast.ts";
 import { jsonObject } from "../../core/request.ts";
@@ -27,7 +26,7 @@ type MotherDuckPhase = "validate" | "execute";
 type MotherDuckActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
 interface MotherDuckRequestInput {
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   method?: MotherDuckMethod;
   path: string;
   phase: MotherDuckPhase;
@@ -203,8 +202,8 @@ async function requestMotherDuckJson(input: MotherDuckRequestInput): Promise<unk
     const response = await input.context.fetcher(new URL(input.path, motherDuckApiBaseUrl), {
       method: input.method ?? "GET",
       headers: jsonObject({
-        authorization: `Bearer ${input.context.apiKey}`,
-        accept: "application/json",
+        "authorization": `Bearer ${input.context.apiKey}`,
+        "accept": "application/json",
         "content-type": input.body ? "application/json" : undefined,
         "user-agent": providerUserAgent,
       }) as Record<string, string>,

@@ -4,8 +4,7 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ProviderRuntimeHandler } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -216,7 +215,7 @@ async function validateBrazeCredential(input: {
 }
 
 async function requestBrazeJson(input: {
-  context: Pick<BrazeActionContext, "apiKey" | "restEndpoint" | "fetcher" | "signal">;
+  context: BrazeActionContext;
   path: string;
   query?: Array<[string, unknown]>;
   phase: BrazeRequestPhase;
@@ -229,8 +228,8 @@ async function requestBrazeJson(input: {
     response = await input.context.fetcher(buildBrazeUrl(input.context.restEndpoint, input.path, input.query), {
       method: "GET",
       headers: {
-        accept: "application/json",
-        authorization: `Bearer ${input.context.apiKey}`,
+        "accept": "application/json",
+        "authorization": `Bearer ${input.context.apiKey}`,
         "user-agent": providerUserAgent,
       },
       signal: timeout.signal,

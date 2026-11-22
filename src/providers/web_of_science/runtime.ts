@@ -1,6 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalInteger, optionalRecord, optionalString, rawStringOrNull } from "../../core/cast.ts";
 import {
@@ -18,8 +17,7 @@ import {
 const webOfScienceApiBaseUrl = "https://api.clarivate.com/apis/wos-starter/v1";
 
 type WebOfSciencePhase = "validate" | "execute";
-type WebOfScienceContext = Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
-type WebOfScienceActionHandler = (input: Record<string, unknown>, context: WebOfScienceContext) => Promise<unknown>;
+type WebOfScienceActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
 export const webOfScienceActionHandlers: ProviderActionHandlers<"web_of_science", WebOfScienceActionHandler> = {
   async search_documents(input, context) {
@@ -126,14 +124,14 @@ interface WebOfScienceRequest {
 
 async function requestWebOfScienceJson(
   input: WebOfScienceRequest,
-  context: WebOfScienceContext,
+  context: ApiKeyProviderContext,
 ): Promise<Record<string, unknown>> {
   const timeout = createProviderTimeout(context.signal);
   try {
     const response = await context.fetcher(buildWebOfScienceUrl(input.path, input.query), {
       method: "GET",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "user-agent": providerUserAgent,
         "X-ApiKey": context.apiKey,
       },

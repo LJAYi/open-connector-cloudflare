@@ -1,5 +1,4 @@
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
 import {
@@ -17,7 +16,7 @@ type HoldedActionHandler = (input: Record<string, unknown>, context: ApiKeyProvi
 interface HoldedRequestInput {
   method: "GET" | "POST";
   path: string;
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   query: Record<string, string | undefined>;
   body?: Record<string, unknown>;
   phase: HoldedPhase;
@@ -157,8 +156,8 @@ async function requestHoldedJson(input: HoldedRequestInput): Promise<unknown> {
     const response = await input.context.fetcher(buildHoldedUrl(input.path, input.query), {
       method: input.method,
       headers: {
-        accept: "application/json",
-        authorization: `Bearer ${input.context.apiKey}`,
+        "accept": "application/json",
+        "authorization": `Bearer ${input.context.apiKey}`,
         "content-type": "application/json",
         "user-agent": providerUserAgent,
       },

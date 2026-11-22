@@ -223,13 +223,10 @@ async function requestBlazeMeter(
   }
 }
 
-function blazeMeterHeaders(
-  context: Pick<BlazeMeterContext, "apiKeyId" | "apiSecret">,
-  headers: Record<string, string> = {},
-): Record<string, string> {
+function blazeMeterHeaders(context: BlazeMeterContext, headers: Record<string, string> = {}): Record<string, string> {
   return {
-    accept: "application/json",
-    authorization: buildBasicAuthorizationHeader(context.apiKeyId, context.apiSecret),
+    "accept": "application/json",
+    "authorization": buildBasicAuthorizationHeader(context.apiKeyId, context.apiSecret),
     "user-agent": providerUserAgent,
     ...headers,
   };

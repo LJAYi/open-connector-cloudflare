@@ -1,6 +1,5 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -25,8 +24,7 @@ const service = "woodpecker_co";
 export const woodpeckerCoApiBaseUrl = "https://api.woodpecker.co/rest";
 
 type WoodpeckerCoPhase = "validate" | "execute";
-type WoodpeckerCoContext = Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
-type WoodpeckerCoActionHandler = (input: Record<string, unknown>, context: WoodpeckerCoContext) => Promise<unknown>;
+type WoodpeckerCoActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
 interface NormalizedWoodpeckerUser {
   id: number | null;
@@ -165,10 +163,7 @@ export const proxy: ProviderProxyExecutor = defineProviderProxy({
   baseUrl: woodpeckerCoApiBaseUrl,
   auth: { type: "api_key_header", name: "x-api-key" },
   skipDnsValidation: true,
-  customizeRequest({ headers }) {
-    if (!headers.has("accept")) headers.set("accept", "application/json");
-    if (!headers.has("content-type")) headers.set("content-type", "application/json");
-  },
+  defaultHeaders: { "accept": "application/json", "content-type": "application/json" },
 });
 
 export const credentialValidators: CredentialValidators = {
@@ -210,7 +205,7 @@ async function requestWoodpeckerCoJson(input: {
   method: "GET";
   path: string;
   params?: Record<string, string | undefined>;
-  context: WoodpeckerCoContext;
+  context: ApiKeyProviderContext;
   phase: WoodpeckerCoPhase;
 }): Promise<unknown> {
   const url = new URL(normalizeWoodpeckerCoPath(input.path), `${woodpeckerCoApiBaseUrl}/`);
@@ -227,7 +222,7 @@ async function requestWoodpeckerCoJson(input: {
     response = await input.context.fetcher(url, {
       method: input.method,
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "user-agent": providerUserAgent,
         "x-api-key": input.context.apiKey,
       },

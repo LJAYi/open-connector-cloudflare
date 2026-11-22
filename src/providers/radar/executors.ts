@@ -1,6 +1,6 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderRequestContext } from "../provider-runtime.ts";
 
 import {
   compactObject,
@@ -173,7 +173,7 @@ async function requestRadarJson(input: {
   path: string;
   apiKey: string;
   query: Record<string, string | undefined>;
-  context: Pick<ApiKeyProviderContext, "fetcher" | "signal">;
+  context: ProviderRequestContext;
   phase: RadarRequestPhase;
 }): Promise<Record<string, unknown>> {
   const timeout = createProviderTimeout(input.context.signal);
@@ -182,8 +182,8 @@ async function requestRadarJson(input: {
     const response = await input.context.fetcher(buildRadarUrl(input.path, input.query), {
       method: "GET",
       headers: {
-        accept: "application/json",
-        authorization: input.apiKey,
+        "accept": "application/json",
+        "authorization": input.apiKey,
         "user-agent": providerUserAgent,
       },
       signal: timeout.signal,

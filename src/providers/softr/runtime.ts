@@ -1,7 +1,6 @@
 import type { QueryValue } from "../../core/request.ts";
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 import type { ProviderFetch } from "../provider-runtime.ts";
 
 import {
@@ -23,7 +22,7 @@ type SoftrRequestMode = "validate" | "execute";
 
 interface SoftrRequestOptions {
   path: string;
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   mode: SoftrRequestMode;
   method?: "GET" | "POST" | "PATCH" | "DELETE";
   query?: Record<string, QueryValue>;
@@ -181,7 +180,7 @@ async function requestSoftrJson(options: SoftrRequestOptions): Promise<unknown> 
     url.searchParams.set(key, value);
   }
   const headers: Record<string, string> = {
-    accept: "application/json",
+    "accept": "application/json",
     "softr-api-key": options.context.apiKey,
     "user-agent": providerUserAgent,
   };

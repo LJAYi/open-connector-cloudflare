@@ -52,7 +52,7 @@ interface Item {
 interface Page {
   readonly "@odata.deltaLink"?: string;
   readonly "@odata.nextLink"?: string;
-  readonly value?: readonly Item[];
+  readonly "value"?: readonly Item[];
 }
 
 export const oneDriveItemChanged: PollDefinition = {
@@ -206,7 +206,7 @@ async function event(
   itemType: ItemType,
   deltaToken: string,
 ): Promise<PollEvent> {
-  // 同一轮分页共用删除事件标识，后续 delta 周期必须使用新标识。
+  // Share deletion event IDs across pages of one delta cycle, but use new IDs for subsequent cycles.
   return {
     dedupeKey:
       item.deleted != null

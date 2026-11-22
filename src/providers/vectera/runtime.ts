@@ -1,6 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -30,7 +29,7 @@ interface VecteraJsonResponse {
 }
 
 interface VecteraRequestInput {
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   path: string;
   phase: VecteraPhase;
   method?: string;
@@ -198,8 +197,8 @@ async function requestVecteraJson(input: VecteraRequestInput): Promise<VecteraJs
   const timeout = createProviderTimeout(input.context.signal);
   try {
     const headers = new Headers({
-      accept: "application/json",
-      authorization: `Token ${input.context.apiKey}`,
+      "accept": "application/json",
+      "authorization": `Token ${input.context.apiKey}`,
       "user-agent": providerUserAgent,
     });
     if (input.body != null) headers.set("content-type", "application/json");

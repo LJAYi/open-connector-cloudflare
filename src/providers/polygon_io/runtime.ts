@@ -1,6 +1,5 @@
 import type { CredentialValidationResult, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -31,23 +30,23 @@ const baseActionHandlers: Partial<ProviderActionHandlers<"polygon_io", PolygonIo
   async list_tickers(input, context) {
     const response = optionalRecord(
       await requestPolygonIoJson(context, "/v3/reference/tickers", {
-        ticker: optionalString(input.ticker),
-        type: optionalString(input.type),
-        market: optionalString(input.market),
-        exchange: optionalString(input.exchange),
-        cusip: optionalString(input.cusip),
-        cik: optionalString(input.cik),
-        date: optionalString(input.date),
-        search: optionalString(input.search),
-        active: optionalBoolean(input.active),
+        "ticker": optionalString(input.ticker),
+        "type": optionalString(input.type),
+        "market": optionalString(input.market),
+        "exchange": optionalString(input.exchange),
+        "cusip": optionalString(input.cusip),
+        "cik": optionalString(input.cik),
+        "date": optionalString(input.date),
+        "search": optionalString(input.search),
+        "active": optionalBoolean(input.active),
         "ticker.gte": optionalString(input.tickerGte),
         "ticker.gt": optionalString(input.tickerGt),
         "ticker.lte": optionalString(input.tickerLte),
         "ticker.lt": optionalString(input.tickerLt),
-        order: optionalString(input.order),
-        limit: optionalIntegerString(input.limit),
-        sort: optionalString(input.sort),
-        cursor: optionalString(input.cursor),
+        "order": optionalString(input.order),
+        "limit": optionalIntegerString(input.limit),
+        "sort": optionalString(input.sort),
+        "cursor": optionalString(input.cursor),
       }),
     );
     return {
@@ -168,7 +167,7 @@ export async function validatePolygonIoCredential(
 }
 
 async function requestPolygonIoJson(
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
+  context: ApiKeyProviderContext,
   path: string,
   query: Record<string, PolygonIoQueryValue> = {},
   phase: PolygonIoPhase = "execute",
@@ -186,7 +185,7 @@ async function requestPolygonIoJson(
     response = await context.fetcher(url, {
       method: "GET",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "user-agent": providerUserAgent,
       },
       signal: context.signal,

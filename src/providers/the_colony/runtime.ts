@@ -1,6 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 import type { ProviderFetch } from "../provider-runtime.ts";
 
 import { compactObject, optionalNumber, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
@@ -23,7 +22,7 @@ type TheColonyActionHandler = (input: Record<string, unknown>, context: ApiKeyPr
 interface TheColonyRequestInput {
   method: "GET" | "POST";
   path: string;
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   phase: TheColonyRequestPhase;
   query?: Record<string, QueryValue>;
   body?: Record<string, unknown>;
@@ -231,16 +230,13 @@ async function requestTheColonyJson(input: TheColonyRequestInput): Promise<unkno
   return payload;
 }
 
-async function exchangeTheColonyToken(
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
-  phase: TheColonyRequestPhase,
-): Promise<string> {
+async function exchangeTheColonyToken(context: ApiKeyProviderContext, phase: TheColonyRequestPhase): Promise<string> {
   const response = await fetchTheColony({
     url: buildTheColonyUrl(theColonyTokenPath),
     init: {
       method: "POST",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "content-type": "application/json",
         "user-agent": providerUserAgent,
       },
@@ -312,8 +308,8 @@ function buildTheColonyHeaders(
   input: { hasJsonBody: boolean; idempotencyKey?: string },
 ): Record<string, string> {
   const headers: Record<string, string> = {
-    accept: "application/json",
-    authorization: `Bearer ${accessToken}`,
+    "accept": "application/json",
+    "authorization": `Bearer ${accessToken}`,
     "user-agent": providerUserAgent,
   };
   if (input.hasJsonBody) {

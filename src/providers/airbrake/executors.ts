@@ -4,8 +4,8 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
+import type { ProviderRequestContext } from "../provider-runtime.ts";
 
 import { compactObject, optionalNumber, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
@@ -28,7 +28,7 @@ type AirbrakeActionHandler = ProviderRuntimeHandler<ApiKeyProviderContext>;
 interface AirbrakeRequestInput {
   path: string;
   apiKey: string;
-  context: Pick<ApiKeyProviderContext, "fetcher" | "signal">;
+  context: ProviderRequestContext;
   phase: AirbrakeRequestPhase;
   method?: string;
   query?: Record<string, AirbrakeQueryValue>;
@@ -290,7 +290,7 @@ function buildAirbrakeUrl(path: string, apiKey: string, query: Record<string, Ai
 
 function buildAirbrakeHeaders(hasBody: boolean): Record<string, string> {
   const headers = compactObject({
-    accept: "application/json",
+    "accept": "application/json",
     "user-agent": providerUserAgent,
     "content-type": hasBody ? "application/json" : undefined,
   });

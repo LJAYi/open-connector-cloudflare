@@ -127,7 +127,7 @@ export function createBilibiliSignedHeaders(input: BilibiliSignedHeadersInput): 
   ];
   const authorization = createHmac("sha256", input.appSecret).update(signedLines.join("\n")).digest("hex");
   return {
-    accept: "application/json",
+    "accept": "application/json",
     "access-token": input.accessToken,
     authorization,
     "x-bili-accesskeyid": input.clientId,
@@ -283,8 +283,8 @@ export interface BilibiliOAuthTokenRequest {
 
 /**
  * Exchange or refresh a Bilibili OAuth token. Two Bilibili quirks force this
- * provider-local request: the parameters travel in the URL query (the
- * documents list them as url 参数), and `expires_in` is an absolute UTC Unix
+ * provider-local request: the parameters travel in the URL query,
+ * and `expires_in` is an absolute UTC Unix
  * timestamp rather than a lifetime in seconds.
  */
 export async function requestBilibiliOAuthToken(input: BilibiliOAuthTokenRequest): Promise<OAuthTokenResult> {
@@ -296,7 +296,7 @@ export async function requestBilibiliOAuthToken(input: BilibiliOAuthTokenRequest
     response = await input.fetcher(url.toString(), {
       method: "POST",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "content-type": "application/x-www-form-urlencoded",
         "user-agent": providerUserAgent,
       },

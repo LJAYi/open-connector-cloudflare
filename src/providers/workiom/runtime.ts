@@ -1,6 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import { compactObject, optionalInteger, optionalRecord, optionalString, requiredRecord } from "../../core/cast.ts";
 import {
@@ -129,7 +128,7 @@ export async function validateWorkiomCredential(
 
 async function requestWorkiom(
   input: WorkiomRequestInput,
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
+  context: ApiKeyProviderContext,
   phase: WorkiomRequestPhase = "execute",
 ): Promise<Record<string, unknown>> {
   const url = new URL(`${workiomApiPathPrefix}${input.path}`, workiomApiBaseUrl);
@@ -144,7 +143,7 @@ async function requestWorkiom(
     response = await context.fetcher(url, {
       method: input.method ?? "GET",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "user-agent": providerUserAgent,
         "X-Api-Key": input.apiKey,
         ...(body ? { "content-type": "application/json" } : {}),

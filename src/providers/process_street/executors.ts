@@ -1,6 +1,5 @@
 import type { ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -175,7 +174,7 @@ async function requestProcessStreet(input: {
   path: string;
   method: "GET" | "POST" | "PUT";
   params: Record<string, string | undefined>;
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   phase: "validate" | "execute";
   body?: Record<string, unknown>;
   allowEmptyBody?: boolean;
@@ -185,7 +184,7 @@ async function requestProcessStreet(input: {
     response = await input.context.fetcher(buildUrl(input.path, input.params), {
       method: input.method,
       headers: compactObject({
-        accept: "application/json",
+        "accept": "application/json",
         "content-type": input.body ? "application/json" : undefined,
         "user-agent": providerUserAgent,
         "x-api-key": input.context.apiKey,

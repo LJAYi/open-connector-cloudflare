@@ -1,6 +1,5 @@
 import type { CredentialValidationResult, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -189,7 +188,7 @@ export const credentialValidators = {
 };
 
 async function requestRebrandlyJson(input: {
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   path: string;
   mode: "validate" | "execute";
   method?: string;
@@ -209,9 +208,9 @@ async function requestRebrandlyJson(input: {
     response = await input.context.fetcher(url, {
       method: input.method ?? "GET",
       headers: {
-        apikey: input.context.apiKey,
+        "apikey": input.context.apiKey,
         ...(input.workspaceId ? { Workspace: input.workspaceId } : {}),
-        accept: "application/json",
+        "accept": "application/json",
         ...(input.body !== undefined ? { "content-type": "application/json" } : {}),
         "user-agent": providerUserAgent,
       },

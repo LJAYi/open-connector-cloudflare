@@ -1,6 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import { compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
 import {
@@ -87,7 +86,7 @@ function buildSearchBody(input: Record<string, unknown>): Record<string, unknown
 
 async function requestSpiderJson(
   input: SpiderRequestInput,
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
+  context: ApiKeyProviderContext,
   phase: RequestPhase,
 ): Promise<unknown> {
   const timeout = createProviderTimeout(context.signal, requestTimeoutMs);
@@ -97,8 +96,8 @@ async function requestSpiderJson(
     response = await context.fetcher(new URL(`${spiderApiBaseUrl}${input.path}`), {
       method: input.method ?? "GET",
       headers: {
-        accept: "application/json",
-        authorization: `Bearer ${context.apiKey}`,
+        "accept": "application/json",
+        "authorization": `Bearer ${context.apiKey}`,
         "content-type": "application/json",
         "user-agent": providerUserAgent,
       },

@@ -1,7 +1,6 @@
 import type { CredentialValidationResult, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
-import type { ProviderFetch } from "../provider-runtime.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
+import type { ProviderRequestContext, ProviderFetch } from "../provider-runtime.ts";
 
 import { compactObject, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
 import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
@@ -134,7 +133,7 @@ async function requestSensiboJson(input: {
   apiKey: string;
   path: string;
   query?: Record<string, string | undefined>;
-  context: Pick<ApiKeyProviderContext, "fetcher" | "signal">;
+  context: ProviderRequestContext;
   method: "GET" | "POST";
   body?: Record<string, unknown>;
   phase: SensiboPhase;
@@ -186,7 +185,7 @@ function buildSensiboUrl(path: string, apiKey: string, query?: Record<string, st
 
 function buildSensiboHeaders(method: "GET" | "POST"): Record<string, string> {
   return compactObject({
-    accept: "application/json",
+    "accept": "application/json",
     "accept-encoding": "gzip",
     "content-type": method === "POST" ? "application/json" : undefined,
     "user-agent": providerUserAgent,

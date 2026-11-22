@@ -1,6 +1,5 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalBoolean, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
 import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
@@ -86,11 +85,7 @@ export const proxy: ProviderProxyExecutor = defineProviderProxy({
   baseUrl: neverbounceApiBaseUrl,
   auth: { type: "api_key_query_or_form_body", name: "key" },
   skipDnsValidation: true,
-  customizeRequest({ headers }) {
-    if (!headers.has("accept")) {
-      headers.set("accept", "application/json");
-    }
-  },
+  defaultHeaders: { accept: "application/json" },
 });
 
 export const credentialValidators: CredentialValidators = {
@@ -124,7 +119,7 @@ export const credentialValidators: CredentialValidators = {
 
 async function requestNeverBounceJson(
   path: string,
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
+  context: ApiKeyProviderContext,
   phase: NeverBouncePhase,
   query: Record<string, string | undefined>,
   method: "GET" | "POST" = "GET",
@@ -139,7 +134,7 @@ async function requestNeverBounceJson(
 
 async function requestNeverBounceRaw(
   path: string,
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
+  context: ApiKeyProviderContext,
   phase: NeverBouncePhase,
   query: Record<string, string | undefined>,
   method: "GET" | "POST" = "GET",
@@ -158,7 +153,7 @@ async function requestNeverBounceRaw(
   const timeout = createProviderTimeout(context.signal);
   try {
     const headers: Record<string, string> = {
-      accept: options.accept,
+      "accept": options.accept,
       "user-agent": providerUserAgent,
     };
     let body: URLSearchParams | undefined;

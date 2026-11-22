@@ -1,6 +1,5 @@
 import type { CredentialValidationResult, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalBoolean, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
 import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
@@ -54,11 +53,7 @@ export const proxy: ProviderProxyExecutor = defineProviderProxy({
   baseUrl: renderApiBaseUrl,
   auth: { type: "api_key_authorization", prefix: "Bearer " },
   skipDnsValidation: true,
-  customizeRequest({ headers }) {
-    if (!headers.has("accept")) {
-      headers.set("accept", "application/json");
-    }
-  },
+  defaultHeaders: { accept: "application/json" },
 });
 
 export const credentialValidators = {
@@ -236,7 +231,7 @@ async function resumeService(input: Record<string, unknown>, context: ApiKeyProv
 }
 
 async function requestRenderJson<T>(input: {
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   path: string;
   phase: RenderRequestPhase;
   method?: string;
@@ -256,7 +251,7 @@ async function requestRenderJson<T>(input: {
 }
 
 async function requestRenderAck(input: {
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   path: string;
   phase: RenderRequestPhase;
   method?: string;
@@ -271,7 +266,7 @@ async function requestRenderAck(input: {
 }
 
 async function renderFetch(input: {
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   path: string;
   method?: string;
   query?: Record<string, RenderQueryValue>;
@@ -312,8 +307,8 @@ function appendQueryValue(url: URL, key: string, value: RenderQueryValue): void 
 
 function renderHeaders(apiKey: string, hasBody: boolean): Record<string, string> {
   const headers: Record<string, string> = {
-    Accept: "application/json",
-    Authorization: `Bearer ${apiKey}`,
+    "Accept": "application/json",
+    "Authorization": `Bearer ${apiKey}`,
     "User-Agent": providerUserAgent,
   };
   if (hasBody) {

@@ -1,6 +1,5 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import {
   optionalBoolean,
@@ -108,31 +107,23 @@ export const proxy: ProviderProxyExecutor = defineProviderProxy({
   service,
   baseUrl: concordApiBaseUrl,
   auth: { type: "api_key_header", name: "X-API-KEY" },
-  customizeRequest({ headers }) {
-    if (!headers.has("accept")) headers.set("accept", "application/json");
-    if (!headers.has("content-type")) headers.set("content-type", "application/json");
-    if (!headers.has("user-agent")) headers.set("user-agent", providerUserAgent);
-  },
+  defaultHeaders: { "accept": "application/json", "content-type": "application/json", "user-agent": providerUserAgent },
 });
 
 async function requestConcordObject(
   path: string,
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
+  context: ApiKeyProviderContext,
   phase: ConcordPhase,
   label: string,
 ): Promise<Record<string, unknown>> {
   return requiredRecord(await requestConcordJson(path, context, phase), `Concord ${label}`, providerResponseError);
 }
 
-async function requestConcordJson(
-  path: string,
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
-  phase: ConcordPhase,
-): Promise<unknown> {
+async function requestConcordJson(path: string, context: ApiKeyProviderContext, phase: ConcordPhase): Promise<unknown> {
   return runProviderRequest({ signal: context.signal, label: "Concord" }, async (signal) => {
     const response = await context.fetcher(`${concordApiBaseUrl}${path}`, {
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "user-agent": providerUserAgent,
         "X-API-KEY": context.apiKey,
       },

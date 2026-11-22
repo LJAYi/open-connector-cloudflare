@@ -4,8 +4,7 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -199,9 +198,7 @@ export const credentialValidators: CredentialValidators = {
   },
 };
 
-async function validateKlazifyCredential(
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
-): Promise<CredentialValidationResult> {
+async function validateKlazifyCredential(context: ApiKeyProviderContext): Promise<CredentialValidationResult> {
   await requestKlazifyJson({
     apiKey: context.apiKey,
     path: "/categorize",
@@ -262,8 +259,8 @@ async function requestKlazifyJson(input: {
     const response = await input.fetcher(buildKlazifyUrl(input.path), {
       method: "POST",
       headers: {
-        authorization: `Bearer ${input.apiKey}`,
-        accept: "application/json",
+        "authorization": `Bearer ${input.apiKey}`,
+        "accept": "application/json",
         "content-type": "application/json",
         "user-agent": providerUserAgent,
       },

@@ -1,5 +1,4 @@
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import { compactObject } from "../../core/cast.ts";
 import { ProviderRequestError, providerInputError } from "../provider-runtime.ts";
@@ -49,14 +48,14 @@ async function request(
   path: string,
   method: string,
   body: Record<string, unknown> | undefined,
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
+  context: ApiKeyProviderContext,
   validating = false,
 ): Promise<unknown> {
   const response = await context.fetcher(`${deutschlandgptApiBaseUrl}${path}`, {
     method,
     headers: {
-      accept: "application/json",
-      authorization: `Bearer ${context.apiKey}`,
+      "accept": "application/json",
+      "authorization": `Bearer ${context.apiKey}`,
       "content-type": "application/json",
     },
     body: body ? JSON.stringify(body) : undefined,

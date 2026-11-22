@@ -18,12 +18,18 @@ import {
   ProviderHttpDispatchError,
   runWithProviderHttpDispatch,
 } from "../core/provider-http-dispatch.ts";
-import { readBoundedResponseBytes } from "../core/request.ts";
+import { encodePathSegment, readBoundedResponseBytes } from "../core/request.ts";
 
 /**
  * Fetch-compatible function accepted by provider runtime helpers and tests.
  */
 export type ProviderFetch = typeof fetch;
+
+/** Transport dependencies for provider requests that do not need credentials. */
+export interface ProviderRequestContext {
+  fetcher: ProviderFetch;
+  signal?: AbortSignal;
+}
 
 export interface ProviderFetchOptions {
   /** Bind runtime policy; private targets still require the transport's allowPrivateNetwork opt-in. */
@@ -132,6 +138,14 @@ export class ProviderDispatchRequestError extends ProviderRequestError {
  */
 export function providerInputError(message: string): ProviderRequestError {
   return new ProviderRequestError(400, message);
+}
+
+/** Encode one identifier, rejecting dot segments that URL normalization would remove. */
+export function encodeNonDotPathSegment(value: string): string {
+  if (value === "." || value === "..") {
+    throw providerInputError("Path segments cannot be . or ..");
+  }
+  return encodePathSegment(value);
 }
 
 /**

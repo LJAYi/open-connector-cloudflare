@@ -1,6 +1,5 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalBoolean, optionalNumber, optionalRawString, optionalRecord } from "../../core/cast.ts";
 import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
@@ -16,8 +15,7 @@ const whopValidationPath = "/companies";
 
 type WhopQueryValue = boolean | number | readonly string[] | string | undefined;
 type WhopRequestMode = "validate" | "execute";
-type WhopActionContext = Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
-type WhopActionHandler = (input: Record<string, unknown>, context: WhopActionContext) => Promise<unknown>;
+type WhopActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
 interface WhopRequestOptions {
   apiKey: string;
@@ -159,10 +157,7 @@ export const proxy: ProviderProxyExecutor = defineProviderProxy({
   baseUrl: whopApiBaseUrl,
   auth: { type: "api_key_authorization", prefix: "Bearer " },
   skipDnsValidation: true,
-  customizeRequest({ headers }) {
-    if (!headers.has("accept")) headers.set("accept", "application/json");
-    if (!headers.has("api-version-date")) headers.set("api-version-date", whopApiVersion);
-  },
+  defaultHeaders: { "accept": "application/json", "api-version-date": whopApiVersion },
 });
 
 export const credentialValidators: CredentialValidators = {
@@ -242,8 +237,8 @@ async function whopFetch(input: WhopRequestOptions): Promise<Response> {
 
 function whopHeaders(apiKey: string): Record<string, string> {
   return {
-    accept: "application/json",
-    authorization: `Bearer ${apiKey}`,
+    "accept": "application/json",
+    "authorization": `Bearer ${apiKey}`,
     "api-version-date": whopApiVersion,
     "user-agent": providerUserAgent,
   };

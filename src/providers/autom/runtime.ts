@@ -78,6 +78,8 @@ export const automActionHandlers: ProviderActionHandlers<"autom", AutomActionHan
         query: requiredInputString(input.query, "query"),
         gl: optionalString(input.country),
         hl: optionalString(input.language),
+        tbs: optionalString(input.tbs),
+        safe: optionalString(input.safe),
         location: optionalString(input.location),
         page: optionalInteger(input.page),
         num: optionalInteger(input.numResults),
@@ -265,7 +267,7 @@ export async function requestAutomJson(input: AutomRequestOptions): Promise<unkn
     response = await input.fetcher(url, {
       method: "GET",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "user-agent": providerUserAgent,
         "x-api-key": input.apiKey,
       },
@@ -349,7 +351,12 @@ function mapAutomError(status: number, message: string | undefined, phase: Autom
   if (status === 401 && message && /rate limit/i.test(message)) {
     return new ProviderRequestError(429, message);
   }
-  return new ProviderRequestError(status, message ?? fallback);
+  return new ProviderRequestError(
+    status,
+    message ?? fallback,
+    undefined,
+    status === 401 || status === 403 ? "provider_error" : undefined,
+  );
 }
 
 function hashAutomApiKey(apiKey: string): string {

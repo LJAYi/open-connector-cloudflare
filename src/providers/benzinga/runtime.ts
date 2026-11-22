@@ -1,6 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
 import type { ProviderFetch } from "../provider-runtime.ts";
 
 import { compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
@@ -9,7 +8,6 @@ import { providerUserAgent, ProviderRequestError, runProviderRequest } from "../
 const benzingaApiBaseUrl = "https://api.benzinga.com";
 
 type BenzingaPhase = "validate" | "execute";
-type BenzingaContext = Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
 type BenzingaActionHandler = ProviderRuntimeHandler<ApiKeyProviderContext>;
 
 export const benzingaActionHandlers: ProviderActionHandlers<"benzinga", BenzingaActionHandler> = {
@@ -99,14 +97,14 @@ function buildCalendarParams(input: Record<string, unknown>): Record<string, str
     "parameters[tickers]": optionalString(input.symbol),
     "parameters[date_from]": optionalString(input.dateFrom),
     "parameters[date_to]": optionalString(input.dateTo),
-    page: readOptionalNumberString(input.page),
-    pagesize: readOptionalNumberString(input.limit),
+    "page": readOptionalNumberString(input.page),
+    "pagesize": readOptionalNumberString(input.limit),
   });
 }
 
 async function requestBenzingaJson(input: {
   path: string;
-  context: BenzingaContext;
+  context: ApiKeyProviderContext;
   params: Record<string, string | undefined>;
   phase: BenzingaPhase;
 }): Promise<unknown> {
@@ -114,7 +112,7 @@ async function requestBenzingaJson(input: {
     const response = await input.context.fetcher(buildBenzingaUrl(input.path, input.context.apiKey, input.params), {
       method: "GET",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "user-agent": providerUserAgent,
       },
       signal,

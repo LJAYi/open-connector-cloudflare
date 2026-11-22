@@ -115,7 +115,7 @@ async function getWisburgResource(
 }
 
 async function wisburgRequest(
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
+  context: ApiKeyProviderContext,
   input: WisburgRequestInput,
 ): Promise<Record<string, unknown>> {
   return runProviderRequest({ signal: context.signal, label: "Wisburg" }, async (signal) => {
@@ -123,8 +123,8 @@ async function wisburgRequest(
     setSearchParams(url, input.query ?? {});
     const response = await context.fetcher(url, {
       headers: {
-        accept: "application/json",
-        authorization: `Bearer ${context.apiKey}`,
+        "accept": "application/json",
+        "authorization": `Bearer ${context.apiKey}`,
         "user-agent": providerUserAgent,
       },
       signal,

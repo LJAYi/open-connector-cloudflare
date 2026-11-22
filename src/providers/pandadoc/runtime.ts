@@ -1,6 +1,5 @@
 import type { CredentialValidationResult, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -311,7 +310,7 @@ export async function validatePandadocCredential(
 }
 
 async function requestPandadocJson(
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
+  context: ApiKeyProviderContext,
   options: {
     path: string;
     method?: string;
@@ -371,8 +370,8 @@ function buildUrl(path: string, query: Record<string, PandadocQueryValue> = {}, 
 
 function buildHeaders(apiKey: string, body: FormData | Record<string, unknown> | undefined): Record<string, string> {
   return compactObject({
-    accept: "application/json",
-    authorization: `API-Key ${apiKey}`,
+    "accept": "application/json",
+    "authorization": `API-Key ${apiKey}`,
     "content-type": body && !(body instanceof FormData) ? "application/json" : undefined,
     "user-agent": providerUserAgent,
   }) as Record<string, string>;

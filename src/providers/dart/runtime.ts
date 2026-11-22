@@ -1,6 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import { optionalRecord, optionalString, requiredRecord } from "../../core/cast.ts";
 import {
@@ -154,7 +153,7 @@ function buildListTaskQuery(input: Record<string, unknown>): Record<string, stri
 async function requestDart(input: {
   path: string;
   method: "GET" | "POST" | "PUT" | "DELETE";
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   phase: DartRequestPhase;
   query?: Record<string, string>;
   body?: unknown;
@@ -165,8 +164,8 @@ async function requestDart(input: {
   }
 
   const headers: Record<string, string> = {
-    accept: "application/json",
-    authorization: `Bearer ${input.context.apiKey}`,
+    "accept": "application/json",
+    "authorization": `Bearer ${input.context.apiKey}`,
     "user-agent": providerUserAgent,
   };
   const init: RequestInit = { method: input.method, headers };

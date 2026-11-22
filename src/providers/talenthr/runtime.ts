@@ -1,6 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { optionalRecord, optionalString } from "../../core/cast.ts";
 import { queryParams } from "../../core/request.ts";
@@ -57,7 +56,7 @@ export async function validateTalenthrCredential(
 }
 
 interface TalenthrRequestInput {
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   path: string;
   phase: "validate" | "execute";
   method?: "GET" | "PUT";
@@ -69,8 +68,8 @@ async function requestTalenthrJson(input: TalenthrRequestInput): Promise<unknown
   const url = new URL(`${talenthrApiBaseUrl}${input.path}`);
   setSearchParams(url, input.query ?? {});
   const headers: Record<string, string> = {
-    accept: "application/json",
-    authorization: `Basic ${Buffer.from(`${input.context.apiKey}:`).toString("base64")}`,
+    "accept": "application/json",
+    "authorization": `Basic ${Buffer.from(`${input.context.apiKey}:`).toString("base64")}`,
     "user-agent": providerUserAgent,
   };
   if (input.body !== undefined) {

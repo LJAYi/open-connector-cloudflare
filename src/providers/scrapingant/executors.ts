@@ -4,8 +4,8 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderRequestContext } from "../provider-runtime.ts";
 
 import {
   compactObject,
@@ -40,7 +40,7 @@ interface ScrapingantRequestInput {
   headers?: Record<string, string>;
   body?: string;
   timeoutMs?: number;
-  context: Pick<ApiKeyProviderContext, "fetcher" | "signal">;
+  context: ProviderRequestContext;
   phase: ScrapingantPhase;
 }
 
@@ -169,16 +169,16 @@ function buildScrapingantQuery(
 ): Record<string, string | string[] | undefined> {
   return compactObject({
     "x-api-key": apiKey,
-    url: optionalString(input.url),
-    browser: stringifyOptionalBoolean(optionalBoolean(input.browser)),
-    timeout: stringifyOptionalInteger(optionalInteger(input.timeout)),
-    return_page_source: stringifyOptionalBoolean(optionalBoolean(input.returnPageSource)),
-    cookies: optionalString(input.cookies),
-    js_snippet: encodeOptionalBase64(optionalRawString(input.jsSnippet)),
-    proxy_type: optionalString(input.proxyType),
-    proxy_country: normalizeProxyCountry(input.proxyCountry),
-    wait_for_selector: optionalString(input.waitForSelector),
-    block_resource: readOptionalStringArray(input.blockResource),
+    "url": optionalString(input.url),
+    "browser": stringifyOptionalBoolean(optionalBoolean(input.browser)),
+    "timeout": stringifyOptionalInteger(optionalInteger(input.timeout)),
+    "return_page_source": stringifyOptionalBoolean(optionalBoolean(input.returnPageSource)),
+    "cookies": optionalString(input.cookies),
+    "js_snippet": encodeOptionalBase64(optionalRawString(input.jsSnippet)),
+    "proxy_type": optionalString(input.proxyType),
+    "proxy_country": normalizeProxyCountry(input.proxyCountry),
+    "wait_for_selector": optionalString(input.waitForSelector),
+    "block_resource": readOptionalStringArray(input.blockResource),
   });
 }
 
@@ -221,7 +221,7 @@ async function requestScrapingantJson(input: ScrapingantRequestInput): Promise<u
     const response = await input.context.fetcher(buildScrapingantUrl(input.path, input.query), {
       method: input.method,
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "user-agent": providerUserAgent,
         ...(input.headers ?? {}),
       },

@@ -1,6 +1,5 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { optionalRecord, optionalString } from "../../core/cast.ts";
 import { compactJson, jsonObject } from "../../core/request.ts";
@@ -17,8 +16,7 @@ const service = "geckoboard";
 const geckoboardApiBaseUrl = "https://api.geckoboard.com";
 
 type GeckoboardPhase = "validate" | "execute";
-type GeckoboardActionContext = Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
-type GeckoboardActionHandler = (input: Record<string, unknown>, context: GeckoboardActionContext) => Promise<unknown>;
+type GeckoboardActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
 export const geckoboardActionHandlers: ProviderActionHandlers<"geckoboard", GeckoboardActionHandler> = {
   async find_or_create_dataset(input, context) {
@@ -87,11 +85,7 @@ export const proxy: ProviderProxyExecutor = defineProviderProxy({
     suffix: ":",
   },
   skipDnsValidation: true,
-  customizeRequest({ headers }) {
-    if (!headers.has("accept")) {
-      headers.set("accept", "application/json");
-    }
-  },
+  defaultHeaders: { accept: "application/json" },
 });
 
 export const credentialValidators: CredentialValidators = {
@@ -124,7 +118,7 @@ async function requestGeckoboardJson(input: {
   path: string;
   method: "DELETE" | "GET" | "POST" | "PUT";
   body?: Record<string, unknown>;
-  context: GeckoboardActionContext;
+  context: ApiKeyProviderContext;
   phase: GeckoboardPhase;
 }): Promise<Record<string, unknown>> {
   const timeoutSignal = AbortSignal.timeout(defaultProviderRequestTimeoutMs);
@@ -172,8 +166,8 @@ async function requestGeckoboardJson(input: {
 
 function geckoboardHeaders(apiKey: string, hasBody: boolean): Record<string, string> {
   const headers: Record<string, string> = {
-    accept: "application/json",
-    authorization: `Basic ${Buffer.from(`${apiKey}:`).toString("base64")}`,
+    "accept": "application/json",
+    "authorization": `Basic ${Buffer.from(`${apiKey}:`).toString("base64")}`,
     "user-agent": providerUserAgent,
   };
   if (hasBody) {

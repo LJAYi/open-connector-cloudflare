@@ -1,6 +1,5 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { Buffer } from "node:buffer";
 import {
@@ -99,10 +98,7 @@ export const credentialValidators: CredentialValidators = {
   },
 };
 
-async function docparserPing(
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
-  phase: DocparserRequestPhase,
-): Promise<{ msg: string }> {
+async function docparserPing(context: ApiKeyProviderContext, phase: DocparserRequestPhase): Promise<{ msg: string }> {
   const payload = await docparserRequest({ path: "/v1/ping" }, context, phase);
   const record = optionalRecord(payload);
   const msg = optionalString(record?.msg);
@@ -339,7 +335,7 @@ async function docparserReintegrateDocuments(
 
 async function docparserRequest(
   input: DocparserRequestInput,
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
+  context: ApiKeyProviderContext,
   phase: DocparserRequestPhase,
 ): Promise<unknown> {
   const url = new URL(input.path, docparserApiBaseUrl);
@@ -379,8 +375,8 @@ async function docparserRequest(
 
 function buildDocparserHeaders(apiKey: string, body?: URLSearchParams | FormData): Headers {
   const headers = new Headers({
-    accept: "application/json",
-    api_key: apiKey,
+    "accept": "application/json",
+    "api_key": apiKey,
     "user-agent": providerUserAgent,
   });
 

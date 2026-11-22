@@ -4,8 +4,8 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-executors.ts";
-import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderRequestContext } from "../provider-runtime.ts";
 
 import {
   compactObject,
@@ -143,11 +143,7 @@ export const proxy: ProviderProxyExecutor = defineProviderProxy({
   baseUrl: templatedApiBaseUrl,
   auth: { type: "api_key_authorization", prefix: "Bearer " },
   skipDnsValidation: true,
-  customizeRequest({ headers }) {
-    if (!headers.has("accept")) {
-      headers.set("accept", "application/json");
-    }
-  },
+  defaultHeaders: { accept: "application/json" },
 });
 
 export const credentialValidators: CredentialValidators = {
@@ -178,7 +174,7 @@ export const credentialValidators: CredentialValidators = {
 async function requestTemplatedJson(input: {
   apiKey: string;
   path: string;
-  context: Pick<ApiKeyProviderContext, "fetcher" | "signal">;
+  context: ProviderRequestContext;
   phase: TemplatedRequestPhase;
   method?: "GET" | "POST";
   query?: Record<string, string | number | boolean | undefined>;
@@ -196,7 +192,7 @@ async function requestTemplatedJson(input: {
 async function requestTemplatedAck(input: {
   apiKey: string;
   path: string;
-  context: Pick<ApiKeyProviderContext, "fetcher" | "signal">;
+  context: ProviderRequestContext;
   phase: TemplatedRequestPhase;
   notFoundAsInvalidInput?: boolean;
 }): Promise<void> {
@@ -213,7 +209,7 @@ async function requestTemplatedAck(input: {
 async function templatedFetch(input: {
   apiKey: string;
   path: string;
-  context: Pick<ApiKeyProviderContext, "fetcher" | "signal">;
+  context: ProviderRequestContext;
   method?: "GET" | "POST" | "DELETE";
   query?: Record<string, string | number | boolean | undefined>;
   body?: Record<string, unknown>;
@@ -242,8 +238,8 @@ async function templatedFetch(input: {
 
 function templatedHeaders(apiKey: string, hasJsonBody: boolean): Headers {
   const headers = new Headers({
-    accept: "application/json",
-    authorization: `Bearer ${apiKey}`,
+    "accept": "application/json",
+    "authorization": `Bearer ${apiKey}`,
     "user-agent": providerUserAgent,
   });
   if (hasJsonBody) {
