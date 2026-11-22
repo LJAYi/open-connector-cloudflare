@@ -1,10 +1,10 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import { compactObject, optionalBoolean, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
-  defineApiKeyProviderExecutors,
   providerUserAgent,
   ProviderRequestError,
   requiredInputString,
@@ -54,6 +54,16 @@ export const braveSearchActionHandlers: ProviderActionHandlers<"brave_search", B
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, braveSearchActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: braveSearchApiBaseUrl,
+  auth: { type: "api_key_header", name: "X-Subscription-Token" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     await requestBraveSearchJson(
@@ -76,7 +86,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: "brave_search",
         displayName: "Brave Search API Key",
       },
-      grantedScopes: [],
       metadata: {
         validationEndpoint: "/res/v1/web/search",
         validationQuery: "brave search",
@@ -90,7 +99,7 @@ export const credentialValidators: CredentialValidators = {
 async function requestBraveSearchJson(
   path: string,
   query: Record<string, BraveSearchQueryValue>,
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
+  context: ApiKeyProviderContext,
   phase: BraveSearchPhase,
 ): Promise<unknown> {
   let response: Response;
@@ -99,7 +108,7 @@ async function requestBraveSearchJson(
     response = await context.fetcher(buildBraveSearchUrl(path, query), {
       method: "GET",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "user-agent": providerUserAgent,
         "x-subscription-token": context.apiKey,
       },

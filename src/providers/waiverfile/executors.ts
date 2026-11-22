@@ -6,13 +6,10 @@ import type {
 } from "../../core/types.ts";
 
 import { optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
-import {
-  defineProviderExecutors,
-  defineProviderProxy,
-  ProviderRequestError,
-  providerUserAgent,
-  requireApiKeyCredential,
-} from "../provider-runtime.ts";
+import { requireApiKeyCredential } from "../provider-credentials.ts";
+import { defineProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
 
 const service = "waiverfile";
 const apiBaseUrl = "https://api.waiverfile.com/api/v1";
@@ -83,7 +80,7 @@ export const credentialValidators: CredentialValidators = {
     );
     const record = optionalRecord(data);
     const displayName = optionalString(record?.SiteName) ?? optionalString(record?.siteName) ?? "WaiverFile Site";
-    return { profile: { accountId: siteId, displayName }, grantedScopes: [], metadata: { apiBaseUrl, siteId } };
+    return { profile: { accountId: siteId, displayName }, metadata: { apiBaseUrl, siteId } };
   },
 };
 
@@ -112,7 +109,7 @@ async function request(
   url.searchParams.set("siteID", context.siteId);
   for (const [name, value] of Object.entries(spec.query(input))) if (value != null) url.searchParams.set(name, value);
   const response = await context.fetcher(url, {
-    headers: { accept: "application/json", "user-agent": providerUserAgent },
+    headers: { "accept": "application/json", "user-agent": providerUserAgent },
     signal: context.signal,
   });
   const text = await response.text();

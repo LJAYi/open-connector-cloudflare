@@ -1,6 +1,11 @@
-import type { CredentialValidationResult, CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type {
+  CredentialValidationResult,
+  CredentialValidators,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -10,7 +15,9 @@ import {
   optionalString,
   requiredString,
 } from "../../core/cast.ts";
-import { defineApiKeyProviderExecutors, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
 
 const service = "rocketlane";
 const rocketlaneApiBaseUrl = "https://api.rocketlane.com/api";
@@ -48,6 +55,16 @@ export const rocketlaneActionHandlers: ProviderActionHandlers<"rocketlane", Rock
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, rocketlaneActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: rocketlaneApiBaseUrl,
+  auth: { type: "api_key_header", name: "api-key" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }): Promise<CredentialValidationResult> {
     const apiKey = requiredString(input.apiKey, "apiKey", (message) => new ProviderRequestError(401, message));
@@ -70,7 +87,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: accountId ?? "rocketlane-api-key",
         displayName: buildAccountLabel(firstUser),
       },
-      grantedScopes: [],
       metadata: compactObject({
         apiBaseUrl: rocketlaneApiBaseUrl,
         validationEndpoint: rocketlaneValidationPath,
@@ -92,13 +108,13 @@ async function listProjects(
     fetcher: context.fetcher,
     signal: context.signal,
     query: compactObject({
-      pageSize: readOptionalPositiveInteger(input.pageSize, "pageSize"),
-      pageToken: optionalString(input.pageToken),
-      includeFields: readOptionalStringArray(input.includeFields, "includeFields"),
-      includeAllFields: optionalBoolean(input.includeAllFields),
-      sortBy: optionalString(input.sortBy),
-      sortOrder: optionalString(input.sortOrder),
-      match: optionalString(input.match),
+      "pageSize": readOptionalPositiveInteger(input.pageSize, "pageSize"),
+      "pageToken": optionalString(input.pageToken),
+      "includeFields": readOptionalStringArray(input.includeFields, "includeFields"),
+      "includeAllFields": optionalBoolean(input.includeAllFields),
+      "sortBy": optionalString(input.sortBy),
+      "sortOrder": optionalString(input.sortOrder),
+      "match": optionalString(input.match),
       "projectName.eq": optionalString(input.projectNameEq),
       "projectName.cn": optionalString(input.projectNameContains),
       "status.eq": optionalString(input.statusEq),
@@ -146,13 +162,13 @@ async function listTasks(
     fetcher: context.fetcher,
     signal: context.signal,
     query: compactObject({
-      pageSize: readOptionalPositiveInteger(input.pageSize, "pageSize"),
-      pageToken: optionalString(input.pageToken),
-      includeFields: readOptionalStringArray(input.includeFields, "includeFields"),
-      includeAllFields: optionalBoolean(input.includeAllFields),
-      sortBy: optionalString(input.sortBy),
-      sortOrder: optionalString(input.sortOrder),
-      match: optionalString(input.match),
+      "pageSize": readOptionalPositiveInteger(input.pageSize, "pageSize"),
+      "pageToken": optionalString(input.pageToken),
+      "includeFields": readOptionalStringArray(input.includeFields, "includeFields"),
+      "includeAllFields": optionalBoolean(input.includeAllFields),
+      "sortBy": optionalString(input.sortBy),
+      "sortOrder": optionalString(input.sortOrder),
+      "match": optionalString(input.match),
       "taskName.eq": optionalString(input.taskNameEq),
       "taskName.cn": optionalString(input.taskNameContains),
       "task.status.eq": optionalString(input.taskStatusEq),
@@ -200,13 +216,13 @@ async function listUsers(
     fetcher: context.fetcher,
     signal: context.signal,
     query: compactObject({
-      pageSize: readOptionalPositiveInteger(input.pageSize, "pageSize"),
-      pageToken: optionalString(input.pageToken),
-      includeFields: readOptionalStringArray(input.includeFields, "includeFields"),
-      includeAllFields: optionalBoolean(input.includeAllFields),
-      sortBy: optionalString(input.sortBy),
-      sortOrder: optionalString(input.sortOrder),
-      match: optionalString(input.match),
+      "pageSize": readOptionalPositiveInteger(input.pageSize, "pageSize"),
+      "pageToken": optionalString(input.pageToken),
+      "includeFields": readOptionalStringArray(input.includeFields, "includeFields"),
+      "includeAllFields": optionalBoolean(input.includeAllFields),
+      "sortBy": optionalString(input.sortBy),
+      "sortOrder": optionalString(input.sortOrder),
+      "match": optionalString(input.match),
       "firstName.eq": optionalString(input.firstNameEq),
       "firstName.cn": optionalString(input.firstNameContains),
       "email.eq": optionalString(input.emailEq),
@@ -258,7 +274,7 @@ async function requestRocketlaneJson(input: {
     response = await input.fetcher(buildRocketlaneUrl(input.path, input.query), {
       method: "GET",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "api-key": input.apiKey,
         "user-agent": providerUserAgent,
       },

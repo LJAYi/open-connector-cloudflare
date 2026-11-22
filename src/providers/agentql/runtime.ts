@@ -1,9 +1,9 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 import type { ProviderFetch } from "../provider-runtime.ts";
 
 import { compactObject, optionalBoolean, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
-import { providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import { providerUserAgent, ProviderRequestError, providerInputError } from "../provider-runtime.ts";
 
 export const agentqlApiBaseUrl = "https://api.agentql.com";
 const usagePath = "/v1/usage";
@@ -61,7 +61,6 @@ export async function validateAgentqlCredential(
       accountId: "api_key",
       displayName: "AgentQL API Key",
     },
-    grantedScopes: [],
     metadata: compactObject({
       apiBaseUrl: agentqlApiBaseUrl,
       validationEndpoint: usagePath,
@@ -174,7 +173,7 @@ async function agentqlPostJson(
     {
       method: "POST",
       headers: agentqlHeaders(context.apiKey, {
-        accept: "application/json",
+        "accept": "application/json",
         "content-type": "application/json",
         "x-tf-request-origin": "rest-api-data",
       }),
@@ -240,7 +239,7 @@ function createAgentqlError(response: Response, payload: unknown, phase: Agentql
   }
 
   if (phase === "validate" && (response.status === 401 || response.status === 403)) {
-    return new ProviderRequestError(400, message);
+    return providerInputError(message);
   }
 
   if (response.status >= 400 && response.status < 500) {

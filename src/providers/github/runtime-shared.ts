@@ -1,5 +1,7 @@
+import type { TransitFileWriter } from "../../core/types.ts";
+
 import { compactObject, optionalInteger, optionalString, optionalRawString } from "../../core/cast.ts";
-import { ProviderRequestError } from "../provider-runtime.ts";
+import { ProviderRequestError, providerInputError } from "../provider-runtime.ts";
 
 export { compactObject };
 
@@ -11,12 +13,15 @@ export const githubUserAgent = "oomol-connect";
 export type GitHubActionContext = {
   accessToken: string;
   fetcher: typeof fetch;
+  transitFiles?: TransitFileWriter;
   signal?: AbortSignal;
+  installation?: boolean;
 };
 
 export type GitHubActionHandler = (input: Record<string, unknown>, context: GitHubActionContext) => Promise<unknown>;
 
 interface GitHubJsonRequest {
+  signal?: AbortSignal;
   method?: string;
   path: string;
   query?: Record<string, string | number | boolean | undefined>;
@@ -52,6 +57,7 @@ export async function githubRequestJson<T>(input: GitHubJsonRequest): Promise<T>
   const url = buildGitHubUrl(input.path, input.query);
   const response = await input.fetcher(url, {
     method: input.method ?? "GET",
+    signal: input.signal,
     headers: githubHeaders(input.accessToken, input.body !== undefined),
     body: input.body === undefined ? undefined : JSON.stringify(input.body),
   });
@@ -147,8 +153,8 @@ export function buildRepoContentsPath(owner: string, repo: string, path?: string
 
 export function githubHeaders(accessToken: string, hasJsonBody: boolean): Record<string, string> {
   const headers: Record<string, string> = {
-    accept: githubDefaultAcceptHeader,
-    authorization: `Bearer ${accessToken}`,
+    "accept": githubDefaultAcceptHeader,
+    "authorization": `Bearer ${accessToken}`,
     "x-github-api-version": githubApiVersion,
     "user-agent": githubUserAgent,
   };
@@ -193,7 +199,7 @@ export function normalizeGitHubError(
     return new ProviderRequestError(404, message);
   }
   if (response.status === 400 || response.status === 422) {
-    return new ProviderRequestError(400, message);
+    return providerInputError(message);
   }
 
   return new ProviderRequestError(500, message, response.status);

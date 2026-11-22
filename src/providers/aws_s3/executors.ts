@@ -6,7 +6,7 @@ import type {
   ProviderProxyExecutor,
   TransitFileWriter,
 } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 
 import {
   canonicalizeSearchParams,
@@ -16,18 +16,15 @@ import {
   signAwsSigV4Request,
 } from "../../core/aws-sigv4.ts";
 import { compactObject, optionalRecord, optionalString, requiredRawString } from "../../core/cast.ts";
-import { assertPublicHttpUrl, readBoundedResponseBytes } from "../../core/request.ts";
+import { assertPublicHttpUrl, storeResponseInTransit } from "../../core/request.ts";
+import { defineProviderExecutors } from "../provider-executors.ts";
 import {
   createProviderProxyUrl,
-  createProviderTimeout,
-  defineProviderExecutors,
   normalizeProviderProxyHeaders,
-  providerFetch,
-  ProviderRequestError,
-  providerUserAgent,
   readProviderProxyResponse,
   toProviderProxyError,
-} from "../provider-runtime.ts";
+} from "../provider-proxy.ts";
+import { createProviderTimeout, providerFetch, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
 
 type AwsActionContext = {
   values: Record<string, string>;
@@ -231,7 +228,6 @@ async function validateAwsCredential(
             accountId: accessKeyId,
             displayName: `AWS S3 - ${bucket}`,
           },
-          grantedScopes: [],
           metadata: compactObject({
             region,
             bucket,
@@ -256,7 +252,6 @@ async function validateAwsCredential(
         accountId: accessKeyId,
         displayName: firstBucket?.name ? `AWS S3 - ${firstBucket.name}` : `AWS S3 - ${region}`,
       },
-      grantedScopes: [],
       metadata: compactObject({
         region,
         bucket,
@@ -273,7 +268,7 @@ async function awsListBuckets(input: Record<string, unknown>, context: AwsAction
   const client = createClientForAction(input, context);
   const response = await awsS3Request(client, {
     query: compactObject({
-      prefix: optionalString(input.prefix),
+      "prefix": optionalString(input.prefix),
       "continuation-token": optionalString(input.marker),
       "max-buckets": asOptionalPositiveInteger(input.maxKeys),
     }),
@@ -298,8 +293,8 @@ async function awsListObjects(input: Record<string, unknown>, context: AwsAction
     query: compactObject({
       "list-type": 2,
       "encoding-type": "url",
-      prefix: optionalString(input.prefix),
-      delimiter: optionalString(input.delimiter),
+      "prefix": optionalString(input.prefix),
+      "delimiter": optionalString(input.delimiter),
       "continuation-token": optionalString(input.continuationToken),
       "start-after": optionalString(input.startAfter),
       "fetch-owner": input.fetchOwner === true ? "true" : undefined,
@@ -366,12 +361,13 @@ async function awsDownloadObject(input: Record<string, unknown>, context: AwsAct
 
     const name = optionalString(input.fileName) ?? defaultObjectFileName(objectKey);
     const mimeType = optionalString(response.headers.get("content-type")) ?? "application/octet-stream";
-    const bytes = await readBoundedResponseBytes(response, {
-      maxBytes: context.transitFiles.maxBytes,
+    const file = await storeResponseInTransit(response, context.transitFiles, {
+      name,
+      mimeType,
       fieldName: "AWS S3 download",
       createError: (message) => new ProviderRequestError(413, message),
+      signal: context.signal,
     });
-    const file = await context.transitFiles.create(new File([Uint8Array.from(bytes)], name, { type: mimeType }));
 
     return {
       objectKey,

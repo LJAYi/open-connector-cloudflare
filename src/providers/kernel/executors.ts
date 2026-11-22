@@ -1,14 +1,11 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderRequestContext } from "../provider-runtime.ts";
 
 import { optionalRecord, optionalString } from "../../core/cast.ts";
-import {
-  defineApiKeyProviderExecutors,
-  providerUserAgent,
-  ProviderRequestError,
-  runProviderRequest,
-} from "../provider-runtime.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { providerUserAgent, ProviderRequestError, runProviderRequest } from "../provider-runtime.ts";
 
 const service = "kernel";
 const kernelApiBaseUrl = "https://api.onkernel.com";
@@ -22,7 +19,7 @@ interface KernelRequestInput {
   apiKey: string;
   query?: Record<string, unknown>;
   body?: Record<string, unknown>;
-  context: Pick<ApiKeyProviderContext, "fetcher" | "signal">;
+  context: ProviderRequestContext;
   phase: KernelRequestPhase;
 }
 
@@ -93,6 +90,16 @@ export const kernelActionHandlers: ProviderActionHandlers<"kernel", KernelAction
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, kernelActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: kernelApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     await requestKernelJson({
@@ -114,7 +121,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: "api_key",
         displayName: "Kernel API Key",
       },
-      grantedScopes: [],
       metadata: {
         apiBaseUrl: kernelApiBaseUrl,
         validationEndpoint: "/browsers",
@@ -176,8 +182,8 @@ async function requestKernelJson(input: KernelRequestInput): Promise<{
 
 function buildKernelHeaders(input: KernelRequestInput): Record<string, string> {
   const headers: Record<string, string> = {
-    accept: "application/json",
-    authorization: `Bearer ${input.apiKey}`,
+    "accept": "application/json",
+    "authorization": `Bearer ${input.apiKey}`,
     "user-agent": providerUserAgent,
   };
   if (input.body) {

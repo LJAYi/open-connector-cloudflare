@@ -1,15 +1,22 @@
-import type { CredentialValidationResult, CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type {
+  CredentialValidationResult,
+  CredentialValidators,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { createHash } from "node:crypto";
 import { compactObject, optionalRecord, optionalString, requiredString, stringArray } from "../../core/cast.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
-  defineApiKeyProviderExecutors,
   providerInputError,
   ProviderRequestError,
   providerUserAgent,
   requiredResponseRecord,
+  providerResponseError,
 } from "../provider-runtime.ts";
 
 const service = "loyverse";
@@ -99,6 +106,16 @@ export const loyverseActionHandlers: ProviderActionHandlers<"loyverse", Loyverse
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, loyverseActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: loyverseApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     return validateLoyverseCredential(input.apiKey, fetcher, signal);
@@ -129,9 +146,7 @@ async function validateLoyverseCredential(
         ? `loyverse:merchant:${merchantId}`
         : `loyverse:token:${createHash("sha256").update(apiKey).digest("hex").slice(0, 16)}`,
       displayName: merchantName ?? "Loyverse API Key",
-      grantedScopes: [],
     },
-    grantedScopes: [],
     metadata: {
       apiBaseUrl: loyverseApiBaseUrl,
       validationEndpoint: "/merchant/",
@@ -219,8 +234,8 @@ async function requestLoyverseRaw(input: {
   const response = await input.fetcher(url.toString(), {
     method: "GET",
     headers: {
-      accept: "application/json",
-      authorization: `Bearer ${input.apiKey}`,
+      "accept": "application/json",
+      "authorization": `Bearer ${input.apiKey}`,
       "user-agent": providerUserAgent,
     },
     signal: input.signal,
@@ -272,13 +287,13 @@ function mapLoyverseError(status: number, errors: Array<Record<string, unknown>>
   const message = [code, field, details].filter(Boolean).join(": ") || "Loyverse request failed";
 
   if (status === 401 || code === "UNAUTHORIZED") {
-    return new ProviderRequestError(400, message);
+    return providerInputError(message);
   }
   if (status === 429) {
     return new ProviderRequestError(429, message);
   }
   if (status >= 400 && status < 500) {
-    return new ProviderRequestError(400, message);
+    return providerInputError(message);
   }
-  return new ProviderRequestError(502, message);
+  return providerResponseError(message);
 }

@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -13,7 +13,7 @@ import {
 } from "../../core/cast.ts";
 import { ProviderRequestError, providerUserAgent, requiredInputString } from "../provider-runtime.ts";
 
-const globalpingApiBaseUrl = "https://api.globalping.io";
+export const globalpingApiBaseUrl = "https://api.globalping.io";
 
 type GlobalpingRequestPhase = "validate" | "execute";
 type GlobalpingActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
@@ -77,7 +77,6 @@ export async function validateGlobalpingCredential(
       accountId: `globalping:${input.apiKey.slice(-4) || input.apiKey}`,
       displayName: "Globalping Dashboard Token",
     },
-    grantedScopes: [],
     metadata: compactObject({
       apiBaseUrl: globalpingApiBaseUrl,
       validationEndpoint: "/v1/limits",
@@ -201,8 +200,8 @@ async function requestGlobalpingJson(input: GlobalpingRequestInput): Promise<{ r
 
 function buildGlobalpingHeaders(apiKey: string, hasBody: boolean): Record<string, string> {
   const headers: Record<string, string> = {
-    accept: "application/json",
-    authorization: `Bearer ${apiKey}`,
+    "accept": "application/json",
+    "authorization": `Bearer ${apiKey}`,
     "user-agent": providerUserAgent,
   };
   if (hasBody) {

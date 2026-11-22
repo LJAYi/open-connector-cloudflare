@@ -1,5 +1,5 @@
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
 import {
@@ -75,17 +75,17 @@ export const hoopActionHandlers: ProviderActionHandlers<"hoop", HoopActionHandle
       signal: context.signal,
       phase: "execute",
       query: compactObject({
-        user: optionalString(input.user),
-        connection: optionalString(input.connectionName),
-        type: optionalString(input.type),
+        "user": optionalString(input.user),
+        "connection": optionalString(input.connectionName),
+        "type": optionalString(input.type),
         "review.approver": optionalString(input.reviewApprover),
         "review.status": optionalString(input.reviewStatus),
-        correlation_id: optionalString(input.correlationId),
-        jira_issue_key: optionalString(input.jiraIssueKey),
-        start_date: optionalString(input.startDate),
-        end_date: optionalString(input.endDate),
-        limit: optionalInteger(input.limit),
-        offset: optionalInteger(input.offset),
+        "correlation_id": optionalString(input.correlationId),
+        "jira_issue_key": optionalString(input.jiraIssueKey),
+        "start_date": optionalString(input.startDate),
+        "end_date": optionalString(input.endDate),
+        "limit": optionalInteger(input.limit),
+        "offset": optionalInteger(input.offset),
       }),
     });
     const sessions = readCollection(payload, "sessions").map((item) => normalizeSession(item));
@@ -101,7 +101,6 @@ export async function validateHoopCredential(
   options: { fetcher: typeof fetch; signal?: AbortSignal },
 ): Promise<{
   profile: { accountId: string; displayName: string };
-  grantedScopes: string[];
   metadata: Record<string, unknown>;
 }> {
   const payload = await requestHoopJson({
@@ -118,7 +117,6 @@ export async function validateHoopCredential(
       accountId: user.subject,
       displayName: user.name ?? user.email ?? "Hoop API Key",
     },
-    grantedScopes: [],
     metadata: compactObject({
       apiBaseUrl: hoopApiBaseUrl,
       validationEndpoint: hoopValidationPath,
@@ -136,8 +134,8 @@ async function requestHoopJson(input: HoopRequestInput): Promise<unknown> {
     response = await input.fetcher(buildHoopUrl(input.path, input.query), {
       method: "GET",
       headers: {
-        authorization: `Bearer ${input.apiKey}`,
-        accept: "application/json",
+        "authorization": `Bearer ${input.apiKey}`,
+        "accept": "application/json",
         "user-agent": providerUserAgent,
       },
       signal: timeout.signal,

@@ -1,6 +1,10 @@
-import type { CredentialValidationResult, CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type {
+  CredentialValidationResult,
+  CredentialValidators,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -10,11 +14,13 @@ import {
   optionalRecord,
   optionalString,
 } from "../../core/cast.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
-  defineApiKeyProviderExecutors,
   providerUserAgent,
   ProviderRequestError,
   runProviderRequest,
+  providerInputError,
 } from "../provider-runtime.ts";
 
 const service = "klazify";
@@ -171,6 +177,17 @@ export const klazifyActionHandlers: ProviderActionHandlers<"klazify", KlazifyAct
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, klazifyActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: klazifyApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+    headers.set("content-type", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     return validateKlazifyCredential({
@@ -181,9 +198,7 @@ export const credentialValidators: CredentialValidators = {
   },
 };
 
-async function validateKlazifyCredential(
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
-): Promise<CredentialValidationResult> {
+async function validateKlazifyCredential(context: ApiKeyProviderContext): Promise<CredentialValidationResult> {
   await requestKlazifyJson({
     apiKey: context.apiKey,
     path: "/categorize",
@@ -200,7 +215,6 @@ async function validateKlazifyCredential(
       accountId: "api_key",
       displayName: "Klazify API Key",
     },
-    grantedScopes: [],
     metadata: {
       apiBaseUrl: klazifyApiBaseUrl,
       validationPath: "/categorize",
@@ -245,8 +259,8 @@ async function requestKlazifyJson(input: {
     const response = await input.fetcher(buildKlazifyUrl(input.path), {
       method: "POST",
       headers: {
-        authorization: `Bearer ${input.apiKey}`,
-        accept: "application/json",
+        "authorization": `Bearer ${input.apiKey}`,
+        "accept": "application/json",
         "content-type": "application/json",
         "user-agent": providerUserAgent,
       },
@@ -324,12 +338,12 @@ function createKlazifyError(
     }
 
     if (normalizedMessage.includes("/unreachable") || normalizedMessage.includes("/no indexable content")) {
-      return new ProviderRequestError(400, message);
+      return providerInputError(message);
     }
   }
 
   if (phase === "validate" && status < 400) {
-    return new ProviderRequestError(400, message);
+    return providerInputError(message);
   }
 
   return new ProviderRequestError(status || 500, message);

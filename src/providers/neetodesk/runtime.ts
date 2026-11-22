@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import { optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import { jsonObject, queryParams } from "../../core/request.ts";
@@ -108,7 +108,6 @@ export async function validateNeetodeskCredential(
   });
   return {
     profile: { accountId: `neetodesk:${subdomain}`, displayName: `${subdomain}.neetodesk.com` },
-    grantedScopes: Object.keys(neetodeskActionHandlers),
     metadata: { subdomain, baseUrl: neetodeskBaseUrl(subdomain) },
   };
 }
@@ -130,7 +129,7 @@ async function requestNeetodesk(input: NeetodeskRequest): Promise<unknown> {
     const response = await input.context.fetcher(url, {
       method: input.method,
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         ...(input.body ? { "content-type": "application/json" } : {}),
         "user-agent": providerUserAgent,
         "x-api-key": input.context.apiKey,

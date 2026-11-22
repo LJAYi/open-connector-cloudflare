@@ -1,14 +1,13 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { isIP } from "node:net";
 import { compactObject, optionalBoolean, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import { assertPublicHttpUrl } from "../../core/request.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
   createProviderTimeout,
-  defineApiKeyProviderExecutors,
-  defineProviderProxy,
   isAbortLikeError,
   providerInputError,
   providerUserAgent,
@@ -39,7 +38,7 @@ interface ApiVoidQuota {
 interface ApiVoidRequestInput {
   path: string;
   body?: Record<string, unknown>;
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   phase: ApiVoidRequestPhase;
 }
 
@@ -102,14 +101,7 @@ export const proxy: ProviderProxyExecutor = defineProviderProxy({
     type: "api_key_header",
     name: "X-API-Key",
   },
-  customizeRequest({ headers }) {
-    if (!headers.has("accept")) {
-      headers.set("accept", "application/json");
-    }
-    if (!headers.has("content-type")) {
-      headers.set("content-type", "application/json");
-    }
-  },
+  defaultHeaders: { "accept": "application/json", "content-type": "application/json" },
 });
 
 export const credentialValidators: CredentialValidators = {
@@ -129,7 +121,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: "api_key",
         displayName: "APIVoid API Key",
       },
-      grantedScopes: [],
       metadata: compactObject({
         apiBaseUrl: apiVoidApiBaseUrl,
         validationEndpoint: "/v2/account-info",
@@ -161,7 +152,7 @@ async function requestApiVoid(input: ApiVoidRequestInput): Promise<ApiVoidAction
     response = await input.context.fetcher(new URL(input.path, apiVoidApiBaseUrl), {
       method: "POST",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "content-type": "application/json",
         "user-agent": providerUserAgent,
         "X-API-Key": input.context.apiKey,

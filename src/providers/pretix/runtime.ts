@@ -1,5 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 import type { ProviderFetch } from "../provider-runtime.ts";
 
 import { createHash } from "node:crypto";
@@ -118,7 +118,6 @@ export async function validatePretixCredential(
     profile: {
       accountId: `pretix:${host}:${instanceHash.slice(0, 12)}:${tokenHash.slice(0, 16)}`,
       displayName: `pretix ${host}${instanceUrl.pathname.replace(/\/$/, "")}`,
-      grantedScopes: [],
     },
     metadata: { baseUrl: context.baseUrl },
   };
@@ -153,8 +152,8 @@ async function requestPretix(
   try {
     const response = await context.fetcher(url, {
       headers: {
-        accept: "application/json",
-        authorization: `Token ${context.token}`,
+        "accept": "application/json",
+        "authorization": `Token ${context.token}`,
         "user-agent": providerUserAgent,
       },
       signal: timeout.signal,

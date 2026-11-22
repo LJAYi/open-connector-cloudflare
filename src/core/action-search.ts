@@ -1,4 +1,3 @@
-import type { ActionDefinition } from "./types.ts";
 import type { Options, SearchResult } from "minisearch";
 
 import MiniSearch from "minisearch";
@@ -20,6 +19,7 @@ export interface ActionSearchOptions {
   fuzzy?: number;
   prefix?: boolean;
   service?: string;
+  acceptsAction?: (actionId: string) => boolean;
 }
 
 export interface ActionSearchIndexProvider {
@@ -195,7 +195,7 @@ const miniSearchOptions: Options<ActionSearchDocument> = {
   processTerm: indexProcessTerm,
 };
 
-export function toActionSearchDocument(action: ActionDefinition): ActionSearchDocument {
+export function toActionSearchDocument(action: ActionSearchDocument): ActionSearchDocument {
   return {
     id: action.id,
     service: action.service,
@@ -204,13 +204,13 @@ export function toActionSearchDocument(action: ActionDefinition): ActionSearchDo
   };
 }
 
-export function buildActionSearchIndex(actions: Iterable<ActionDefinition>): MiniSearch<ActionSearchDocument> {
+export function buildActionSearchIndex(actions: Iterable<ActionSearchDocument>): MiniSearch<ActionSearchDocument> {
   const index = new MiniSearch<ActionSearchDocument>(miniSearchOptions);
   index.addAll(Array.from(actions, toActionSearchDocument));
   return index;
 }
 
-export function createActionSearchIndexProvider(actions: Iterable<ActionDefinition>): ActionSearchIndexProvider {
+export function createActionSearchIndexProvider(actions: Iterable<ActionSearchDocument>): ActionSearchIndexProvider {
   let indexPromise: Promise<MiniSearch<ActionSearchDocument>> | undefined;
   return {
     get() {
@@ -233,7 +233,13 @@ export function searchActions(
   query: string,
   options: ActionSearchOptions = {},
 ): ActionSearchDocument[] {
-  const { limit = DEFAULT_ACTION_SEARCH_LIMIT, fuzzy = DEFAULT_ACTION_SEARCH_FUZZY, prefix = true, service } = options;
+  const {
+    limit = DEFAULT_ACTION_SEARCH_LIMIT,
+    fuzzy = DEFAULT_ACTION_SEARCH_FUZZY,
+    prefix = true,
+    service,
+    acceptsAction,
+  } = options;
   const results = index.search(query, {
     fuzzy,
     prefix,
@@ -241,7 +247,10 @@ export function searchActions(
     boost: DEFAULT_ACTION_SEARCH_BOOST,
     weights: { fuzzy: 0.5, prefix: 0.1 },
     processTerm: searchProcessTerm,
-    filter: service ? (result) => result.service === service : undefined,
+    filter:
+      service || acceptsAction
+        ? (result) => (!service || result.service === service) && (!acceptsAction || acceptsAction(result.id as string))
+        : undefined,
   });
   return results.slice(0, limit).map(toActionSearchResult);
 }

@@ -1,6 +1,5 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -10,8 +9,9 @@ import {
   optionalString,
   requiredRecord,
 } from "../../core/cast.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
-  defineApiKeyProviderExecutors,
   providerInputError,
   providerUserAgent,
   ProviderRequestError,
@@ -21,6 +21,14 @@ import {
 
 const service = "nango";
 const nangoApiBaseUrl = "https://api.nango.dev";
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: nangoApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  defaultHeaders: { accept: "application/json" },
+});
 
 type NangoMethod = "GET" | "POST" | "PATCH" | "DELETE";
 type QueryValue = string | number | boolean | readonly string[] | Record<string, string> | undefined;
@@ -138,7 +146,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: "nango",
         displayName: "Nango API Key",
       },
-      grantedScopes: [],
       metadata: compactObject({
         apiBaseUrl: nangoApiBaseUrl,
         validationEndpoint: "/providers",
@@ -151,7 +158,7 @@ export const credentialValidators: CredentialValidators = {
 async function requestNangoJson(input: {
   method: NangoMethod;
   path: string;
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   query?: Record<string, QueryValue>;
   body?: Record<string, unknown>;
 }): Promise<Record<string, unknown>> {
@@ -162,8 +169,8 @@ async function requestNangoJson(input: {
     response = await input.context.fetcher(buildNangoUrl(input.path, input.query), {
       method: input.method,
       headers: {
-        accept: "application/json",
-        authorization: `Bearer ${input.context.apiKey}`,
+        "accept": "application/json",
+        "authorization": `Bearer ${input.context.apiKey}`,
         "user-agent": providerUserAgent,
         ...(input.body ? { "content-type": "application/json" } : {}),
       },

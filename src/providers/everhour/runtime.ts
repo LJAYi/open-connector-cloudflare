@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext, ProviderFetch, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
+import type { ProviderFetch } from "../provider-runtime.ts";
 
 import { compactObject, optionalBoolean, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
 import {
@@ -10,13 +10,12 @@ import {
   ProviderRequestError,
 } from "../provider-runtime.ts";
 
-const everhourApiBaseUrl = "https://api.everhour.com";
+export const everhourApiBaseUrl = "https://api.everhour.com";
 const everhourValidationPath = "/users/me";
 
 type EverhourRequestPhase = "validate" | "execute";
 type EverhourMethod = "GET" | "POST" | "DELETE";
 type EverhourQueryValue = string | number | boolean | undefined;
-type EverhourContext = Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
 type EverhourActionHandler = ProviderRuntimeHandler<ApiKeyProviderContext>;
 
 interface EverhourRequestInput {
@@ -79,9 +78,9 @@ export const everhourActionHandlers: ProviderActionHandlers<"everhour", Everhour
         path: `/projects/${encodePathSegment(projectId)}/tasks`,
         phase: "execute",
         query: compactObject({
-          page: readOptionalPositiveInteger(input.page, "page"),
-          limit: readOptionalPositiveInteger(input.limit, "limit"),
-          query: optionalString(input.query),
+          "page": readOptionalPositiveInteger(input.page, "page"),
+          "limit": readOptionalPositiveInteger(input.limit, "limit"),
+          "query": optionalString(input.query),
           "exclude-closed": optionalBoolean(input.excludeClosed),
         }),
       },
@@ -214,7 +213,6 @@ export async function validateEverhourCredential(
       accountId: userId === undefined ? "api_key" : String(userId),
       displayName: userName ?? "Everhour API Key",
     },
-    grantedScopes: [],
     metadata: compactObject({
       apiBaseUrl: everhourApiBaseUrl,
       validationEndpoint: everhourValidationPath,
@@ -227,7 +225,7 @@ export async function validateEverhourCredential(
   };
 }
 
-async function requestEverhourJson(input: EverhourRequestInput, context: EverhourContext): Promise<unknown> {
+async function requestEverhourJson(input: EverhourRequestInput, context: ApiKeyProviderContext): Promise<unknown> {
   const url = new URL(input.path, everhourApiBaseUrl);
   for (const [key, value] of Object.entries(input.query ?? {})) {
     if (value !== undefined) {
@@ -241,7 +239,7 @@ async function requestEverhourJson(input: EverhourRequestInput, context: Everhou
     response = await context.fetcher(url.toString(), {
       method: input.method,
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "x-api-key": context.apiKey,
         "user-agent": providerUserAgent,
         ...(input.body === undefined ? {} : { "content-type": "application/json" }),

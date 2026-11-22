@@ -1,5 +1,5 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -10,10 +10,10 @@ import {
   optionalStringArray,
   requiredString,
 } from "../../core/cast.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
   createProviderTimeout,
-  defineApiKeyProviderExecutors,
-  defineProviderProxy,
   providerInputError,
   providerUserAgent,
   ProviderRequestError,
@@ -156,7 +156,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: `mixmax:user:${userId}`,
         displayName: "Mixmax API Token",
       },
-      grantedScopes: [],
       metadata: {
         validationEndpoint: mixmaxValidationPath,
         userId,
@@ -182,7 +181,7 @@ async function requestMixmaxJson(input: MixmaxRequestOptions, context: MixmaxCon
     const response = await context.fetcher(url, {
       method,
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "x-api-token": context.apiKey,
         ...(input.body !== undefined ? { "content-type": "application/json" } : {}),
         "user-agent": providerUserAgent,

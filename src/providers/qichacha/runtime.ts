@@ -1,6 +1,11 @@
 import { createHash } from "node:crypto";
 import { optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
-import { createProviderTimeout, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import {
+  createProviderTimeout,
+  providerUserAgent,
+  ProviderRequestError,
+  providerResponseError,
+} from "../provider-runtime.ts";
 
 export const qichachaApiBaseUrl = "https://api.qichacha.com";
 const actionPathByName: Record<string, string> = {
@@ -81,9 +86,9 @@ async function requestQichacha(input: QichachaRequestInput) {
     const response = await input.fetcher(url, {
       method: "GET",
       headers: {
-        accept: "application/json",
-        Timespan: timespan,
-        Token: createQichachaToken(input.credentials.appKey, timespan, input.credentials.secretKey),
+        "accept": "application/json",
+        "Timespan": timespan,
+        "Token": createQichachaToken(input.credentials.appKey, timespan, input.credentials.secretKey),
         "user-agent": providerUserAgent,
       },
       signal: timeoutHandle.signal,
@@ -138,7 +143,7 @@ function createQichachaError(httpStatus: number, payload: unknown) {
   if (httpStatus == 429 || ["频率", "限流", "too many"].some((value) => normalized.includes(value))) {
     return new ProviderRequestError(429, message);
   }
-  return new ProviderRequestError(502, message);
+  return providerResponseError(message);
 }
 
 function readResultRecords(payload: Record<string, unknown>) {

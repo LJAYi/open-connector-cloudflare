@@ -1,14 +1,14 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalRecord, optionalString, requiredRecord, requiredString } from "../../core/cast.ts";
+import { requireApiKeyCredential } from "../provider-credentials.ts";
+import { defineProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
-  defineProviderExecutors,
   ProviderRequestError,
   providerResponseError,
   providerUserAgent,
-  requireApiKeyCredential,
   setSearchParams,
 } from "../provider-runtime.ts";
 
@@ -122,6 +122,14 @@ export const executors: ProviderExecutors = defineProviderExecutors<ApiKeyProvid
   },
 });
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: axiomApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  defaultHeaders: { accept: "application/json" },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const payload = await requestAxiomJson({
@@ -142,7 +150,6 @@ export const credentialValidators: CredentialValidators = {
       profile: {
         displayName: "Axiom API Token",
       },
-      grantedScopes: [],
       metadata: compactObject({
         apiBaseUrl: axiomApiBaseUrl,
         validationEndpoint: "/v2/datasets",
@@ -155,7 +162,7 @@ export const credentialValidators: CredentialValidators = {
 };
 
 async function requestAxiomJson(input: {
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   path: string;
   phase: AxiomPhase;
   method?: AxiomMethod;
@@ -196,8 +203,8 @@ function buildAxiomUrl(path: string, query?: Record<string, string | undefined>)
 
 function buildAxiomHeaders(apiKey: string, hasBody: boolean): Headers {
   const headers = new Headers({
-    accept: "application/json",
-    authorization: `Bearer ${apiKey}`,
+    "accept": "application/json",
+    "authorization": `Bearer ${apiKey}`,
     "user-agent": providerUserAgent,
   });
   if (hasBody) {

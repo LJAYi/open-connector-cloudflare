@@ -1,12 +1,12 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { createHash } from "node:crypto";
 import { compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
   createProviderTimeout,
-  defineApiKeyProviderExecutors,
   isAbortLikeError,
   providerUserAgent,
   ProviderRequestError,
@@ -72,6 +72,17 @@ export const ngrokActionHandlers: ProviderActionHandlers<"ngrok", NgrokActionHan
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, ngrokActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: ngrokApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+    headers.set("ngrok-version", ngrokApiVersion);
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const payload = await requestNgrokJson({
@@ -96,7 +107,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: buildNgrokAccountId(input.apiKey),
         displayName: "ngrok API Key",
       },
-      grantedScopes: [],
       metadata: compactObject({
         apiBaseUrl: ngrokApiBaseUrl,
         validationEndpoint: ngrokValidationPath,
@@ -112,7 +122,7 @@ export const credentialValidators: CredentialValidators = {
 };
 
 async function requestNgrokJson(input: {
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   phase: NgrokRequestPhase;
   path: string;
   query?: Record<string, string | undefined>;
@@ -130,8 +140,8 @@ async function requestNgrokJson(input: {
     const response = await input.context.fetcher(url.toString(), {
       method: "GET",
       headers: {
-        authorization: `Bearer ${input.context.apiKey}`,
-        accept: "application/json",
+        "authorization": `Bearer ${input.context.apiKey}`,
+        "accept": "application/json",
         "user-agent": providerUserAgent,
         "ngrok-version": ngrokApiVersion,
       },

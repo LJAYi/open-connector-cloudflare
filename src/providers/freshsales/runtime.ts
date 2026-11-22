@@ -1,5 +1,5 @@
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import { compactObject, optionalInteger, optionalRecord, optionalString, positiveInteger } from "../../core/cast.ts";
 import {
@@ -144,7 +144,6 @@ export async function validateFreshsalesCredential(
   signal?: AbortSignal,
 ): Promise<{
   profile: { accountId: string; displayName: string };
-  grantedScopes: string[];
   metadata: Record<string, unknown>;
 }> {
   const bundleAlias = normalizeFreshsalesBundleAlias(values.bundleAlias);
@@ -164,7 +163,6 @@ export async function validateFreshsalesCredential(
       accountId: `freshsales:${bundleAlias}`,
       displayName: `Freshsales ${bundleAlias}`,
     },
-    grantedScopes: [],
     metadata: {
       bundleAlias,
       baseUrl,
@@ -229,8 +227,8 @@ function buildFreshsalesUrl(input: FreshsalesRequestInput): URL {
 
 function buildFreshsalesHeaders(apiKey: string, hasBody: boolean): Record<string, string> {
   const headers: Record<string, string> = {
-    Authorization: `Token token=${apiKey}`,
-    Accept: "application/json",
+    "Authorization": `Token token=${apiKey}`,
+    "Accept": "application/json",
     "User-Agent": providerUserAgent,
   };
   if (hasBody) {

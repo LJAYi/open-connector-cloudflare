@@ -1,6 +1,6 @@
 import type { CredentialValidationResult, TransitFileWriter } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import { createHash } from "node:crypto";
 import { posix as path } from "node:path";
@@ -15,6 +15,7 @@ import {
   ProviderRequestError,
   readProviderJsonBody,
   requiredInputString,
+  providerResponseError,
 } from "../provider-runtime.ts";
 
 type FastNoteSyncRequestPhase = "execute" | "validate";
@@ -269,7 +270,6 @@ export async function validateFastNoteSyncCredential(
       accountId: `fast_note_sync:${host}:${identity}`,
       displayName: `${username ?? email ?? "FNS user"} @ ${host}`,
     },
-    grantedScopes: [],
     metadata: compactObject({
       baseUrl: context.baseUrl,
       uid,
@@ -314,8 +314,8 @@ async function requestFastNoteSyncResponse<TResult>(
     if (value != null) url.searchParams.set(key, String(value));
   }
   const headers = new Headers({
-    accept: options.accept ?? "application/json",
-    authorization: `Bearer ${context.apiKey}`,
+    "accept": options.accept ?? "application/json",
+    "authorization": `Bearer ${context.apiKey}`,
     "user-agent": providerUserAgent,
   });
   let body: BodyInit | undefined = options.formData;
@@ -461,7 +461,7 @@ function mapFastNoteSyncBusinessError(
     return phase === "validate" ? providerInputError(message) : new ProviderRequestError(401, message);
   if (code === 303) return new ProviderRequestError(429, message);
   if (code === 305 || (code != null && code >= 400 && code < 500)) return providerInputError(message);
-  return new ProviderRequestError(502, message);
+  return providerResponseError(message);
 }
 
 function isFastNoteSyncCredentialErrorCode(code: number | undefined): boolean {

@@ -1,6 +1,5 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -12,12 +11,9 @@ import {
   optionalString,
   requiredRecord,
 } from "../../core/cast.ts";
-import {
-  defineApiKeyProviderExecutors,
-  ProviderRequestError,
-  providerResponseError,
-  providerUserAgent,
-} from "../provider-runtime.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { ProviderRequestError, providerResponseError, providerUserAgent } from "../provider-runtime.ts";
 
 const service = "grist";
 const gristApiBaseUrl = "https://api.getgrist.com/api";
@@ -123,6 +119,16 @@ export const gristActionHandlers: ProviderActionHandlers<"grist", GristActionHan
   },
 };
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: gristApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
+
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, gristActionHandlers);
 
 export const credentialValidators: CredentialValidators = {
@@ -149,7 +155,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: email ?? ref ?? `grist:user:${id ?? "api-key"}`,
         displayName: name ?? email ?? "Grist API Key",
       },
-      grantedScopes: [],
       metadata: compactObject({
         apiBaseUrl: gristApiBaseUrl,
         validationEndpoint: gristValidationPath,
@@ -196,7 +201,7 @@ async function listGristWorkspaces(context: ApiKeyProviderContext): Promise<Reco
 }
 
 async function requestGristJson(input: {
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   path: string;
   phase: GristRequestPhase;
   method?: "GET" | "POST" | "PATCH";
@@ -238,8 +243,8 @@ async function requestGristJson(input: {
 
 function gristHeaders(apiKey: string, contentType?: string): Record<string, string> {
   const headers: Record<string, string> = {
-    accept: "application/json",
-    authorization: `Bearer ${apiKey}`,
+    "accept": "application/json",
+    "authorization": `Bearer ${apiKey}`,
     "user-agent": providerUserAgent,
   };
   if (contentType) {

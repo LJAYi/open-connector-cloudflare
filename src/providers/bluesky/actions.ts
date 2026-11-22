@@ -3,7 +3,7 @@ import type { ProviderActionDefinition } from "../../core/provider-definition.ts
 import { s } from "../../core/json-schema.ts";
 import { defineProviderAction } from "../../core/provider-definition.ts";
 
-const service = "bluesky" as const;
+const service = "bluesky";
 
 export const blueskyPostTextMaxBytes = 3000;
 export const blueskyPostTextMaxGraphemes = 300;
@@ -63,6 +63,7 @@ const selfLabelsSchema = s.looseObject("A Bluesky self-label object.");
 export const blueskyActions: ProviderActionDefinition[] = [
   defineProviderAction(service, {
     name: "get_profile",
+    operationType: "read",
     description: "Get the detailed Bluesky profile for a handle or DID.",
     requiredScopes: [],
     inputSchema: s.object("Parameters for retrieving a Bluesky profile.", {
@@ -74,6 +75,7 @@ export const blueskyActions: ProviderActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "search_posts",
+    operationType: "read",
     description: "Search Bluesky posts with common filters and pagination.",
     requiredScopes: [],
     inputSchema: s.object(
@@ -107,6 +109,7 @@ export const blueskyActions: ProviderActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "get_timeline",
+    operationType: "read",
     description: "Get the authenticated account's home timeline with cursor pagination.",
     requiredScopes: [],
     inputSchema: s.object(
@@ -125,6 +128,7 @@ export const blueskyActions: ProviderActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_text_post",
+    operationType: "write",
     description: "Create a Bluesky text post in the authenticated account's repository.",
     requiredScopes: [],
     inputSchema: s.object(

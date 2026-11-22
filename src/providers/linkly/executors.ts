@@ -1,11 +1,11 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalNumber, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
   createProviderTimeout,
-  defineApiKeyProviderExecutors,
   isAbortLikeError,
   providerInputError,
   ProviderRequestError,
@@ -152,6 +152,14 @@ export const linklyActionHandlers: ProviderActionHandlers<"linkly", LinklyAction
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, linklyActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: linklyApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  defaultHeaders: { accept: "application/json" },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const apiKey = input.apiKey.trim();
@@ -167,7 +175,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: firstWorkspace ? String(firstWorkspace.id) : undefined,
         displayName: firstWorkspace?.name || "Linkly API Key",
       },
-      grantedScopes: [],
       metadata: compactObject({
         apiBaseUrl: linklyApiBaseUrl,
         validationEndpoint: `${linklyApiPrefix}/workspaces`,
@@ -180,7 +187,7 @@ export const credentialValidators: CredentialValidators = {
 };
 
 async function fetchWorkspaces(
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
+  context: ApiKeyProviderContext,
   phase: LinklyPhase,
 ): Promise<Array<{ id: number; name: string }>> {
   const payload = await requestLinklyJson({
@@ -193,7 +200,7 @@ async function fetchWorkspaces(
 }
 
 async function requestLinklyJson(input: {
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   path: string;
   phase: LinklyPhase;
   method?: LinklyMethod;
@@ -244,8 +251,8 @@ function buildLinklyUrl(path: string, query: LinklyQuery = {}): URL {
 
 function buildLinklyHeaders(apiKey: string, hasBody: boolean): Record<string, string> {
   return compactObject({
-    accept: "application/json",
-    authorization: `Bearer ${apiKey}`,
+    "accept": "application/json",
+    "authorization": `Bearer ${apiKey}`,
     "content-type": hasBody ? "application/json" : undefined,
     "user-agent": providerUserAgent,
   }) as Record<string, string>;

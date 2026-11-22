@@ -4,7 +4,7 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -15,13 +15,10 @@ import {
   optionalString,
 } from "../../core/cast.ts";
 import { assertPublicHttpUrl } from "../../core/request.ts";
-import {
-  defineProviderProxy,
-  defineProviderExecutors,
-  providerUserAgent,
-  ProviderRequestError,
-  requireApiKeyCredential,
-} from "../provider-runtime.ts";
+import { requireApiKeyCredential } from "../provider-credentials.ts";
+import { defineProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
 
 const service = "adobe_commerce";
 const adobeCommerceCredentialHelpUrl = "https://developer.adobe.com/commerce/webapi/get-started/authentication/";
@@ -185,7 +182,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: `adobe_commerce:${host}${storeCode ? `:${storeCode}` : ""}`,
         displayName: `Adobe Commerce (${host})`,
       },
-      grantedScopes: [],
       metadata: compactObject({
         baseUrl,
         storeCode,
@@ -219,8 +215,8 @@ async function requestAdobeCommerce(options: AdobeCommerceRequestOptions): Promi
     return await options.context.fetcher(url, {
       method: "GET",
       headers: {
-        accept: "application/json",
-        authorization: `Bearer ${options.context.apiKey}`,
+        "accept": "application/json",
+        "authorization": `Bearer ${options.context.apiKey}`,
         "user-agent": providerUserAgent,
       },
       signal: options.context.signal,
@@ -234,10 +230,7 @@ async function requestAdobeCommerce(options: AdobeCommerceRequestOptions): Promi
   }
 }
 
-function buildAdobeCommerceUrl(
-  context: Pick<AdobeCommerceContext, "baseUrl" | "storeCode">,
-  pathSegments: readonly string[],
-): URL {
+function buildAdobeCommerceUrl(context: AdobeCommerceContext, pathSegments: readonly string[]): URL {
   const url = new URL(context.baseUrl);
   const segments = [
     ...splitPathSegments(url.pathname),

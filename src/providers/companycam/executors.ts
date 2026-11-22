@@ -1,6 +1,5 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -10,9 +9,10 @@ import {
   optionalString,
 } from "../../core/cast.ts";
 import { encodePathSegment } from "../../core/request.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
   createProviderTimeout,
-  defineApiKeyProviderExecutors,
   isAbortLikeError,
   providerUserAgent,
   ProviderRequestError,
@@ -23,8 +23,7 @@ const companycamApiBaseUrl = "https://api.companycam.com/v2";
 const companycamApiOrigin = "https://api.companycam.com";
 
 type CompanycamRequestPhase = "validate" | "execute";
-type CompanycamContext = Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
-type CompanycamActionHandler = (input: Record<string, unknown>, context: CompanycamContext) => Promise<unknown>;
+type CompanycamActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
 interface CompanycamRequest {
   apiKey: string;
@@ -195,6 +194,14 @@ export const companycamActionHandlers: ProviderActionHandlers<"companycam", Comp
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, companycamActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: companycamApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  defaultHeaders: { accept: "application/json" },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const payload = await requestCompanycamJson({
@@ -214,7 +221,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: companyId ?? "api_key",
         displayName: companyName ?? "CompanyCam Access Token",
       },
-      grantedScopes: [],
       metadata: compactObject({
         apiBaseUrl: companycamApiBaseUrl,
         validationEndpoint: "/company",
@@ -271,8 +277,8 @@ function companycamHeaders(input: {
   currentUserEmail?: string;
 }): Record<string, string> {
   return compactObject({
-    accept: "application/json",
-    authorization: `Bearer ${input.apiKey}`,
+    "accept": "application/json",
+    "authorization": `Bearer ${input.apiKey}`,
     "content-type": input.body === undefined ? undefined : "application/json",
     "user-agent": providerUserAgent,
     "x-companycam-user": input.currentUserEmail,

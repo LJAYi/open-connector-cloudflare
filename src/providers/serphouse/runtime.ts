@@ -1,16 +1,14 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import { compactObject, optionalRecord, optionalString, requiredRecord, stringArray } from "../../core/cast.ts";
 import { providerResponseError, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
 
 type SerphousePhase = "validate" | "execute";
 type SerphouseQueryValue = string | number | undefined;
-type SerphouseActionContext = Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
 type SerphouseActionHandler = ProviderRuntimeHandler<ApiKeyProviderContext>;
 
-const serphouseBaseUrl = "https://api.serphouse.com";
+export const serphouseBaseUrl = "https://api.serphouse.com";
 
 export const serphouseActionHandlers: ProviderActionHandlers<"serphouse", SerphouseActionHandler> = {
   async account_info(_input, context) {
@@ -146,7 +144,6 @@ export async function validateSerphouseCredential(
       accountId: email ?? "serphouse-api-key",
       displayName: email ?? name ?? "SERPHouse API Key",
     },
-    grantedScopes: [],
     metadata: compactObject({
       validationEndpoint: "/account/info",
       email,
@@ -161,7 +158,7 @@ async function requestSerphouseJson(input: {
   method: "GET" | "POST";
   query?: Record<string, SerphouseQueryValue>;
   body?: Record<string, unknown>;
-  context: SerphouseActionContext;
+  context: ApiKeyProviderContext;
   phase: SerphousePhase;
 }): Promise<unknown> {
   let response: Response;
@@ -169,8 +166,8 @@ async function requestSerphouseJson(input: {
 
   try {
     const headers: Record<string, string> = {
-      accept: "application/json",
-      authorization: `Bearer ${input.context.apiKey}`,
+      "accept": "application/json",
+      "authorization": `Bearer ${input.context.apiKey}`,
       "user-agent": providerUserAgent,
     };
     if (input.body) {

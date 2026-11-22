@@ -1,11 +1,12 @@
-import type { ExecutionContext, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { ExecutionContext, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 
 import { XMLParser } from "fast-xml-parser";
 import { positiveInteger } from "../../core/cast.ts";
+import { defineProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
   createProviderTimeout,
-  defineProviderExecutors,
   providerInputError,
   providerUserAgent,
   ProviderRequestError,
@@ -54,12 +55,19 @@ export const executors: ProviderExecutors = defineProviderExecutors<DealNewsCont
   },
 });
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: dealNewsBaseUrl,
+  auth: { type: "none" },
+  skipDnsValidation: true,
+});
+
 async function requestFeed(url: URL, context: DealNewsContext): Promise<unknown> {
   const timeout = createProviderTimeout(context.signal);
   try {
     const response = await context.fetcher(url, {
       headers: {
-        accept: "application/rss+xml, application/xml;q=0.9, text/xml;q=0.8",
+        "accept": "application/rss+xml, application/xml;q=0.9, text/xml;q=0.8",
         "user-agent": providerUserAgent,
       },
       signal: timeout.signal,

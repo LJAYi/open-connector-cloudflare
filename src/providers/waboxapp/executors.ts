@@ -1,13 +1,19 @@
-import type { CredentialValidators, ExecutionContext, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type {
+  CredentialValidators,
+  ExecutionContext,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 
 import { compactObject, optionalNumber, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
+import { requireApiKeyCredential } from "../provider-credentials.ts";
+import { defineProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
   createProviderTimeout,
-  defineProviderExecutors,
   providerUserAgent,
   ProviderRequestError,
-  requireApiKeyCredential,
   requiredInputString,
 } from "../provider-runtime.ts";
 
@@ -76,6 +82,14 @@ export const executors: ProviderExecutors = defineProviderExecutors<WaboxappActi
   },
 });
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: waboxappApiBaseUrl,
+  auth: { type: "api_key_query_or_form_body", name: "token" },
+  skipDnsValidation: true,
+  defaultHeaders: { accept: "application/json" },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     return validateWaboxappCredential(input.apiKey, input.values, fetcher, signal);
@@ -98,7 +112,6 @@ async function validateWaboxappCredential(
       accountId: account.uid,
       displayName: account.alias ?? account.uid,
     },
-    grantedScopes: [],
     metadata: compactObject({
       apiBaseUrl: waboxappApiBaseUrl,
       validationEndpoint: waboxappValidationPath,
@@ -194,7 +207,7 @@ async function requestWaboxappStatus(
       method: "GET",
       url,
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "user-agent": providerUserAgent,
       },
       signal,
@@ -223,7 +236,7 @@ async function requestWaboxappMessage(input: {
       method: "POST",
       url: new URL(input.actionPath, waboxappApiBaseUrl),
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "content-type": "application/x-www-form-urlencoded;charset=UTF-8",
         "user-agent": providerUserAgent,
       },

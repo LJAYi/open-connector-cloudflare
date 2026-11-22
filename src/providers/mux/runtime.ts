@@ -1,5 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 import type { ProviderFetch } from "../provider-runtime.ts";
 
 import { Buffer } from "node:buffer";
@@ -23,7 +23,7 @@ import {
   requiredInputString,
 } from "../provider-runtime.ts";
 
-const muxApiOrigin = "https://api.mux.com";
+export const muxApiOrigin = "https://api.mux.com";
 const muxWhoAmIPath = "/system/v1/whoami";
 
 export interface MuxContext {
@@ -266,8 +266,8 @@ async function requestMuxJson(options: MuxRequestOptions): Promise<unknown> {
     response = await options.context.fetcher(url, {
       method: options.method ?? "GET",
       headers: {
-        accept: "application/json",
-        authorization: createMuxAuthorization(options.context),
+        "accept": "application/json",
+        "authorization": createMuxAuthorization(options.context),
         ...(options.body === undefined ? {} : { "content-type": "application/json" }),
         "user-agent": providerUserAgent,
       },
@@ -320,7 +320,7 @@ function muxErrorMessage(payload: unknown, status: number): string {
   );
 }
 
-function createMuxAuthorization(context: Pick<MuxContext, "tokenId" | "tokenSecret">): string {
+function createMuxAuthorization(context: MuxContext): string {
   return `Basic ${Buffer.from(`${context.tokenId}:${context.tokenSecret}`, "utf8").toString("base64")}`;
 }
 

@@ -1,21 +1,21 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalRecord, optionalString, positiveInteger, requiredRecord } from "../../core/cast.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
   createProviderTimeout,
-  defineApiKeyProviderExecutors,
   isAbortLikeError,
   providerInputError,
   providerUserAgent,
   ProviderRequestError,
+  defaultProviderRequestTimeoutMs,
 } from "../provider-runtime.ts";
 
 const service = "workpath";
 const workpathApiBaseUrl = "https://connect.workpath.com/api/v3";
 const workpathValidationPath = "/users";
-const workpathDefaultRequestTimeoutMs = 30_000;
 
 type WorkpathRequestMode = "validate" | "execute";
 type WorkpathActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
@@ -132,6 +132,14 @@ export const workpathActionHandlers: ProviderActionHandlers<"workpath", Workpath
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, workpathActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: workpathApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  defaultHeaders: { "accept": "application/json", "content-type": "application/json" },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const result = await workpathRequest(
@@ -157,7 +165,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: typeof userId === "number" ? String(userId) : "workpath-api-token",
         displayName: name ?? email ?? "Workpath API Token",
       },
-      grantedScopes: [],
       metadata: compactObject({
         apiBaseUrl: workpathApiBaseUrl,
         validationEndpoint: workpathValidationPath,
@@ -169,7 +176,7 @@ export const credentialValidators: CredentialValidators = {
 };
 
 async function workpathRequest(
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
+  context: ApiKeyProviderContext,
   input: WorkpathRequestInput,
 ): Promise<WorkpathRequestResult> {
   const apiKey = context.apiKey.trim();
@@ -184,13 +191,13 @@ async function workpathRequest(
     }
   }
 
-  const timeout = createProviderTimeout(context.signal, workpathDefaultRequestTimeoutMs);
+  const timeout = createProviderTimeout(context.signal);
   try {
     const response = await context.fetcher(url, {
       method: "GET",
       headers: {
-        authorization: `Bearer ${apiKey}`,
-        accept: "application/json",
+        "authorization": `Bearer ${apiKey}`,
+        "accept": "application/json",
         "content-type": "application/json",
         "user-agent": providerUserAgent,
       },
@@ -214,7 +221,7 @@ async function workpathRequest(
     if (timeout.didTimeout() || isAbortLikeError(error)) {
       throw new ProviderRequestError(
         504,
-        `Workpath ${input.path} request timed out after ${Math.ceil(workpathDefaultRequestTimeoutMs / 1000)} seconds`,
+        `Workpath ${input.path} request timed out after ${Math.ceil(defaultProviderRequestTimeoutMs / 1000)} seconds`,
       );
     }
 

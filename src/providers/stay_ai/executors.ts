@@ -1,10 +1,10 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalString, requiredRecord, requiredString } from "../../core/cast.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
-  defineApiKeyProviderExecutors,
   providerInputError,
   providerResponseError,
   providerUserAgent,
@@ -88,6 +88,16 @@ const stayAiActionHandlers: ProviderActionHandlers<"stay_ai", StayAiActionHandle
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, stayAiActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: stayAiApiBaseUrl,
+  auth: { type: "api_key_header", name: "X-RETEXTION-ACCESS-TOKEN" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const payload = await requestStayAiJson({
@@ -108,7 +118,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: "stay_ai:api_key",
         displayName: emailSenderName ?? emailSenderAddress ?? "Stay AI API Key",
       },
-      grantedScopes: [],
       metadata: compactObject({
         apiBaseUrl: stayAiApiBaseUrl,
         validationEndpoint: "/settings",
@@ -121,7 +130,7 @@ export const credentialValidators: CredentialValidators = {
 
 async function requestStayAiJson(input: {
   path: string;
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   phase: StayAiRequestPhase;
   searchParams?: URLSearchParams;
 }): Promise<unknown> {
@@ -135,7 +144,7 @@ async function requestStayAiJson(input: {
 
 async function requestStayAi(input: {
   path: string;
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   searchParams?: URLSearchParams;
 }): Promise<Response> {
   const url = stayAiUrl(input.path);
@@ -147,7 +156,7 @@ async function requestStayAi(input: {
     return await input.context.fetcher(url, {
       method: "GET",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "user-agent": providerUserAgent,
         "x-retextion-access-token": input.context.apiKey,
       },

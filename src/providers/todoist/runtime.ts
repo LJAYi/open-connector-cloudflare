@@ -1,5 +1,5 @@
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { BearerProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { BearerProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import { compactObject, optionalInteger, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import {
@@ -8,9 +8,8 @@ import {
   providerUserAgent,
   ProviderRequestError,
 } from "../provider-runtime.ts";
-import { todoistOAuthScopes } from "./scopes.ts";
 
-const todoistApiBaseUrl = "https://api.todoist.com/api/v1";
+export const todoistApiBaseUrl = "https://api.todoist.com/api/v1";
 const todoistUserPath = "/user";
 
 type TodoistRequestPhase = "validate" | "execute";
@@ -93,14 +92,9 @@ export async function validateTodoistCredential(
   signal?: AbortSignal,
 ): Promise<{
   profile: { accountId: string; displayName: string };
-  grantedScopes: string[];
   metadata: Record<string, unknown>;
 }> {
-  const validation = await fetchTodoistCurrentAccount(accessToken, fetcher, signal, "validate");
-  return {
-    ...validation,
-    grantedScopes: todoistOAuthScopes,
-  };
+  return fetchTodoistCurrentAccount(accessToken, fetcher, signal, "validate");
 }
 
 export async function fetchTodoistCurrentAccount(
@@ -110,7 +104,6 @@ export async function fetchTodoistCurrentAccount(
   phase: TodoistRequestPhase = "execute",
 ): Promise<{
   profile: { accountId: string; displayName: string };
-  grantedScopes: string[];
   metadata: Record<string, unknown>;
 }> {
   const payload = await requestTodoistJson<Record<string, unknown>>({
@@ -129,7 +122,6 @@ export async function fetchTodoistCurrentAccount(
       accountId: `todoist:user:${userId}`,
       displayName: email ?? fullName ?? userId,
     },
-    grantedScopes: [],
     metadata: compactObject({
       apiBaseUrl: todoistApiBaseUrl,
       validationEndpoint: todoistUserPath,
@@ -442,8 +434,8 @@ function requestContext(context: BearerProviderContext): Omit<TodoistRequestOpti
 
 function buildTodoistHeaders(accessToken: string, hasBody: boolean): Record<string, string> {
   return {
-    authorization: `Bearer ${accessToken}`,
-    accept: "application/json",
+    "authorization": `Bearer ${accessToken}`,
+    "accept": "application/json",
     "user-agent": providerUserAgent,
     ...(hasBody ? { "content-type": "application/json" } : {}),
   };

@@ -1,6 +1,5 @@
 import type { CredentialValidationResult, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -13,39 +12,41 @@ import {
 } from "../../core/cast.ts";
 import {
   defineApiKeyProviderExecutors,
-  ProviderRequestError,
-  providerUserAgent,
-  requiredInputString,
-} from "../provider-runtime.ts";
+  getProviderActionHandler,
+  mapProviderActionHandlers,
+} from "../provider-executors.ts";
+import { ProviderRequestError, providerUserAgent, requiredInputString } from "../provider-runtime.ts";
+import { polygonIoActions } from "./actions.ts";
+import { executeExpandedPolygonIoAction, expandedPolygonIoActionNames } from "./expanded-runtime.ts";
 
 const service = "polygon_io";
-const polygonIoApiBaseUrl = "https://api.massive.com";
+export const polygonIoApiBaseUrl = "https://api.massive.com";
 
 type PolygonIoPhase = "validate" | "execute";
 type PolygonIoQueryValue = string | number | boolean | undefined;
 type PolygonIoActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
-export const polygonIoActionHandlers: ProviderActionHandlers<"polygon_io", PolygonIoActionHandler> = {
+const baseActionHandlers: Partial<ProviderActionHandlers<"polygon_io", PolygonIoActionHandler>> = {
   async list_tickers(input, context) {
     const response = optionalRecord(
       await requestPolygonIoJson(context, "/v3/reference/tickers", {
-        ticker: optionalString(input.ticker),
-        type: optionalString(input.type),
-        market: optionalString(input.market),
-        exchange: optionalString(input.exchange),
-        cusip: optionalString(input.cusip),
-        cik: optionalString(input.cik),
-        date: optionalString(input.date),
-        search: optionalString(input.search),
-        active: optionalBoolean(input.active),
+        "ticker": optionalString(input.ticker),
+        "type": optionalString(input.type),
+        "market": optionalString(input.market),
+        "exchange": optionalString(input.exchange),
+        "cusip": optionalString(input.cusip),
+        "cik": optionalString(input.cik),
+        "date": optionalString(input.date),
+        "search": optionalString(input.search),
+        "active": optionalBoolean(input.active),
         "ticker.gte": optionalString(input.tickerGte),
         "ticker.gt": optionalString(input.tickerGt),
         "ticker.lte": optionalString(input.tickerLte),
         "ticker.lt": optionalString(input.tickerLt),
-        order: optionalString(input.order),
-        limit: optionalIntegerString(input.limit),
-        sort: optionalString(input.sort),
-        cursor: optionalString(input.cursor),
+        "order": optionalString(input.order),
+        "limit": optionalIntegerString(input.limit),
+        "sort": optionalString(input.sort),
+        "cursor": optionalString(input.cursor),
       }),
     );
     return {
@@ -121,6 +122,25 @@ export const polygonIoActionHandlers: ProviderActionHandlers<"polygon_io", Polyg
   },
 };
 
+export const polygonIoActionHandlers: ProviderActionHandlers<"polygon_io", PolygonIoActionHandler> =
+  mapProviderActionHandlers(service, polygonIoActions, (_action, name) => {
+    const baseHandler = getProviderActionHandler(baseActionHandlers, name);
+    if (baseHandler) return baseHandler;
+    if (!expandedPolygonIoActionNames.has(name)) {
+      return async (): Promise<unknown> => {
+        throw new ProviderRequestError(500, `polygon_io action is not implemented: ${name}`);
+      };
+    }
+    return (input, context) =>
+      executeExpandedPolygonIoAction({
+        actionName: name,
+        input,
+        apiKey: context.apiKey,
+        fetcher: context.fetcher,
+        requestJson: ({ path, query, phase }) => requestPolygonIoJson(context, path, query, phase),
+      });
+  });
+
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, polygonIoActionHandlers);
 
 export async function validatePolygonIoCredential(
@@ -136,7 +156,6 @@ export async function validatePolygonIoCredential(
     profile: {
       accountId: "polygon-io-api-key",
       displayName: "Polygon.io API Key",
-      grantedScopes: [],
     },
     metadata: compactObject({
       apiBaseUrl: polygonIoApiBaseUrl,
@@ -148,7 +167,7 @@ export async function validatePolygonIoCredential(
 }
 
 async function requestPolygonIoJson(
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
+  context: ApiKeyProviderContext,
   path: string,
   query: Record<string, PolygonIoQueryValue> = {},
   phase: PolygonIoPhase = "execute",
@@ -166,7 +185,7 @@ async function requestPolygonIoJson(
     response = await context.fetcher(url, {
       method: "GET",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "user-agent": providerUserAgent,
       },
       signal: context.signal,

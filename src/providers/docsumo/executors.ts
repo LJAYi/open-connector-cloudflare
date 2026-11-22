@@ -1,4 +1,9 @@
-import type { CredentialValidators, ExecutionContext, ProviderExecutors } from "../../core/types.ts";
+import type {
+  CredentialValidators,
+  ExecutionContext,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
 import type { DocsumoActionName } from "./actions.ts";
 
 import {
@@ -11,13 +16,14 @@ import {
   requiredString,
 } from "../../core/cast.ts";
 import { assertPublicHttpUrl, encodePathSegment } from "../../core/request.ts";
+import { requireApiKeyCredential } from "../provider-credentials.ts";
+import { defineProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
-  defineProviderExecutors,
   providerInputError,
   providerResponseError,
   providerUserAgent,
   ProviderRequestError,
-  requireApiKeyCredential,
 } from "../provider-runtime.ts";
 
 const service = "docsumo";
@@ -62,6 +68,16 @@ export const executors: ProviderExecutors = defineProviderExecutors<DocsumoConte
   },
 });
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: apiBaseUrl,
+  auth: { type: "api_key_header", name: "apikey" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const data = readDataObject(
@@ -74,7 +90,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: optionalString(data.user_id) ?? "api_key",
         displayName: optionalString(data.email) ?? "Docsumo API Key",
       },
-      grantedScopes: [],
       metadata: compactObject({
         apiBaseUrl,
         validationEndpoint: "/api/v1/eevee/apikey/limit/",

@@ -5,7 +5,7 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 
 import { sha256Hex, signAwsSigV4Request } from "../../core/aws-sigv4.ts";
 import {
@@ -15,16 +15,14 @@ import {
   optionalScalarString,
   optionalString,
 } from "../../core/cast.ts";
+import { defineProviderExecutors } from "../provider-executors.ts";
 import {
-  createProviderFetch,
   createProviderProxyUrl,
-  defineProviderExecutors,
-  ProviderRequestError,
-  providerUserAgent,
   readProviderProxyErrorMessage,
   readProviderProxyResponse,
   toProviderProxyError,
-} from "../provider-runtime.ts";
+} from "../provider-proxy.ts";
+import { createProviderFetch, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
 
 const service = "aws_sts";
 const stsApiVersion = "2011-06-15";
@@ -153,7 +151,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: accessKeyId,
         displayName: defaultRoleArn ? `AWS STS - ${defaultRoleArn}` : `AWS STS - ${accessKeyId}`,
       },
-      grantedScopes: [],
       metadata: compactObject({
         credentialKind: sessionToken ? "sts" : "access_key",
         defaultRoleArn,
@@ -354,7 +351,7 @@ function signAwsStsRequest(input: {
     region: input.region,
     service: awsServiceName,
     headers: {
-      accept: "application/xml",
+      "accept": "application/xml",
       "content-type": "application/x-www-form-urlencoded; charset=utf-8",
       "user-agent": providerUserAgent,
     },

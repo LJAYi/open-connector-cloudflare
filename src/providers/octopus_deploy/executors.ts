@@ -5,20 +5,21 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 
 import { createHash } from "node:crypto";
 import { compactObject, optionalNumber, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import { assertPublicHttpUrl, isPrivateNetworkAccessAllowed } from "../../core/request.ts";
+import { requireApiKeyCredential } from "../provider-credentials.ts";
+import { defineProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
   createProviderFetch,
   createProviderTimeout,
-  defineProviderExecutors,
-  defineProviderProxy,
   providerUserAgent,
   ProviderRequestError,
   readProviderTextBody,
-  requireApiKeyCredential,
+  providerInputError,
 } from "../provider-runtime.ts";
 
 const service = "octopus_deploy";
@@ -152,11 +153,7 @@ export const proxy: ProviderProxyExecutor = defineProviderProxy({
   },
   auth: { type: "api_key_header", name: "X-Octopus-ApiKey" },
   allowPrivateNetwork: isPrivateNetworkAccessAllowed,
-  customizeRequest({ headers }) {
-    if (!headers.has("accept")) {
-      headers.set("accept", "application/json");
-    }
-  },
+  defaultHeaders: { accept: "application/json" },
 });
 
 export const credentialValidators: CredentialValidators = {
@@ -183,7 +180,6 @@ export const credentialValidators: CredentialValidators = {
           optionalString(raw.EmailAddress) ??
           "Octopus Deploy API Key",
       },
-      grantedScopes: [],
       metadata: compactObject({
         apiBaseUrl,
         baseUrl: apiBaseUrl,
@@ -233,7 +229,7 @@ async function requestOctopusDeployObject(
     const response = await context.fetcher(url, {
       method: "GET",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "user-agent": providerUserAgent,
         "X-Octopus-ApiKey": context.apiKey,
       },
@@ -338,10 +334,10 @@ function mapHttpError(status: number, message: string, phase: "validate" | "exec
     return new ProviderRequestError(401, message);
   }
   if (status === 401 || status === 403 || (phase === "validate" && status === 404)) {
-    return new ProviderRequestError(400, message);
+    return providerInputError(message);
   }
   if (status === 400 || status === 404 || status === 422) {
-    return new ProviderRequestError(400, message);
+    return providerInputError(message);
   }
   if (status === 429) {
     return new ProviderRequestError(429, message);

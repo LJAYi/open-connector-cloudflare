@@ -1,5 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 
 import {
   optionalNumber,
@@ -9,9 +9,14 @@ import {
   optionalInteger,
   optionalBoolean,
 } from "../../core/cast.ts";
-import { createProviderTimeout, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import {
+  createProviderTimeout,
+  providerUserAgent,
+  ProviderRequestError,
+  providerInputError,
+} from "../provider-runtime.ts";
 
-const datascopeApiBaseUrl = "https://www.mydatascope.com/api/external/";
+export const datascopeApiBaseUrl = "https://www.mydatascope.com/api/external/";
 
 type DatascopeRequestPhase = "validate" | "execute";
 type DatascopeQueryValue = string | number | boolean | undefined;
@@ -204,7 +209,6 @@ export async function validateDatascopeCredential(
       accountId: "datascope",
       displayName: "DataScope API Key",
     },
-    grantedScopes: [],
     metadata: {
       apiBaseUrl: "https://www.mydatascope.com/api/external",
       validationEndpoint: "/locations",
@@ -229,8 +233,8 @@ async function requestDatascopeJson(input: {
   }
 
   const headers = new Headers({
-    Accept: "application/json",
-    Authorization: input.apiKey,
+    "Accept": "application/json",
+    "Authorization": input.apiKey,
     "User-Agent": providerUserAgent,
   });
 
@@ -290,7 +294,7 @@ function createDatascopeHttpError(status: number, payload: unknown, phase: Datas
   }
 
   if (status === 400 || status === 422) {
-    return new ProviderRequestError(400, message);
+    return providerInputError(message);
   }
 
   if (status === 429) {

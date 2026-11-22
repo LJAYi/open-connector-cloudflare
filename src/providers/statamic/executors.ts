@@ -1,10 +1,10 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
-  defineApiKeyProviderExecutors,
   providerInputError,
   ProviderRequestError,
   providerUserAgent,
@@ -74,6 +74,14 @@ export const statamicActionHandlers: ProviderActionHandlers<"statamic", Statamic
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, statamicActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: statamicApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  defaultHeaders: { accept: "application/json" },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const payload = await requestStatamicJson({
@@ -92,7 +100,6 @@ export const credentialValidators: CredentialValidators = {
           ? `Statamic: ${optionalString(firstSite?.name)}`
           : "Statamic API Token",
       },
-      grantedScopes: [],
       metadata: compactObject({
         apiBaseUrl: statamicApiBaseUrl,
         validationEndpoint: "/sites",
@@ -107,14 +114,14 @@ export const credentialValidators: CredentialValidators = {
 async function requestStatamicJson(input: {
   path: string;
   method: "GET" | "POST" | "PATCH" | "DELETE";
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   phase: StatamicPhase;
   body?: Record<string, unknown>;
 }): Promise<Record<string, unknown>> {
   return runProviderRequest({ signal: input.context.signal, label: "Statamic" }, async (signal) => {
     const headers: Record<string, string> = {
-      accept: "application/json",
-      authorization: `Bearer ${input.context.apiKey}`,
+      "accept": "application/json",
+      "authorization": `Bearer ${input.context.apiKey}`,
       "user-agent": providerUserAgent,
     };
     if (input.body !== undefined) {

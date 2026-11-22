@@ -1,7 +1,15 @@
-import type { CredentialValidators, ExecutionContext, ProviderExecutors } from "../../core/types.ts";
+import type {
+  CredentialValidators,
+  ExecutionContext,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
 
 import { isPrivateNetworkAccessAllowed } from "../../core/request.ts";
-import { createProviderFetch, defineProviderExecutors, requireApiKeyCredential } from "../provider-runtime.ts";
+import { requireApiKeyCredential } from "../provider-credentials.ts";
+import { defineProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { createProviderFetch } from "../provider-runtime.ts";
 import { invoiceNinjaActionHandlers, normalizeInvoiceNinjaUrls, validateInvoiceNinjaCredential } from "./runtime.ts";
 
 interface InvoiceNinjaContext {
@@ -37,6 +45,19 @@ export const executors: ProviderExecutors = defineProviderExecutors({
     const urls = normalizeInvoiceNinjaUrls(credential.values.instanceUrl);
     return { apiKey: credential.apiKey, apiBaseUrl: urls.apiBaseUrl, fetcher, signal: context.signal };
   },
+});
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service: "invoice_ninja",
+  async baseUrl(context) {
+    const credential = await requireApiKeyCredential(context, "invoice_ninja");
+    return normalizeInvoiceNinjaUrls(
+      credential.metadata.apiBaseUrl ?? credential.metadata.instanceUrl ?? credential.values.instanceUrl,
+    ).apiBaseUrl;
+  },
+  auth: { type: "api_key_header", name: "X-API-TOKEN" },
+  allowPrivateNetwork: isPrivateNetworkAccessAllowed,
+  defaultHeaders: { "accept": "application/json", "x-requested-with": "XMLHttpRequest" },
 });
 
 export const credentialValidators: CredentialValidators = {

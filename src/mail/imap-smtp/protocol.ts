@@ -1,4 +1,4 @@
-import type { GuardedFetchDnsLookup, ResolvedAddress } from "../../core/guarded-fetch.ts";
+import type { GuardedFetchDnsLookup } from "../../core/guarded-fetch.ts";
 import type { FetchMessageObject, ImapFlowOptions, MessageStructureObject, SearchObject } from "imapflow";
 import type { LookupFunction, Socket, TcpNetConnectOpts } from "node:net";
 
@@ -15,6 +15,7 @@ import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import nodemailer from "nodemailer";
 import { resolveGuardedEgressTarget } from "../../core/guarded-fetch.ts";
+import { createPinnedLookup } from "../../core/guarded-socket.ts";
 import { isIpAddress, isPrivateNetworkAccessAllowed } from "../../core/request.ts";
 import { mailAttachmentDownloadByteLimit, mailConnectionTimeoutMs, mailImapPort, mailSmtpPort } from "./config.ts";
 import { MailProtocolError } from "./errors.ts";
@@ -506,17 +507,6 @@ async function pinMailHost(
   };
 }
 
-function createPinnedLookup(addresses: ResolvedAddress[]): LookupFunction {
-  return ((_hostname, options, callback) => {
-    if (typeof options === "object" && options.all) {
-      callback(null, addresses);
-      return;
-    }
-    const first = addresses[0]!;
-    callback(null, first.address, first.family);
-  }) as LookupFunction;
-}
-
 async function createSmtpTransport(
   config: MailProtocolConfig,
   deps: MailProtocolDependencies,
@@ -811,16 +801,17 @@ function normalizeAddress(value: unknown): MailAddress {
   };
 }
 
-function collectBodyParts(bodyStructure: unknown): BodyPart[] {
+function collectBodyParts(bodyStructure: unknown, isRoot = true): BodyPart[] {
   const record = toRecord(bodyStructure);
   if (!record) {
     return [];
   }
 
   const childNodes = record.childNodes;
-  const childParts = Array.isArray(childNodes) ? childNodes.flatMap(collectBodyParts) : [];
+  const childParts = Array.isArray(childNodes) ? childNodes.flatMap((child) => collectBodyParts(child, false)) : [];
   const type = readString(record.type)?.toLowerCase();
-  const part = readString(record.part);
+  // IMAP addresses a single-part root as section 1; ImapFlow leaves its part unset.
+  const part = readString(record.part) ?? (isRoot ? "1" : null);
   if (!type || !part || !type.startsWith("text/") || isAttachment(record)) {
     return childParts;
   }

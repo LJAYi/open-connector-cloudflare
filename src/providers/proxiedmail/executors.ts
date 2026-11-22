@@ -4,7 +4,7 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -14,12 +14,12 @@ import {
   optionalString,
   requiredRecord,
 } from "../../core/cast.ts";
+import { requireApiKeyCredential } from "../provider-credentials.ts";
+import { defineProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
-  defineProviderExecutors,
-  defineProviderProxy,
   providerUserAgent,
   ProviderRequestError,
-  requireApiKeyCredential,
   requiredInputString,
   runProviderRequest,
 } from "../provider-runtime.ts";
@@ -184,7 +184,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: "api_key",
         displayName: "ProxiedMail API Token",
       },
-      grantedScopes: [],
       metadata: compactObject({
         apiBaseUrl: proxiedmailApiBaseUrl,
         validationEndpoint: "/proxy-bindings",
@@ -209,9 +208,9 @@ async function requestProxiedmailJson(input: {
     const response = await input.fetcher(buildProxiedmailUrl(input.path), {
       method: input.method,
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         ...(input.body ? { "content-type": "application/json" } : {}),
-        Token: input.apiKey,
+        "Token": input.apiKey,
         "user-agent": providerUserAgent,
       },
       body: input.body ? JSON.stringify(input.body) : undefined,

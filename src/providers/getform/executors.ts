@@ -1,14 +1,11 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { optionalBoolean, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
-import {
-  defineApiKeyProviderExecutors,
-  providerUserAgent,
-  ProviderRequestError,
-  requiredInputString,
-} from "../provider-runtime.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { providerUserAgent, ProviderRequestError, requiredInputString } from "../provider-runtime.ts";
 
 const service = "getform";
 const getformSubmitBaseUrl = "https://forminit.com";
@@ -38,6 +35,16 @@ export const getformActionHandlers: ProviderActionHandlers<"getform", GetformAct
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, getformActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: `${getformApiOrigin}${getformApiBasePath}`,
+  auth: { type: "api_key_header", name: "x-api-key" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input) {
     if (!input.apiKey.trim()) {
@@ -49,7 +56,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: "api_key",
         displayName: "Getform API Key",
       },
-      grantedScopes: [],
       metadata: {
         apiBaseUrl: `${getformApiOrigin}${getformApiBasePath}`,
         validationMode: "format_only",

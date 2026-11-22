@@ -1,13 +1,12 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy, normalizeProviderProxyEndpoint } from "../provider-proxy.ts";
 import {
   createProviderTimeout,
-  defineApiKeyProviderExecutors,
-  defineProviderProxy,
-  normalizeProviderProxyEndpoint,
   providerUserAgent,
   ProviderRequestError,
   readProviderTextBody,
@@ -171,7 +170,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: projectId ?? "api_key",
         displayName: accountName || projectId || "Browser Use API Key",
       },
-      grantedScopes: [],
       metadata: {
         apiBaseUrl: browserUseV3ApiBaseUrl,
         projectId,
@@ -187,7 +185,7 @@ async function requestBrowserUseJson(input: BrowserUseRequestInput): Promise<unk
     const response = await input.fetcher(buildBrowserUseUrl(input.path, input.query), {
       method: input.method,
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "content-type": "application/json",
         "user-agent": providerUserAgent,
         "X-Browser-Use-API-Key": input.apiKey,

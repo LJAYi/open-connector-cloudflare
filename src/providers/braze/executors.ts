@@ -1,6 +1,10 @@
-import type { CredentialValidators, ExecutionContext, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type {
+  CredentialValidators,
+  ExecutionContext,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { ProviderActionHandlers, ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -11,13 +15,14 @@ import {
   requiredString,
 } from "../../core/cast.ts";
 import { assertPublicHttpUrl } from "../../core/request.ts";
+import { requireApiKeyCredential } from "../provider-credentials.ts";
+import { defineProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
   createProviderTimeout,
-  defineProviderExecutors,
   isAbortLikeError,
   providerUserAgent,
   ProviderRequestError,
-  requireApiKeyCredential,
   requiredInputString,
   requiredResponseRecord,
 } from "../provider-runtime.ts";
@@ -124,6 +129,20 @@ export const executors: ProviderExecutors = defineProviderExecutors<BrazeActionC
   },
 });
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  async baseUrl(context): Promise<string> {
+    const credential = await requireApiKeyCredential(context, service);
+    return normalizeBrazeRestEndpoint(
+      optionalString(credential.values.restEndpoint) ?? optionalString(credential.metadata.restEndpoint),
+    );
+  },
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const restEndpoint = normalizeBrazeRestEndpoint(input.values.restEndpoint);
@@ -142,7 +161,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: `braze:${endpointHost}`,
         displayName: `Braze ${endpointHost}`,
       },
-      grantedScopes: [],
       metadata: compactObject({
         restEndpoint,
         validationEndpoint: validation.path,
@@ -197,7 +215,7 @@ async function validateBrazeCredential(input: {
 }
 
 async function requestBrazeJson(input: {
-  context: Pick<BrazeActionContext, "apiKey" | "restEndpoint" | "fetcher" | "signal">;
+  context: BrazeActionContext;
   path: string;
   query?: Array<[string, unknown]>;
   phase: BrazeRequestPhase;
@@ -210,8 +228,8 @@ async function requestBrazeJson(input: {
     response = await input.context.fetcher(buildBrazeUrl(input.context.restEndpoint, input.path, input.query), {
       method: "GET",
       headers: {
-        accept: "application/json",
-        authorization: `Bearer ${input.context.apiKey}`,
+        "accept": "application/json",
+        "authorization": `Bearer ${input.context.apiKey}`,
         "user-agent": providerUserAgent,
       },
       signal: timeout.signal,

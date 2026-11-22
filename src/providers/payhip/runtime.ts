@@ -1,6 +1,6 @@
 import type { CredentialValidationResult, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import {
   optionalIntegerLike,
@@ -10,8 +10,8 @@ import {
   optionalString,
   requiredString,
 } from "../../core/cast.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
 import {
-  defineApiKeyProviderExecutors,
   providerInputError,
   ProviderRequestError,
   providerResponseError,
@@ -88,7 +88,6 @@ export async function validatePayhipCredential(
     profile: {
       accountId: "payhip-api-key",
       displayName: "Payhip API Key",
-      grantedScopes: [],
     },
     metadata: {
       apiBaseUrl: payhipApiBaseUrl,
@@ -219,7 +218,7 @@ async function requestPayhipJson(options: PayhipRequestOptions) {
 
   const body = options.form ? new URLSearchParams(stringifyForm(options.form)) : undefined;
   const headers: Record<string, string> = {
-    accept: "application/json",
+    "accept": "application/json",
     "user-agent": providerUserAgent,
   };
   if (options.apiKey) {

@@ -8,7 +8,7 @@ import {
 } from "../../core/cast.ts";
 import { ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
 
-const v0ApiBaseUrl = "https://api.v0.dev";
+export const v0ApiBaseUrl = "https://api.v0.dev";
 
 interface V0RequestOptions {
   apiKey: string;
@@ -48,7 +48,7 @@ export async function requestV0Json<T>({
   }
 
   const headers = new Headers({
-    authorization: `Bearer ${apiKey}`,
+    "authorization": `Bearer ${apiKey}`,
     "user-agent": providerUserAgent,
   });
   if (body) {

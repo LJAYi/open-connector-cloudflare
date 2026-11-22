@@ -1,16 +1,12 @@
 import type { CredentialValidationResult, ExecutionContext, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 
 import { Buffer } from "node:buffer";
 import { compactObject, optionalBoolean, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
 import { encodePathSegment } from "../../core/request.ts";
-import {
-  defineProviderExecutors,
-  providerUserAgent,
-  ProviderRequestError,
-  requireApiKeyCredential,
-  requiredInputString,
-} from "../provider-runtime.ts";
+import { requireApiKeyCredential } from "../provider-credentials.ts";
+import { defineProviderExecutors } from "../provider-executors.ts";
+import { providerUserAgent, ProviderRequestError, requiredInputString } from "../provider-runtime.ts";
 
 const mailgunDefaultApiBaseUrl = "https://api.mailgun.net";
 const mailgunAllowedApiBaseUrls = new Set([mailgunDefaultApiBaseUrl, "https://api.eu.mailgun.net"]);
@@ -71,18 +67,18 @@ export const mailgunActionHandlers: ProviderActionHandlers<"mailgun", MailgunAct
     const domain = requiredInputString(input.domain, "domain");
     return normalizeListResponse(
       mailgunGetJson(`/v3/${encodePathSegment(domain)}/events`, context, {
-        begin: optionalString(input.begin),
-        end: optionalString(input.end),
-        ascending: optionalString(input.ascending),
-        limit: optionalInteger(input.limit),
-        event: optionalString(input.event),
-        severity: optionalString(input.severity),
-        recipient: optionalString(input.recipient),
-        from: optionalString(input.from),
-        to: optionalString(input.to),
-        subject: optionalString(input.subject),
+        "begin": optionalString(input.begin),
+        "end": optionalString(input.end),
+        "ascending": optionalString(input.ascending),
+        "limit": optionalInteger(input.limit),
+        "event": optionalString(input.event),
+        "severity": optionalString(input.severity),
+        "recipient": optionalString(input.recipient),
+        "from": optionalString(input.from),
+        "to": optionalString(input.to),
+        "subject": optionalString(input.subject),
         "message-id": optionalString(input.messageId),
-        tags: optionalString(input.tags),
+        "tags": optionalString(input.tags),
       }),
     );
   },
@@ -214,7 +210,6 @@ export async function validateMailgunCredential(
       accountId: firstDomain ? `mailgun:domain:${firstDomain}` : "mailgun-api-key",
       displayName: firstDomain ? `Mailgun: ${firstDomain}` : "Mailgun API Key",
     },
-    grantedScopes: [],
     metadata: compactObject({
       apiBaseUrl,
       validationEndpoint: validationPath,
@@ -430,7 +425,7 @@ async function mailgunFetch(
     return await context.fetcher(url, {
       method,
       headers: {
-        authorization: createMailgunAuthorizationHeader(context.apiKey),
+        "authorization": createMailgunAuthorizationHeader(context.apiKey),
         "user-agent": providerUserAgent,
         ...options.headers,
       },

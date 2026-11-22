@@ -1,4 +1,4 @@
-import type { ApiKeyActionRequest, ProviderActionHandlers } from "../provider-runtime.ts";
+import type { ApiKeyActionRequest, ProviderActionHandlers } from "../provider-executors.ts";
 import type { DopplerMarketingAutomationActionName } from "./actions.ts";
 
 import {
@@ -14,6 +14,7 @@ import {
   ProviderRequestError,
   providerUserAgent,
   requiredResponseRecord,
+  providerInputError,
 } from "../provider-runtime.ts";
 
 export interface DopplerMarketingAutomationCredentialCheck {
@@ -196,7 +197,7 @@ export async function validateDopplerMarketingAutomationCredential(
   input: Record<string, string>,
   fetcher: typeof fetch,
 ): Promise<DopplerMarketingAutomationCredentialCheck> {
-  const apiKey = requiredString(input.apiKey, "apiKey", (message) => new ProviderRequestError(400, message));
+  const apiKey = requiredString(input.apiKey, "apiKey", providerInputError);
   const accountEmail = requireAccountEmail(input.accountEmail);
   const validationPath = accountPath(accountEmail);
 
@@ -241,8 +242,8 @@ async function requestDopplerMarketingJson(input: DopplerMarketingRequest) {
     const response = await input.fetcher(url, {
       method,
       headers: {
-        accept: "application/json",
-        authorization: `token ${input.apiKey}`,
+        "accept": "application/json",
+        "authorization": `token ${input.apiKey}`,
         ...(input.body === undefined ? {} : { "content-type": "application/json" }),
         "user-agent": providerUserAgent,
       },
@@ -303,7 +304,7 @@ function createDopplerMarketingError(status: number, statusText: string, payload
     return new ProviderRequestError(429, message);
   }
   if (phase === "validate" && (status === 401 || status === 403)) {
-    return new ProviderRequestError(400, message);
+    return providerInputError(message);
   }
   if (phase === "execute" && (status === 401 || status === 403)) {
     return new ProviderRequestError(401, message);
@@ -409,7 +410,7 @@ function normalizeMessageResult(payload: unknown) {
 
 function credentialContext(input: ApiKeyActionRequest) {
   return {
-    apiKey: requiredString(input.apiKey, "apiKey", (message) => new ProviderRequestError(400, message)),
+    apiKey: requiredString(input.apiKey, "apiKey", providerInputError),
     accountEmail: requireAccountEmail(
       input.values?.accountEmail ?? optionalString(input.providerMetadata?.accountEmail),
     ),

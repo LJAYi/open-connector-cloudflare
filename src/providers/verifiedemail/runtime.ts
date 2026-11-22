@@ -1,11 +1,12 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext, ProviderFetch } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderFetch } from "../provider-runtime.ts";
 
 import { compactObject, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
 import { ProviderRequestError, providerUserAgent, requiredInputString } from "../provider-runtime.ts";
 
-const verifiedemailApiBaseUrl = "https://api.verified.email";
+export const verifiedemailApiBaseUrl = "https://api.verified.email";
 
 type VerifiedemailRequestPhase = "validate" | "execute";
 type VerifiedemailQueryValue = string | number | undefined;
@@ -91,7 +92,6 @@ export async function validateVerifiedemailCredential(
       accountId: "verifiedemail",
       displayName: "VerifiedEmail API Key",
     },
-    grantedScopes: [],
     metadata: compactObject({
       apiBaseUrl: verifiedemailApiBaseUrl,
       validationEndpoint: "/v1/entitlements",
@@ -125,8 +125,8 @@ async function requestVerifiedemailJson(input: VerifiedemailRequestInput): Promi
     response = await input.fetcher(url.toString(), {
       method: "GET",
       headers: {
-        accept: "application/json",
-        authorization: `Bearer ${input.apiKey}`,
+        "accept": "application/json",
+        "authorization": `Bearer ${input.apiKey}`,
         "user-agent": providerUserAgent,
       },
       signal: input.signal,

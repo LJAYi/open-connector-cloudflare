@@ -1,4 +1,9 @@
-import type { CredentialValidators, ExecutionContext, ProviderExecutors } from "../../core/types.ts";
+import type {
+  CredentialValidators,
+  ExecutionContext,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
 import type { DocsautomatorActionName } from "./actions.ts";
 
 import { createHash } from "node:crypto";
@@ -9,12 +14,13 @@ import {
   optionalString,
   requiredString,
 } from "../../core/cast.ts";
+import { requireApiKeyCredential } from "../provider-credentials.ts";
+import { defineProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
-  defineProviderExecutors,
   providerResponseError,
   providerUserAgent,
   ProviderRequestError,
-  requireApiKeyCredential,
   requiredResponseRecord,
 } from "../provider-runtime.ts";
 
@@ -63,6 +69,16 @@ export const executors: ProviderExecutors = defineProviderExecutors<Docsautomato
   },
 });
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: apiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const payload = await request({
@@ -78,7 +94,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: `docsautomator:token:${createHash("sha256").update(input.apiKey).digest("hex").slice(0, 16)}`,
         displayName: "DocsAutomator API Key",
       },
-      grantedScopes: [],
       metadata: {
         apiBaseUrl,
         validationEndpoint: "/queue/stats",
@@ -214,8 +229,8 @@ async function request(input: {
     response = await input.fetcher(url, {
       method: input.method ?? "GET",
       headers: compactObject({
-        accept: "application/json",
-        authorization: `Bearer ${input.apiKey}`,
+        "accept": "application/json",
+        "authorization": `Bearer ${input.apiKey}`,
         "content-type": input.body === undefined ? undefined : "application/json",
         "user-agent": providerUserAgent,
       }) as Record<string, string>,

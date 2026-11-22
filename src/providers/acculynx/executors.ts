@@ -1,18 +1,25 @@
-import type { CredentialValidators, ExecutionContext, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type {
+  CredentialValidators,
+  ExecutionContext,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 
 import { compactObject, optionalBoolean, optionalRecord, optionalString } from "../../core/cast.ts";
+import { requireApiKeyCredential } from "../provider-credentials.ts";
+import { defineProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
-  defineProviderExecutors,
   providerUserAgent,
   ProviderRequestError,
-  requireApiKeyCredential,
   requiredInputString,
   requiredResponseRecord,
 } from "../provider-runtime.ts";
 
 const service = "acculynx";
 const acculynxApiBaseUrl = "https://api.acculynx.com";
+const acculynxApiRootUrl = `${acculynxApiBaseUrl}/api/v2`;
 const companySettingsPath = "/company-settings";
 const contactTypesPath = "/contacts/contact-types";
 const leadSourcesPath = "/company-settings/leads/lead-sources";
@@ -222,6 +229,16 @@ export const executors: ProviderExecutors = defineProviderExecutors<AcculynxActi
   },
 });
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: acculynxApiRootUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     return validateAcculynxCredential(input.apiKey, fetcher, signal);
@@ -248,7 +265,6 @@ async function validateAcculynxCredential(
       accountId: company.id,
       displayName: company.name,
     },
-    grantedScopes: [],
     metadata: compactObject({
       companyId: company.id,
       companyName: company.name,
@@ -298,8 +314,8 @@ async function acculynxRequest(input: {
     response = await input.fetcher(url, {
       method: input.method,
       headers: {
-        Authorization: `Bearer ${input.apiKey}`,
-        accept: "application/json",
+        "Authorization": `Bearer ${input.apiKey}`,
+        "accept": "application/json",
         "user-agent": providerUserAgent,
         ...(input.body === undefined ? {} : { "content-type": "application/json" }),
       },

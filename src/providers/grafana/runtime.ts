@@ -1,5 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 
 import { compactObject, optionalBoolean, optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
 import { assertPublicHttpUrl, encodePathSegment, isPrivateNetworkAccessAllowed } from "../../core/request.ts";
@@ -126,7 +126,6 @@ export async function validateGrafanaCredential(
       accountId: optionalNumber(org?.id)?.toString(),
       displayName: optionalString(org?.name) ?? "Grafana",
     },
-    grantedScopes: [],
     metadata: {
       baseUrl,
       validationPath: "/api/org",
@@ -425,8 +424,8 @@ async function grafanaRequestJson(
 
 function grafanaHeaders(apiKey: string, hasJsonBody: boolean): Record<string, string> {
   return {
-    authorization: `Bearer ${apiKey}`,
-    accept: "application/json",
+    "authorization": `Bearer ${apiKey}`,
+    "accept": "application/json",
     "user-agent": providerUserAgent,
     ...(hasJsonBody ? { "content-type": "application/json" } : {}),
   };

@@ -1,6 +1,10 @@
-import type { CredentialValidationResult, CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type {
+  CredentialValidationResult,
+  CredentialValidators,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -12,8 +16,9 @@ import {
   requiredRecord,
   requiredString,
 } from "../../core/cast.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
-  defineApiKeyProviderExecutors,
   providerInputError,
   providerResponseError,
   providerUserAgent,
@@ -176,6 +181,16 @@ const senderActionHandlers: ProviderActionHandlers<"sender", SenderActionHandler
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, senderActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: senderApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }): Promise<CredentialValidationResult> {
     await senderRequest(
@@ -194,7 +209,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: "sender",
         displayName: "Sender API Access Token",
       },
-      grantedScopes: [],
       metadata: {
         apiBaseUrl: senderApiBaseUrl,
         validationEndpoint: "/groups",
@@ -204,7 +218,7 @@ export const credentialValidators: CredentialValidators = {
 };
 
 async function senderRequest(
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
+  context: ApiKeyProviderContext,
   path: string,
   options: SenderRequestOptions,
   phase: SenderPhase,
@@ -217,8 +231,8 @@ async function senderRequest(
   }
 
   const headers = new Headers({
-    accept: "application/json",
-    authorization: `Bearer ${context.apiKey}`,
+    "accept": "application/json",
+    "authorization": `Bearer ${context.apiKey}`,
     "user-agent": providerUserAgent,
   });
   const init: RequestInit = {

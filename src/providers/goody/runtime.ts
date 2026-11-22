@@ -1,11 +1,11 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
 import { ProviderRequestError, providerUserAgent, requiredResponseRecord } from "../provider-runtime.ts";
 
-const goodyApiBaseUrl = "https://api.ongoody.com";
+export const goodyApiBaseUrl: string = "https://api.ongoody.com";
 
 type GoodyRequestPhase = "validate" | "execute";
 type GoodyActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
@@ -69,7 +69,6 @@ export async function validateGoodyCredential(
       accountId: email ?? "goody",
       displayName: email ?? "Goody API Key",
     },
-    grantedScopes: [],
     metadata: compactObject({
       apiBaseUrl: goodyApiBaseUrl,
       validationEndpoint: "/v1/me",
@@ -131,8 +130,8 @@ async function getProduct(input: Record<string, unknown>, context: ApiKeyProvide
 async function listOrders(input: Record<string, unknown>, context: ApiKeyProviderContext): Promise<unknown> {
   return goodyRequest({
     path: buildPath("/v1/orders", {
-      page: input.page,
-      per_page: input.per_page,
+      "page": input.page,
+      "per_page": input.per_page,
       "created_at[after]": input.created_at_after,
       "created_at[before]": input.created_at_before,
     }),
@@ -194,8 +193,8 @@ async function goodyRequest(input: GoodyRequestInput): Promise<unknown> {
 
 function goodyHeaders(apiKey: string): Record<string, string> {
   return {
-    accept: "application/json",
-    authorization: `Bearer ${apiKey}`,
+    "accept": "application/json",
+    "authorization": `Bearer ${apiKey}`,
     "user-agent": providerUserAgent,
   };
 }

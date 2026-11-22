@@ -1,9 +1,15 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 
 import { Buffer } from "node:buffer";
 import { compactObject, optionalBoolean, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
-import { ProviderRequestError, providerUserAgent, requiredResponseRecord } from "../provider-runtime.ts";
+import {
+  ProviderRequestError,
+  providerUserAgent,
+  requiredResponseRecord,
+  providerInputError,
+  providerResponseError,
+} from "../provider-runtime.ts";
 
 const mailjetApiBaseUrl = "https://api.mailjet.com/v3/REST";
 const mailjetValidationPath = "/contact?Limit=1";
@@ -55,7 +61,6 @@ export async function validateMailjetCredential(
       accountId: "mailjet:api-key",
       displayName: "Mailjet API Key",
     },
-    grantedScopes: [],
     metadata: {
       apiBaseUrl: mailjetApiBaseUrl,
       validationEndpoint: mailjetValidationPath,
@@ -167,8 +172,8 @@ async function requestMailjet(input: {
   }
 
   const headers: Record<string, string> = {
-    accept: "application/json",
-    authorization: buildBasicAuthorizationHeader(input.apiKey, input.apiSecret),
+    "accept": "application/json",
+    "authorization": buildBasicAuthorizationHeader(input.apiKey, input.apiSecret),
     "user-agent": providerUserAgent,
   };
   if (input.body !== undefined) {
@@ -219,9 +224,9 @@ function createMailjetError(
     return new ProviderRequestError(429, message);
   }
   if (phase === "validate") {
-    return new ProviderRequestError(400, message);
+    return providerInputError(message);
   }
-  return new ProviderRequestError(502, message);
+  return providerResponseError(message);
 }
 
 function extractMailjetErrorMessage(payload: unknown): string | undefined {

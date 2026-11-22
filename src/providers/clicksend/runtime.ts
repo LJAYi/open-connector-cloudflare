@@ -1,5 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 
 import { Buffer } from "node:buffer";
 import { compactObject, optionalNumber, optionalRecord, optionalString, requiredRecord } from "../../core/cast.ts";
@@ -182,7 +182,6 @@ export async function validateClicksendCredential(
       accountId,
       displayName: accountLabel,
     },
-    grantedScopes: [],
     metadata: compactObject({
       apiBaseUrl: clicksendApiBaseUrl,
       validationEndpoint: clicksendValidationPath,
@@ -236,8 +235,8 @@ async function requestClicksendJson(input: ClicksendRequestInput): Promise<Recor
 
 function clicksendHeaders(input: ClicksendRequestInput): Record<string, string> {
   return compactObject({
-    accept: "application/json",
-    authorization: buildBasicAuthorizationHeader(input.username, input.apiKey),
+    "accept": "application/json",
+    "authorization": buildBasicAuthorizationHeader(input.username, input.apiKey),
     "content-type": input.body === undefined ? undefined : "application/json",
     "user-agent": providerUserAgent,
   }) as Record<string, string>;

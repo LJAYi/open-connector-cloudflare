@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import { Buffer } from "node:buffer";
 import {
@@ -309,7 +309,6 @@ export async function validateMemosCredential(
       displayName:
         optionalString(user.displayName) ?? optionalString(user.email) ?? username ?? name ?? `Memos ${host}`,
     },
-    grantedScopes: [],
     metadata: compactObject({
       baseUrl: context.baseUrl,
       apiBaseUrl: context.baseUrl,
@@ -334,8 +333,8 @@ async function requestMemosJson(
     if (value != null) url.searchParams.set(key, String(value));
   }
   const headers = new Headers({
-    accept: "application/json",
-    authorization: `Bearer ${context.apiKey}`,
+    "accept": "application/json",
+    "authorization": `Bearer ${context.apiKey}`,
     "user-agent": providerUserAgent,
   });
   if (options.body) headers.set("content-type", "application/json");

@@ -4,23 +4,25 @@ import type {
   ProviderProxyExecutor,
   ProxyExecutionResult,
 } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
+import { requireApiKeyCredential } from "../provider-credentials.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
 import {
-  createProviderFetch,
   createProviderProxyUrl,
-  defineApiKeyProviderExecutors,
   normalizeProviderProxyHeaders,
-  ProviderRequestError,
-  providerUserAgent,
   readProviderProxyErrorMessage,
   readProviderProxyResponse,
-  requireApiKeyCredential,
+  toProviderProxyError,
+} from "../provider-proxy.ts";
+import {
+  createProviderFetch,
+  ProviderRequestError,
+  providerUserAgent,
   requiredInputString,
   runProviderRequest,
-  toProviderProxyError,
 } from "../provider-runtime.ts";
 
 const service = "shippo";
@@ -176,7 +178,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: "shippo",
         displayName: "Shippo API Token",
       },
-      grantedScopes: [],
       metadata: {
         apiBaseUrl: shippoApiBaseUrl,
         apiVersion: shippoApiVersion,
@@ -210,8 +211,8 @@ async function requestShippoJson(input: ShippoRequestInput): Promise<unknown> {
     const response = await input.fetcher(url, {
       method: input.method ?? "GET",
       headers: {
-        accept: "application/json",
-        authorization: `ShippoToken ${input.apiKey}`,
+        "accept": "application/json",
+        "authorization": `ShippoToken ${input.apiKey}`,
         "content-type": "application/json",
         "shippo-api-version": shippoApiVersion,
         "user-agent": providerUserAgent,

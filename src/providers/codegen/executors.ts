@@ -1,13 +1,19 @@
-import type { CredentialValidators, ExecutionContext, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type {
+  CredentialValidators,
+  ExecutionContext,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderRequestContext } from "../provider-runtime.ts";
 
 import { optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
+import { requireApiKeyCredential } from "../provider-credentials.ts";
+import { defineProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
-  defineProviderExecutors,
   providerUserAgent,
   ProviderRequestError,
-  requireApiKeyCredential,
   requiredResponseRecord,
   runProviderRequest,
 } from "../provider-runtime.ts";
@@ -121,6 +127,16 @@ export const executors: ProviderExecutors = defineProviderExecutors<CodegenActio
   fallbackMessage: "Codegen request failed",
 });
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: codegenApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const apiKey = input.apiKey;
@@ -161,7 +177,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: String(organizationId),
         displayName: `Codegen (${organizationName})`,
       },
-      grantedScopes: [],
       metadata: {
         apiBaseUrl: codegenApiBaseUrl,
         organizationId: String(organizationId),
@@ -219,14 +234,14 @@ async function requestCodegenJson(input: {
   method: "GET";
   path: string;
   phase: CodegenPhase;
-  context: Pick<ApiKeyProviderContext, "fetcher" | "signal">;
+  context: ProviderRequestContext;
 }): Promise<unknown> {
   return runProviderRequest({ signal: input.context.signal, label: "Codegen" }, async (signal) => {
     const response = await input.context.fetcher(new URL(input.path, codegenApiBaseUrl), {
       method: input.method,
       headers: {
-        accept: "application/json",
-        authorization: `Bearer ${input.apiKey}`,
+        "accept": "application/json",
+        "authorization": `Bearer ${input.apiKey}`,
         "user-agent": providerUserAgent,
       },
       signal,

@@ -29,9 +29,10 @@ const mcpToolSummarySchema = s.object(
 export const tiktokBusinessMcpActions: ProviderActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_tools",
+    operationType: "read",
     description:
       "List the complete current tool catalog and live input schemas exposed by the connected TikTok for Business MCP account.",
-    requiredScopes: ["tiktok_business_mcp.tools"],
+    requiredScopes: ["mcp:tt4b"],
     followUpActions: ["tiktok_business_mcp.call_tool"],
     inputSchema: s.object("No input is required.", {}),
     outputSchema: s.object("The current TikTok for Business MCP tool catalog.", {
@@ -40,9 +41,10 @@ export const tiktokBusinessMcpActions: ProviderActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "call_tool",
+    operationType: "destructive",
     description:
       "Call a current TikTok for Business MCP tool with JSON arguments. Discover the live schema first and confirm the user's intent because tools may create ads, change budgets or delivery, revoke access, or delete advertising assets.",
-    requiredScopes: ["tiktok_business_mcp.tools"],
+    requiredScopes: ["mcp:tt4b"],
     followUpActions: ["tiktok_business_mcp.list_tools"],
     inputSchema: s.object(
       "Input for invoking one current TikTok for Business MCP tool.",

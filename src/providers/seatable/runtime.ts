@@ -163,7 +163,6 @@ export async function validateSeaTableCredential(
       accountId: `seatable:${access.baseUuid}`,
       displayName: access.baseName ?? `SeaTable ${new URL(serverUrl).host}`,
     },
-    grantedScopes: [],
     metadata: {
       serverUrl,
       baseUuid: access.baseUuid,
@@ -253,8 +252,8 @@ async function requestBaseJson(
 
 function requestHeaders(token: string, jsonBody = false): Headers {
   const headers = new Headers({
-    accept: "application/json",
-    authorization: `Bearer ${token}`,
+    "accept": "application/json",
+    "authorization": `Bearer ${token}`,
     "user-agent": providerUserAgent,
   });
   if (jsonBody) headers.set("content-type", "application/json");

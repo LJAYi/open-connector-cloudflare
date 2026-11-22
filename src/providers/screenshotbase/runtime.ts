@@ -1,5 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { optionalBoolean, optionalInteger, optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
 import {
@@ -7,9 +7,10 @@ import {
   ProviderRequestError,
   providerUserAgent,
   requiredResponseRecord,
+  providerInputError,
 } from "../provider-runtime.ts";
 
-const screenshotbaseApiBaseUrl = "https://api.screenshotbase.com";
+export const screenshotbaseApiBaseUrl = "https://api.screenshotbase.com";
 
 const screenshotbaseStatusPath = "/v1/status";
 const screenshotbaseTakePath = "/v1/take";
@@ -118,8 +119,8 @@ async function requestScreenshotbaseJson(input: ScreenshotbaseRequestInput) {
     const response = await input.fetcher(buildScreenshotbaseUrl(input.path, input.query), {
       method: "GET",
       headers: {
-        accept: "application/json",
-        apikey: input.apiKey,
+        "accept": "application/json",
+        "apikey": input.apiKey,
         "user-agent": providerUserAgent,
       },
       signal: timeoutHandle.signal,
@@ -180,13 +181,13 @@ function createScreenshotbaseError(status: number, payload: unknown, phase: Scre
     return new ProviderRequestError(429, message);
   }
   if (phase === "validate" && (status === 401 || status === 403)) {
-    return new ProviderRequestError(400, message);
+    return providerInputError(message);
   }
   if (phase === "execute" && (status === 401 || status === 403)) {
     return new ProviderRequestError(401, message);
   }
   if (status === 400 || status === 422) {
-    return new ProviderRequestError(400, message);
+    return providerInputError(message);
   }
   if (status === 408) {
     return new ProviderRequestError(504, message);

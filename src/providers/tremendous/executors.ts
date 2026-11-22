@@ -4,18 +4,13 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import { jsonObject } from "../../core/request.ts";
-import {
-  defineApiKeyProviderExecutors,
-  defineProviderProxy,
-  providerUserAgent,
-  ProviderRequestError,
-  runProviderRequest,
-} from "../provider-runtime.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { providerUserAgent, ProviderRequestError, runProviderRequest } from "../provider-runtime.ts";
 
 export const tremendousApiBaseUrl = "https://api.tremendous.com/api/v2";
 export const tremendousValidationPath = "/organizations";
@@ -253,7 +248,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: organizationId ?? "tremendous-api-key",
         displayName: organizationName ? `Tremendous ${organizationName}` : "Tremendous API Key",
       },
-      grantedScopes: [],
       metadata: {
         apiBaseUrl: tremendousApiBaseUrl,
         validationEndpoint: tremendousValidationPath,
@@ -265,7 +259,7 @@ export const credentialValidators: CredentialValidators = {
 };
 
 async function requestTremendousJson(input: {
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   method: string;
   path: string;
   phase: TremendousPhase;
@@ -300,8 +294,8 @@ function buildTremendousUrl(input: { path: string; query?: URLSearchParams }): U
 
 function buildTremendousHeaders(apiKey: string, hasBody: boolean): Record<string, string> {
   const headers: Record<string, string> = {
-    accept: "application/json",
-    authorization: `Bearer ${apiKey}`,
+    "accept": "application/json",
+    "authorization": `Bearer ${apiKey}`,
     "user-agent": providerUserAgent,
   };
   if (hasBody) {

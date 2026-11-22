@@ -1,5 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 
 import { createHash } from "node:crypto";
 import { compactObject, optionalInteger, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
@@ -224,7 +224,6 @@ export async function validateLivespaceCredential(
       accountId: `livespace:${credentials.subdomain}:api_key:${hashSecret(credentials.apiKey)}`,
       displayName: buildAccountLabel(credentials.subdomain, payload.data),
     },
-    grantedScopes: [],
     metadata: {
       apiBaseUrl: buildLivespaceApiBaseUrl(credentials.subdomain),
       subdomain: credentials.subdomain,
@@ -371,7 +370,7 @@ async function postLivespaceForm(
     response = await context.fetcher(new URL(methodPath, buildLivespaceApiBaseUrl(context.subdomain)), {
       method: "POST",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "content-type": "application/x-www-form-urlencoded;charset=UTF-8",
         "user-agent": providerUserAgent,
       },
@@ -405,11 +404,7 @@ async function postLivespaceForm(
   return payload;
 }
 
-function signLivespaceData(
-  credentials: Pick<LivespaceCredentials, "apiKey" | "apiSecret">,
-  token: LivespaceToken,
-  data: Record<string, unknown>,
-) {
+function signLivespaceData(credentials: LivespaceCredentials, token: LivespaceToken, data: Record<string, unknown>) {
   return {
     ...data,
     _api_auth: "key",

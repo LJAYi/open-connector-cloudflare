@@ -1,11 +1,11 @@
 import type { CredentialValidationResult, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext, ProviderFetch, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
+import type { ProviderRequestContext, ProviderFetch } from "../provider-runtime.ts";
 
 import { compactObject, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
 import {
   createProviderTimeout,
-  defineApiKeyProviderExecutors,
   isAbortLikeError,
   providerUserAgent,
   ProviderRequestError,
@@ -13,7 +13,7 @@ import {
 } from "../provider-runtime.ts";
 
 const service = "sensibo";
-const sensiboApiBaseUrl = "https://home.sensibo.com/api/v2";
+export const sensiboApiBaseUrl: string = "https://home.sensibo.com/api/v2";
 const sensiboValidationPath = "/users/me/pods";
 const defaultDeviceFields = "id,name,room,measurements,acState,connectionStatus,productModel";
 
@@ -120,7 +120,6 @@ export async function validateSensiboCredential(
       accountId: "sensibo",
       displayName: "Sensibo API Key",
     },
-    grantedScopes: [],
     metadata: compactObject({
       apiBaseUrl: sensiboApiBaseUrl,
       validationEndpoint: sensiboValidationPath,
@@ -134,7 +133,7 @@ async function requestSensiboJson(input: {
   apiKey: string;
   path: string;
   query?: Record<string, string | undefined>;
-  context: Pick<ApiKeyProviderContext, "fetcher" | "signal">;
+  context: ProviderRequestContext;
   method: "GET" | "POST";
   body?: Record<string, unknown>;
   phase: SensiboPhase;
@@ -186,7 +185,7 @@ function buildSensiboUrl(path: string, apiKey: string, query?: Record<string, st
 
 function buildSensiboHeaders(method: "GET" | "POST"): Record<string, string> {
   return compactObject({
-    accept: "application/json",
+    "accept": "application/json",
     "accept-encoding": "gzip",
     "content-type": method === "POST" ? "application/json" : undefined,
     "user-agent": providerUserAgent,

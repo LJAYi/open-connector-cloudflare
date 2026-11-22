@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
 import {
@@ -11,7 +11,7 @@ import {
   requiredResponseRecord,
 } from "../provider-runtime.ts";
 
-const lemonSqueezyApiBaseUrl = "https://api.lemonsqueezy.com/v1";
+export const lemonSqueezyApiBaseUrl = "https://api.lemonsqueezy.com/v1";
 const lemonSqueezyValidationPath = "/users/me";
 
 type LemonSqueezyRequestPhase = "validate" | "execute";
@@ -323,7 +323,6 @@ export async function validateLemonSqueezyCredential(
       accountId,
       displayName,
     },
-    grantedScopes: [],
     metadata: compactObject({
       apiBaseUrl: lemonSqueezyApiBaseUrl,
       validationEndpoint: lemonSqueezyValidationPath,
@@ -437,9 +436,9 @@ function mapLemonSqueezyError(
 
 function lemonSqueezyHeaders(apiKey: string): Record<string, string> {
   return {
-    Accept: "application/vnd.api+json",
+    "Accept": "application/vnd.api+json",
     "Content-Type": "application/vnd.api+json",
-    Authorization: `Bearer ${apiKey}`,
+    "Authorization": `Bearer ${apiKey}`,
     "User-Agent": providerUserAgent,
   };
 }

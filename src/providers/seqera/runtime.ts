@@ -4,8 +4,9 @@ import type {
   ProviderExecutors,
   ResolvedCredential,
 } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ProviderExecutorDefinition, ProviderFetch, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ProviderExecutorDefinition, ProviderRuntimeHandler } from "../provider-executors.ts";
+import type { ProviderFetch } from "../provider-runtime.ts";
 
 import {
   compactObject,
@@ -15,19 +16,20 @@ import {
   optionalString,
   requiredString,
 } from "../../core/cast.ts";
+import { assertPublicHttpUrl, isPrivateNetworkAccessAllowed } from "../../core/request.ts";
+import { requireApiKeyCredential } from "../provider-credentials.ts";
+import { defineProviderExecutors } from "../provider-executors.ts";
 import {
   createProviderTimeout,
-  defineProviderExecutors,
   isAbortLikeError,
   providerUserAgent,
   ProviderRequestError,
-  requireApiKeyCredential,
   requiredResponseRecord,
+  defaultProviderRequestTimeoutMs,
 } from "../provider-runtime.ts";
 
 const service = "seqera";
 const defaultSeqeraApiBaseUrl = "https://api.cloud.seqera.io";
-const seqeraRequestTimeoutMs = 30_000;
 const seqeraValidationEndpoint = "/user-info";
 
 type SeqeraRequestPhase = "validate" | "execute";
@@ -78,6 +80,7 @@ export const seqeraActionHandlers: ProviderActionHandlers<"seqera", SeqeraAction
 export const seqeraExecutorDefinition: ProviderExecutorDefinition<SeqeraActionContext> = {
   service: "seqera",
   handlers: seqeraActionHandlers,
+  allowPrivateNetwork: isPrivateNetworkAccessAllowed,
   async createContext(context: ExecutionContext, fetcher: ProviderFetch): Promise<SeqeraActionContext> {
     return createSeqeraContext(await requireApiKeyCredential(context, service), fetcher, context.signal);
   },
@@ -110,7 +113,6 @@ export async function validateSeqeraCredential(
       accountId: String(userId),
       displayName: accountLabel,
     },
-    grantedScopes: [],
     metadata: compactObject({
       apiBaseUrl,
       validationEndpoint: seqeraValidationEndpoint,
@@ -356,8 +358,8 @@ async function seqeraFetch(input: {
 }): Promise<Response> {
   const url = buildSeqeraUrl(input.apiBaseUrl, input.path, input.query);
   const headers = new Headers({
-    Accept: "application/json",
-    Authorization: `Bearer ${input.apiKey}`,
+    "Accept": "application/json",
+    "Authorization": `Bearer ${input.apiKey}`,
     "User-Agent": providerUserAgent,
   });
 
@@ -367,7 +369,7 @@ async function seqeraFetch(input: {
     body = JSON.stringify(input.body);
   }
 
-  const timeout = createProviderTimeout(input.signal, seqeraRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.signal);
   try {
     return await input.fetcher(url, {
       method: input.method ?? "GET",
@@ -379,7 +381,7 @@ async function seqeraFetch(input: {
     if (timeout.didTimeout() || isAbortLikeError(error)) {
       throw new ProviderRequestError(
         502,
-        `seqera ${input.path} request timed out after ${Math.max(1, Math.ceil(seqeraRequestTimeoutMs / 1000))} seconds`,
+        `seqera ${input.path} request timed out after ${Math.max(1, Math.ceil(defaultProviderRequestTimeoutMs / 1000))} seconds`,
       );
     }
 
@@ -446,16 +448,14 @@ function buildSeqeraUrl(apiBaseUrl: string, path: string, query?: Record<string,
   return url;
 }
 
-function normalizeSeqeraApiBaseUrl(value: string | undefined, fieldName: string): string {
+export function normalizeSeqeraApiBaseUrl(value: string | undefined, fieldName: string): string {
   const raw = value?.trim() || defaultSeqeraApiBaseUrl;
   const withProtocol = raw.startsWith("http://") || raw.startsWith("https://") ? raw : `https://${raw}`;
-
-  let parsed: URL;
-  try {
-    parsed = new URL(withProtocol);
-  } catch {
-    throw new ProviderRequestError(400, `${fieldName} must be a valid absolute URL`);
-  }
+  const parsed = assertPublicHttpUrl(withProtocol, {
+    fieldName,
+    createError: (message) => new ProviderRequestError(400, message),
+    allowPrivateNetwork: isPrivateNetworkAccessAllowed(),
+  });
 
   if (parsed.protocol !== "https:" && !isLocalhostHostname(parsed.hostname)) {
     throw new ProviderRequestError(400, "seqera apiBaseUrl must use https unless connecting to localhost");

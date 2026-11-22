@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import {
   optionalBoolean,
@@ -54,7 +54,6 @@ export async function validateMetronomeCredential(
       accountId: "metronome:api-key",
       displayName: "Metronome API Key",
     },
-    grantedScopes: [],
     metadata: {
       apiBaseUrl: metronomeApiBaseUrl,
       validationEndpoint: "/v1/customers",
@@ -224,9 +223,9 @@ async function metronomeRequestJson(
 
 function metronomeHeaders(apiKey: string, extraHeaders?: HeadersInit): Record<string, string> {
   return {
-    accept: "application/json",
+    "accept": "application/json",
     "user-agent": providerUserAgent,
-    authorization: `Bearer ${apiKey}`,
+    "authorization": `Bearer ${apiKey}`,
     ...Object.fromEntries(new Headers(extraHeaders).entries()),
   };
 }

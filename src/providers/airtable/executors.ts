@@ -1,6 +1,13 @@
-import type { CredentialValidationResult, CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { BearerProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type {
+  CredentialValidationResult,
+  CredentialValidators,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { IntegrationDefinition } from "../../triggers/common/integration.ts";
+import type { PollDefinition } from "../../triggers/common/poll.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { BearerProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -11,13 +18,16 @@ import {
   optionalString,
   optionalStringArray,
 } from "../../core/cast.ts";
+import { defineBearerProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
-  defineBearerProviderExecutors,
   ProviderRequestError,
   providerResponseError,
   providerUserAgent,
   requiredResponseRecord,
+  providerInputError,
 } from "../provider-runtime.ts";
+import { airtableRecordChanged } from "./trigger-on-record-changed.ts";
 
 type AirtableRequestMode = "validate" | "execute";
 type AirtableActionInput = Record<string, unknown>;
@@ -92,6 +102,14 @@ export const airtableActionHandlers: ProviderActionHandlers<"airtable", Airtable
 };
 
 export const executors: ProviderExecutors = defineBearerProviderExecutors(service, airtableActionHandlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: airtableApiBaseUrl,
+  auth: { type: "bearer" },
+  skipDnsValidation: true,
+  defaultHeaders: { accept: "application/json" },
+});
 
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher }) {
@@ -440,8 +458,8 @@ function buildAirtableUrl(path: string, query?: ReadonlyArray<readonly [string, 
 
 function airtableHeaders(auth: AirtableAuth, contentType?: string): Record<string, string> {
   const headers: Record<string, string> = {
-    Accept: "application/json",
-    Authorization: `${auth.tokenType ?? "Bearer"} ${auth.accessToken}`,
+    "Accept": "application/json",
+    "Authorization": `${auth.tokenType ?? "Bearer"} ${auth.accessToken}`,
     "User-Agent": providerUserAgent,
   };
   if (contentType) {
@@ -480,10 +498,10 @@ function createAirtableError(
     return new ProviderRequestError(mode === "validate" ? 400 : response.status, message);
   }
   if (notFoundAsInvalidInput && response.status === 404) {
-    return new ProviderRequestError(400, message);
+    return providerInputError(message);
   }
   if (response.status === 422) {
-    return new ProviderRequestError(400, message);
+    return providerInputError(message);
   }
   if (response.status === 429) {
     return new ProviderRequestError(429, message);
@@ -772,3 +790,5 @@ function requireString(value: unknown, fieldName: string): string {
   }
   return text;
 }
+
+export const triggers: readonly (IntegrationDefinition | PollDefinition)[] = [airtableRecordChanged];

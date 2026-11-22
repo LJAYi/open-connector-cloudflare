@@ -1,5 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ApiKeyProviderContext, ProviderActionHandlers, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ApiKeyProviderContext, ProviderActionHandlers, ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -17,9 +17,11 @@ import {
 import {
   providerInputError,
   ProviderRequestError,
+  withRetryAfterSeconds,
   providerResponseError,
   providerUserAgent,
   readProviderJsonBody,
+  readProviderErrorBody,
   requiredInputString,
   requiredResponseRecord,
   runProviderRequest,
@@ -51,6 +53,8 @@ interface SeedanceToolInput {
 export interface SeedanceSubmitInput {
   model: string;
   prompt?: string;
+  omniReferenceTaskType?: "auto" | "reference" | "edit" | "extend";
+  outputFormat?: "mp4" | "mov";
   images: SeedanceImageInput[];
   videos: SeedanceVideoInput[];
   audios: SeedanceAudioInput[];
@@ -145,7 +149,6 @@ export async function validateSeedanceCredential(
       accountId: "seedance:api_key",
       displayName: "Seedance API Key",
     },
-    grantedScopes: [],
     metadata: { apiBaseUrl: seedanceApiBaseUrl },
   };
 }
@@ -172,6 +175,13 @@ export function readSeedanceSubmitInput(input: Record<string, unknown>): Seedanc
   return {
     model,
     prompt,
+    omniReferenceTaskType: readEnum(input.omniReferenceTaskType, "omniReferenceTaskType", [
+      "auto",
+      "reference",
+      "edit",
+      "extend",
+    ]),
+    outputFormat: readEnum(input.outputFormat, "outputFormat", ["mp4", "mov"]),
     images,
     videos,
     audios,
@@ -203,6 +213,8 @@ export function buildSeedanceSubmitBody(input: SeedanceSubmitInput): Record<stri
   return compactObject({
     model: input.model,
     content,
+    omni_reference_task_type: input.omniReferenceTaskType,
+    output_format: input.outputFormat,
     return_last_frame: input.returnLastFrame,
     execution_expires_after: input.executionExpiresAfter,
     generate_audio: input.generateAudio,
@@ -226,7 +238,7 @@ export function normalizeSeedanceTask(payload: unknown, fallbackTaskId: string):
     createdAt: optionalInteger(record.created_at),
     updatedAt: optionalInteger(record.updated_at),
   };
-  if (status === "queued" || status === "running") {
+  if (status === "created" || status === "queued" || status === "running") {
     return { ...common, state: "processing", progress: optionalNumber(record.progress) };
   }
   if (status === "succeeded") {
@@ -264,18 +276,20 @@ async function requestArkJson(input: SeedanceRequestInput): Promise<unknown> {
     const response = await input.context.fetcher(url, {
       method: input.method,
       headers: {
-        accept: "application/json",
-        authorization: `Bearer ${input.context.apiKey}`,
+        "accept": "application/json",
+        "authorization": `Bearer ${input.context.apiKey}`,
         "content-type": "application/json",
         "user-agent": providerUserAgent,
       },
       body: input.body ? JSON.stringify(input.body) : undefined,
       signal,
     });
-    const payload = await readProviderJsonBody(response, {
-      emptyBody: {},
-      invalidJsonMessage: "Seedance returned an invalid JSON response",
-    });
+    const payload = response.ok
+      ? await readProviderJsonBody(response, {
+          emptyBody: {},
+          invalidJsonMessage: "Seedance returned an invalid JSON response",
+        })
+      : await readProviderErrorBody(response, "Seedance", signal);
     if (!response.ok) handleArkError(response, payload);
     return payload;
   });
@@ -290,7 +304,7 @@ function handleArkError(response: Response, payload: unknown): never {
     optionalString(record?.error) ??
     optionalString(nestedError?.message) ??
     `Seedance request failed with HTTP ${response.status}`;
-  const details = compactObject({ code, status: response.status });
+  const details = withRetryAfterSeconds(response, compactObject({ code, status: response.status }));
   if (response.status === 401 || response.status === 403)
     throw new ProviderRequestError(response.status, message, details);
   if (response.status === 400 || response.status === 404 || response.status === 422) {
@@ -386,7 +400,9 @@ function requireArkInteger(value: unknown, field: string): number {
   return integer;
 }
 
-function readEnum<T extends string>(value: unknown, field: string, values: readonly T[], fallback: T): T {
+function readEnum<T extends string>(value: unknown, field: string, values: readonly T[], fallback: T): T;
+function readEnum<T extends string>(value: unknown, field: string, values: readonly T[]): T | undefined;
+function readEnum<T extends string>(value: unknown, field: string, values: readonly T[], fallback?: T): T | undefined {
   if (value === undefined) return fallback;
   if (typeof value === "string" && values.includes(value as T)) return value as T;
   throw new ProviderRequestError(400, `${field} is invalid`);

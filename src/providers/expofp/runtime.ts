@@ -1,9 +1,13 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import { compactObject, optionalBoolean, optionalRecord, optionalString } from "../../core/cast.ts";
-import { ProviderRequestError, providerUserAgent, runProviderRequest } from "../provider-runtime.ts";
+import {
+  ProviderRequestError,
+  providerUserAgent,
+  runProviderRequest,
+  providerInputError,
+} from "../provider-runtime.ts";
 
 export const expofpApiBaseUrl = "https://app.expofp.com/api/v1";
 
@@ -118,7 +122,6 @@ export async function validateExpofpCredential(
       accountId: "expofp:api-token",
       displayName: firstExpo ? `ExpoFP ${firstExpo.name}` : "ExpoFP API Token",
     },
-    grantedScopes: [],
     metadata: compactObject({
       validationEndpoint: "/list-events",
       apiBaseUrl: expofpApiBaseUrl,
@@ -132,14 +135,14 @@ export async function validateExpofpCredential(
 async function requestExpofpJson(
   path: string,
   payload: Record<string, unknown>,
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
+  context: ApiKeyProviderContext,
   phase: ExpofpPhase,
 ): Promise<unknown> {
   return runProviderRequest({ signal: context.signal, label: "ExpoFP" }, async (signal) => {
     const response = await context.fetcher(new URL(path.replace(/^\//, ""), `${expofpApiBaseUrl}/`), {
       method: "POST",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "content-type": "application/json",
         "user-agent": providerUserAgent,
       },
@@ -175,7 +178,7 @@ function createExpofpError(status: number, payload: unknown, phase: ExpofpPhase)
     return new ProviderRequestError(429, message);
   }
   if (phase === "validate" && status >= 400 && status < 500) {
-    return new ProviderRequestError(400, message);
+    return providerInputError(message);
   }
   if (phase === "execute" && status === 401) {
     return new ProviderRequestError(401, message);

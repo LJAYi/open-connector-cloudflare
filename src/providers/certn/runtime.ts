@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import {
@@ -173,7 +173,6 @@ export async function validateCertnCredential(
       accountId: `certn:${region.id}`,
       displayName: `Certn ${region.label} API Key`,
     },
-    grantedScopes: [],
     metadata: {
       region: region.id,
       regionLabel: region.label,
@@ -230,8 +229,8 @@ async function requestCertn(input: {
       method: input.method,
       signal: timeout.signal,
       headers: {
-        accept: "application/json",
-        authorization: `Api-Key ${input.context.apiKey}`,
+        "accept": "application/json",
+        "authorization": `Api-Key ${input.context.apiKey}`,
         "user-agent": providerUserAgent,
       },
     });

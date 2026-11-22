@@ -46,7 +46,6 @@ export async function validateBtMcpCredential(
       accountId: `bt_mcp:mcp:${endpointHash}`,
       displayName: `BT Panel MCP - ${context.endpoint.host}`,
     },
-    grantedScopes: [],
     metadata: {
       mcpEndpoint: context.endpoint.toString(),
       discoveredToolCount: tools.length,
@@ -107,7 +106,7 @@ async function withBtMcpClient<T>(context: BtMcpContext, run: (client: Client) =
       transport: "streamable_http",
       fetcher: context.fetcher,
       headers: new Headers({
-        authorization: `Bearer ${context.authorizationToken}`,
+        "authorization": `Bearer ${context.authorizationToken}`,
         "user-agent": providerUserAgent,
       }),
       signal: context.signal,

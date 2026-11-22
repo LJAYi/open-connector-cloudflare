@@ -1,9 +1,9 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 
 import { compactObject, looseArray, optionalBoolean, optionalRawString, optionalString } from "../../core/cast.ts";
 import { assertPublicHttpUrl } from "../../core/request.ts";
-import { ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
+import { ProviderRequestError, providerUserAgent, providerInputError } from "../provider-runtime.ts";
 
 const posthogUserAgent = providerUserAgent;
 const posthogValidationPath = "/api/users/@me/";
@@ -244,7 +244,6 @@ export async function validatePosthogCredential(
     profile: {
       accountId: providerAccountId,
       displayName: accountLabel,
-      grantedScopes: [],
     },
     metadata: compactObject({
       baseUrl,
@@ -1454,7 +1453,7 @@ async function requestPosthogJson<T>(input: PosthogRequestOptions): Promise<T> {
 
 function buildPosthogHeaders(bearerToken: string) {
   return {
-    authorization: `Bearer ${bearerToken}`,
+    "authorization": `Bearer ${bearerToken}`,
     "content-type": "application/json",
     "user-agent": posthogUserAgent,
   };
@@ -1515,9 +1514,10 @@ function mapPosthogError(input: {
     return new ProviderRequestError(429, message);
   }
   if (input.status === 404 && input.notFoundAsInvalidInput) {
-    return new ProviderRequestError(400, message);
+    return providerInputError(message);
   }
 
+  if ([400, 409, 422].includes(input.status)) return new ProviderRequestError(400, message, undefined, "invalid_input");
   return new ProviderRequestError(input.status >= 500 ? 502 : input.status, message);
 }
 
@@ -1529,7 +1529,7 @@ function normalizePosthogBaseUrl(value: string | undefined) {
 
   const parsed = assertPublicHttpUrl(baseUrl, {
     fieldName: "Base URL",
-    createError: (message) => new ProviderRequestError(400, message),
+    createError: providerInputError,
   });
   if (parsed.protocol !== "https:") {
     throw new ProviderRequestError(400, "Base URL must use https");

@@ -1,6 +1,6 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -12,9 +12,10 @@ import {
   positiveInteger,
   requiredRecord,
 } from "../../core/cast.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
   createProviderTimeout,
-  defineApiKeyProviderExecutors,
   providerInputError,
   providerUserAgent,
   ProviderRequestError,
@@ -63,6 +64,16 @@ export const executors: ProviderExecutors = defineApiKeyProviderExecutors(servic
   skipDnsValidation: true,
 });
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: commpeakTextPeakBaseUrl,
+  auth: { type: "api_key_header", name: "Authorization" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const payload = await commpeakGetJson(
@@ -79,7 +90,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: firstStream?.id == null ? "api_key" : String(firstStream.id),
         displayName: firstStream?.name ? `CommPeak: ${firstStream.name}` : "CommPeak TextPeak API Key",
       },
-      grantedScopes: [],
       metadata: compactObject({
         apiBaseUrl: commpeakTextPeakBaseUrl,
         validationEndpoint: "/streams",
@@ -273,7 +283,7 @@ async function commpeakPostJson(
     {
       method: "POST",
       headers: commpeakHeaders(token, {
-        accept: "application/json",
+        "accept": "application/json",
         "content-type": "application/json",
       }),
       body: JSON.stringify(body),
@@ -319,7 +329,7 @@ function commpeakTextPeakUrl(path: string) {
 
 function commpeakHeaders(token: string, extraHeaders: Record<string, string>) {
   return {
-    Authorization: token,
+    "Authorization": token,
     "user-agent": providerUserAgent,
     ...extraHeaders,
   };

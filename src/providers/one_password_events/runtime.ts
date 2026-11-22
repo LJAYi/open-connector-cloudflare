@@ -1,6 +1,7 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ProviderFetch, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ProviderRuntimeHandler } from "../provider-executors.ts";
+import type { ProviderFetch } from "../provider-runtime.ts";
 import type { OnePasswordEventsActionName } from "./actions.ts";
 
 import { createHash } from "node:crypto";
@@ -153,7 +154,7 @@ function buildEventCursorBody(input: Record<string, unknown>): Record<string, un
   });
 }
 
-function resolveOnePasswordEventsBaseUrl(
+export function resolveOnePasswordEventsBaseUrl(
   values: Record<string, string>,
   metadata: Record<string, unknown> | undefined,
 ): string {
@@ -192,8 +193,8 @@ async function requestOnePasswordEventsJson(input: {
     const response = await input.context.fetcher(new URL(input.path, `${input.context.baseUrl}/`), {
       method: input.method,
       headers: {
-        accept: "application/json",
-        authorization: `Bearer ${input.context.apiKey}`,
+        "accept": "application/json",
+        "authorization": `Bearer ${input.context.apiKey}`,
         ...(input.method === "POST" ? { "content-type": "application/json" } : {}),
         "user-agent": providerUserAgent,
       },
@@ -232,7 +233,7 @@ function createOnePasswordEventsError(
     extractOnePasswordEventsErrorMessage(payload) ?? `1Password Events request failed with status ${status}`;
 
   if (phase === "validate" && (status === 401 || status === 403)) {
-    return new ProviderRequestError(400, message);
+    return providerInputError(message);
   }
 
   if (phase === "execute" && (status === 401 || status === 403)) {

@@ -1,5 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ApiKeyProviderContext, ProviderActionHandlers, ProviderFetch } from "../provider-runtime.ts";
+import type { ApiKeyProviderContext, ProviderActionHandlers } from "../provider-executors.ts";
+import type { ProviderFetch } from "../provider-runtime.ts";
 import type { TikHubEndpointMethod } from "./endpoint-policy.ts";
 
 import {
@@ -18,7 +19,7 @@ import {
 } from "./endpoint-policy.ts";
 import { TikHubRequestError } from "./errors.ts";
 
-const tikhubApiBaseUrl = "https://api.tikhub.io";
+export const tikhubApiBaseUrl = "https://api.tikhub.io";
 const tikhubUserScope = "/api/v1/tikhub/user/";
 const tikhubUserRequestTimeoutMs = 45_000;
 const tikhubDynamicRequestTimeoutMs = 60_000;
@@ -207,13 +208,13 @@ async function invokeTikHubEndpoint(input: Record<string, unknown>, fetcher: typ
     const response = await fetcher(url, {
       method,
       headers: {
-        accept: "application/json",
-        authorization: `Bearer ${apiKey}`,
+        "accept": "application/json",
+        "authorization": `Bearer ${apiKey}`,
         ...(serializedBody === undefined ? {} : { "content-type": "application/json" }),
         "user-agent": providerUserAgent,
       },
       ...(serializedBody === undefined ? {} : { body: serializedBody }),
-      redirect: "error",
+      redirect: "manual",
       signal: timeout.signal,
     });
     let responseBody: unknown;
@@ -576,11 +577,11 @@ async function requestTikHubUserJson(input: {
     const response = await input.fetcher(url, {
       method: "GET",
       headers: {
-        accept: "application/json",
-        authorization: `Bearer ${input.apiKey}`,
+        "accept": "application/json",
+        "authorization": `Bearer ${input.apiKey}`,
         "user-agent": providerUserAgent,
       },
-      redirect: "error",
+      redirect: "manual",
       signal: timeout.signal,
     });
     const payload = await readTikHubResponseBody(response, tikhubDynamicResponseMaxBytes);

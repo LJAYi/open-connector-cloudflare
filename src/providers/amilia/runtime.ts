@@ -1,6 +1,7 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ProviderFetch, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ProviderRuntimeHandler } from "../provider-executors.ts";
+import type { ProviderFetch } from "../provider-runtime.ts";
 
 import {
   optionalBoolean,
@@ -150,9 +151,7 @@ export async function validateAmiliaCredential(
     profile: {
       accountId: `amilia:${organization}`,
       displayName: `Amilia: ${organization}`,
-      grantedScopes: [],
     },
-    grantedScopes: [],
     metadata: {
       organization,
       apiBaseUrl: buildAmiliaApiBaseUrl(organization),
@@ -180,8 +179,8 @@ async function requestAmiliaJson(input: {
   try {
     const response = await input.context.fetcher(url, {
       headers: {
-        accept: "application/json",
-        authorization: `Bearer ${input.context.apiKey}`,
+        "accept": "application/json",
+        "authorization": `Bearer ${input.context.apiKey}`,
         "user-agent": providerUserAgent,
       },
       signal: timeout.signal,
@@ -228,7 +227,7 @@ function toAmiliaError(
     return new ProviderRequestError(phase === "validate" ? 401 : response.status, message);
   }
   if (response.status === 404 && notFoundAsInvalidInput) {
-    return new ProviderRequestError(400, message);
+    return providerInputError(message);
   }
   return new ProviderRequestError(response.status >= 400 ? response.status : 502, message);
 }

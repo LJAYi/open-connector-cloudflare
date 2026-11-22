@@ -1,5 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 
 import { compactObject, optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
 import { providerUserAgent, ProviderRequestError, requiredInputString } from "../provider-runtime.ts";
@@ -92,9 +92,7 @@ export async function validateGleapCredential(
     profile: {
       accountId: userId ?? projectId,
       displayName: readUserLabel(user) ?? "Gleap API Key",
-      grantedScopes: [],
     },
-    grantedScopes: [],
     metadata: compactObject({
       apiBaseUrl: gleapApiBaseUrl,
       projectId,
@@ -392,9 +390,9 @@ async function requestGleapJson(input: GleapRequestInput): Promise<unknown> {
 
 function gleapHeaders(context: GleapActionContext, hasBody: boolean): HeadersInit {
   return {
-    accept: "application/json",
-    authorization: `Bearer ${context.apiKey}`,
-    Project: context.projectId,
+    "accept": "application/json",
+    "authorization": `Bearer ${context.apiKey}`,
+    "Project": context.projectId,
     "user-agent": providerUserAgent,
     ...(hasBody ? { "content-type": "application/json" } : {}),
   };

@@ -1,9 +1,14 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
-import { ProviderRequestError, providerUserAgent, runProviderRequest } from "../provider-runtime.ts";
+import {
+  ProviderRequestError,
+  providerUserAgent,
+  runProviderRequest,
+  providerInputError,
+} from "../provider-runtime.ts";
 
 export const cronlyApiBaseUrl = "https://cronly.app/api";
 type CronlyPhase = "validate" | "execute";
@@ -118,8 +123,8 @@ async function requestCronlyJson(input: CronlyRequestInput): Promise<unknown> {
     const response = await input.context.fetcher(new URL(path, `${cronlyApiBaseUrl}/`), {
       method: input.method ?? "GET",
       headers: {
-        accept: "application/json",
-        authorization: `Bearer ${input.context.apiKey}`,
+        "accept": "application/json",
+        "authorization": `Bearer ${input.context.apiKey}`,
         "content-type": "application/json",
         "user-agent": providerUserAgent,
       },
@@ -149,8 +154,7 @@ function createCronlyError(status: number, payload: unknown, phase: CronlyPhase)
     optionalString(record?.message)?.trim() ||
     `Cronly request failed with status ${status}`;
   if (status === 429) return new ProviderRequestError(429, message);
-  if (phase === "validate" && (status === 200 || (400 <= status && status < 500)))
-    return new ProviderRequestError(400, message);
+  if (phase === "validate" && (status === 200 || (400 <= status && status < 500))) return providerInputError(message);
   if (400 <= status && status < 500) return new ProviderRequestError(status, message);
   return new ProviderRequestError(status === 200 ? 502 : status || 500, message);
 }

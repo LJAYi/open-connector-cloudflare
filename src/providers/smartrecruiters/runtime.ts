@@ -1,6 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import { compactObject, optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
 import {
@@ -101,7 +100,6 @@ export async function validateSmartRecruitersCredential(
       accountId: "smartrecruiters-api-key",
       displayName: "SmartRecruiters API Key",
     },
-    grantedScopes: [],
     metadata: compactObject({
       validationEndpoint: "/jobs",
       apiBaseUrl: smartrecruitersApiBaseUrl,
@@ -113,13 +111,13 @@ export async function validateSmartRecruitersCredential(
 
 async function requestSmartRecruitersJson(
   input: SmartRecruitersRequestInput,
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
+  context: ApiKeyProviderContext,
 ): Promise<unknown> {
   return runProviderRequest({ signal: context.signal, label: "SmartRecruiters" }, async (signal) => {
     const response = await context.fetcher(buildSmartRecruitersUrl(input.path, input.query), {
       method: input.method,
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "user-agent": providerUserAgent,
         "X-SmartToken": context.apiKey,
       },

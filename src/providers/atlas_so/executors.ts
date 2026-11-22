@@ -1,10 +1,10 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
-  defineApiKeyProviderExecutors,
   ProviderRequestError,
   providerUserAgent,
   requiredResponseRecord,
@@ -178,6 +178,14 @@ export const atlasSoActionHandlers: ProviderActionHandlers<"atlas_so", AtlasSoAc
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, atlasSoActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: atlasSoApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  defaultHeaders: { accept: "application/json" },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const payload = await requestAtlasSoJson({
@@ -205,7 +213,6 @@ export const credentialValidators: CredentialValidators = {
       profile: {
         displayName: firstAccountName ?? firstAccountEmail ?? "Atlas.so API Key",
       },
-      grantedScopes: [],
       metadata: compactObject({
         apiBaseUrl: atlasSoApiBaseUrl,
         validationEndpoint: "/v1/accounts",
@@ -219,7 +226,7 @@ export const credentialValidators: CredentialValidators = {
 };
 
 async function requestAtlasSoJson(input: {
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   path: string;
   phase: AtlasSoPhase;
   method?: AtlasSoMethod;
@@ -256,8 +263,8 @@ function buildAtlasSoUrl(path: string, query?: Record<string, AtlasSoQueryValue>
 
 function buildAtlasSoHeaders(apiKey: string, hasBody: boolean): Record<string, string> {
   const headers: Record<string, string> = {
-    accept: "application/json",
-    authorization: `Bearer ${apiKey}`,
+    "accept": "application/json",
+    "authorization": `Bearer ${apiKey}`,
     "user-agent": providerUserAgent,
   };
   if (hasBody) {

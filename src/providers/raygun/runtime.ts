@@ -1,5 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 
 import { compactObject, optionalInteger, optionalString } from "../../core/cast.ts";
 import { encodePathSegment } from "../../core/request.ts";
@@ -180,7 +180,6 @@ export async function validateRaygunCredential(
     profile: {
       accountId: "raygun",
       displayName: firstApplicationName ? `Raygun PAT ()` : "Raygun Personal Access Token",
-      grantedScopes: [],
     },
     metadata: {
       apiBaseUrl: raygunApiBaseUrl,
@@ -196,8 +195,8 @@ async function raygunRequest(input: RaygunRequestInput, context: RaygunContext) 
 
   try {
     const headers: Record<string, string> = {
-      accept: "application/json",
-      authorization: `Bearer ${context.apiKey}`,
+      "accept": "application/json",
+      "authorization": `Bearer ${context.apiKey}`,
       "user-agent": providerUserAgent,
     };
     if (input.body) {

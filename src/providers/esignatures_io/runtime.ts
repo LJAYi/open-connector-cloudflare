@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import { Buffer } from "node:buffer";
 import {
@@ -65,7 +65,6 @@ export async function validateEsignaturesIoCredential(
     profile: {
       displayName: "eSignatures.com API Key",
     },
-    grantedScopes: [],
     metadata: {
       apiBaseUrl: esignaturesIoApiBaseUrl,
       validationEndpoint: "/templates",
@@ -264,8 +263,8 @@ async function esignaturesIoRequest(
 
 function esignaturesIoHeaders(apiKey: string, hasJsonBody: boolean): Record<string, string> {
   const headers: Record<string, string> = {
-    accept: "application/json",
-    authorization: buildEsignaturesIoAuthorizationHeader(apiKey),
+    "accept": "application/json",
+    "authorization": buildEsignaturesIoAuthorizationHeader(apiKey),
     "user-agent": providerUserAgent,
   };
   if (hasJsonBody) {

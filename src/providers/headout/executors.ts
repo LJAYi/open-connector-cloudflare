@@ -1,5 +1,10 @@
-import type { CredentialValidators, ExecutionContext, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type {
+  CredentialValidators,
+  ExecutionContext,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -11,21 +16,22 @@ import {
   optionalString,
   requiredString,
 } from "../../core/cast.ts";
+import { requireApiKeyCredential } from "../provider-credentials.ts";
+import { defineProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
-  defineProviderExecutors,
   isAbortLikeError,
   providerInputError,
   providerUserAgent,
   ProviderRequestError,
-  requireApiKeyCredential,
   requiredResponseRecord,
+  defaultProviderRequestTimeoutMs,
 } from "../provider-runtime.ts";
 
 const service = "headout";
 const headoutProductionApiBaseUrl = "https://www.headout.com/api/public/v1";
 const headoutSandboxApiBaseUrl = "https://sandbox.api.test-headout.com/api/public/v1";
 const headoutValidationPath = "/booking";
-const headoutDefaultTimeoutMs = 30_000;
 
 type HeadoutPhase = "validate" | "execute";
 type HeadoutQueryValue = boolean | number | string | undefined;
@@ -119,8 +125,8 @@ export const headoutActionHandlers: ProviderActionHandlers<"headout", HeadoutAct
       context,
       path: `/product/get/${encodeURIComponent(productId)}`,
       query: compactObject({
-        currencyCode: optionalString(input.currencyCode),
-        language: optionalString(input.language),
+        "currencyCode": optionalString(input.currencyCode),
+        "language": optionalString(input.language),
         "fetch-variants": optionalBoolean(input.fetchVariants),
       }),
       phase: "execute",
@@ -197,6 +203,21 @@ export const executors: ProviderExecutors = defineProviderExecutors<HeadoutActio
   },
 });
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  async baseUrl(context) {
+    const credential = await requireApiKeyCredential(context, service);
+    return optionalString(credential.metadata.apiBaseUrl) === headoutSandboxApiBaseUrl
+      ? headoutSandboxApiBaseUrl
+      : headoutProductionApiBaseUrl;
+  },
+  allowedOrigins: [headoutProductionApiBaseUrl, headoutSandboxApiBaseUrl],
+  auth: { type: "api_key_header", name: "Headout-Auth" },
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const apiBaseUrl = resolveHeadoutApiBaseUrl(input.apiKey);
@@ -216,7 +237,6 @@ export const credentialValidators: CredentialValidators = {
       profile: {
         displayName: "Headout API Key",
       },
-      grantedScopes: [],
       metadata: {
         apiBaseUrl,
         environment: apiBaseUrl === headoutSandboxApiBaseUrl ? "sandbox" : "production",
@@ -234,14 +254,14 @@ async function requestHeadoutJson(input: {
 }): Promise<unknown> {
   const apiBaseUrl = input.context.apiBaseUrl ?? resolveHeadoutApiBaseUrl(input.context.apiKey);
   const url = buildHeadoutUrl(apiBaseUrl, input.path, input.query);
-  const timeoutSignal = AbortSignal.timeout(headoutDefaultTimeoutMs);
+  const timeoutSignal = AbortSignal.timeout(defaultProviderRequestTimeoutMs);
   const signal = input.context.signal ? AbortSignal.any([input.context.signal, timeoutSignal]) : timeoutSignal;
 
   try {
     const response = await input.context.fetcher(url, {
       method: "GET",
       headers: {
-        Accept: "application/json",
+        "Accept": "application/json",
         "Headout-Auth": input.context.apiKey,
         "User-Agent": providerUserAgent,
       },
@@ -261,7 +281,7 @@ async function requestHeadoutJson(input: {
     if (isAbortLikeError(error)) {
       throw new ProviderRequestError(
         502,
-        `headout ${input.path} request timed out after ${Math.ceil(headoutDefaultTimeoutMs / 1000)} seconds`,
+        `headout ${input.path} request timed out after ${Math.ceil(defaultProviderRequestTimeoutMs / 1000)} seconds`,
       );
     }
     throw new ProviderRequestError(

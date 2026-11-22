@@ -1,10 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type {
-  ApiKeyProviderContext,
-  ProviderActionHandlers,
-  ProviderRuntimeHandler,
-  ProviderTransitFile,
-} from "../provider-runtime.ts";
+import type { ApiKeyProviderContext, ProviderActionHandlers, ProviderRuntimeHandler } from "../provider-executors.ts";
+import type { ProviderTransitFile } from "../provider-files.ts";
 
 import { Buffer } from "node:buffer";
 import { compactObject, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
@@ -35,7 +31,6 @@ export function validateCredential(apiKey: string): CredentialValidationResult {
       accountId: "api_key",
       displayName: "ImageTranslate.AI API Key",
     },
-    grantedScopes: [],
     metadata: {
       apiBaseUrl,
       validationMode: "format_only",
@@ -96,7 +91,7 @@ async function downloadSource(url: string, signal?: AbortSignal): Promise<{ byte
   let response: Response;
   try {
     response = await providerFetch(url, {
-      headers: { accept: "image/jpeg, image/png, image/webp", "user-agent": providerUserAgent },
+      headers: { "accept": "image/jpeg, image/png, image/webp", "user-agent": providerUserAgent },
       signal,
     });
   } catch (error) {
@@ -127,8 +122,8 @@ async function requestTranslation(
     response = await context.fetcher(new URL(translatePath, apiBaseUrl), {
       method: "POST",
       headers: {
-        accept: "application/json",
-        authorization: `Bearer ${context.apiKey}`,
+        "accept": "application/json",
+        "authorization": `Bearer ${context.apiKey}`,
         "content-type": "application/json",
         "idempotency-key": idempotencyKey,
         "user-agent": providerUserAgent,

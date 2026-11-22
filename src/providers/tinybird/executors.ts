@@ -5,7 +5,7 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -15,14 +15,10 @@ import {
   requiredRecord,
   requiredString,
 } from "../../core/cast.ts";
-import {
-  defineProviderExecutors,
-  defineProviderProxy,
-  providerInputError,
-  ProviderRequestError,
-  providerUserAgent,
-  requireApiKeyCredential,
-} from "../provider-runtime.ts";
+import { requireApiKeyCredential } from "../provider-credentials.ts";
+import { defineProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { providerInputError, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
 import { tinybirdDefaultApiBaseUrl } from "./constants.ts";
 
 export const tinybirdAllowedApiBaseUrls: readonly string[] = [
@@ -105,11 +101,7 @@ export const proxy: ProviderProxyExecutor = defineProviderProxy({
     return resolveTinybirdApiBaseUrl(credential.values.apiBaseUrl ?? optionalString(credential.metadata.apiBaseUrl));
   },
   auth: { type: "api_key_authorization", prefix: "Bearer " },
-  customizeRequest({ headers }) {
-    if (!headers.has("accept")) {
-      headers.set("accept", "application/json");
-    }
-  },
+  defaultHeaders: { accept: "application/json" },
 });
 
 export const credentialValidators: CredentialValidators = {
@@ -134,7 +126,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: `tinybird:${host}`,
         displayName: `Tinybird ${host}`,
       },
-      grantedScopes: [],
       metadata: {
         apiBaseUrl,
         validationEndpoint: tinybirdSqlPath,
@@ -284,8 +275,8 @@ async function requestTinybirdJson(input: TinybirdRequestInput): Promise<unknown
 
 function tinybirdHeaders(apiKey: string, hasBody: boolean): Headers {
   const headers = new Headers({
-    accept: "application/json",
-    authorization: `Bearer ${apiKey}`,
+    "accept": "application/json",
+    "authorization": `Bearer ${apiKey}`,
     "user-agent": providerUserAgent,
   });
   if (hasBody) {

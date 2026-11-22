@@ -1,5 +1,6 @@
 import type { CredentialValidationResult, TransitFileStore } from "../../core/types.ts";
-import type { ProviderActionHandlerSubset, ProviderFetch } from "../provider-runtime.ts";
+import type { ProviderActionHandlerSubset } from "../provider-executors.ts";
+import type { ProviderFetch } from "../provider-runtime.ts";
 
 import {
   optionalBoolean,
@@ -15,6 +16,7 @@ import {
   stringArray,
 } from "../../core/cast.ts";
 import { assertPublicHttpUrl, isPrivateNetworkAccessAllowed, readBoundedResponseBytes } from "../../core/request.ts";
+import { readTransitFileInput } from "../provider-files.ts";
 import {
   createProviderTimeout,
   providerInputError,
@@ -22,7 +24,6 @@ import {
   providerUserAgent,
   readProviderJsonBody,
   readProviderTextBody,
-  readTransitFileInput,
   requiredInputString,
 } from "../provider-runtime.ts";
 
@@ -98,7 +99,7 @@ function buildPiHoleApiUrl(
 async function performPiHoleRequest(options: PiHoleRequestOptions & { sid: string | null }): Promise<Response> {
   const { context } = options;
   const url = buildPiHoleApiUrl(context, options.path, options.query);
-  const headers = new Headers({ accept: "application/json", "user-agent": providerUserAgent });
+  const headers = new Headers({ "accept": "application/json", "user-agent": providerUserAgent });
   if (options.sid) {
     headers.set("x-ftl-sid", options.sid);
   }
@@ -316,11 +317,15 @@ function readBlockingStatus(payload: Record<string, unknown>): Record<string, un
   };
 }
 
+// The Pi-hole CLI status marks stay written as `\u` escapes: a bundler re-encodes
+// non-ASCII inside a string literal but cannot rewrite a regex literal, and one
+// character above U+00FF forces V8 to hold the whole minified Workers script as a
+// two-byte UTF-16 string, doubling what the script costs in the isolate heap.
 function readGravityStatus(text: string): string | null {
-  if (/\[✗\]|\berror\b|\bfatal\b|\bfailed\b/i.test(text)) {
+  if (/\[\u2717\]|\berror\b|\bfatal\b|\bfailed\b/i.test(text)) {
     return "failed";
   }
-  if (/\[✓\]\s*done|\bdone\.?\s*$/im.test(text.trimEnd())) {
+  if (/\[\u2713\]\s*done|\bdone\.?\s*$/im.test(text.trimEnd())) {
     return "success";
   }
   return null;
@@ -593,9 +598,7 @@ export async function validatePiHoleCredential(
     profile: {
       accountId: `pi_hole:${baseUrl}`,
       displayName: `Pi-hole (${baseUrl})`,
-      grantedScopes: [],
     },
-    grantedScopes: [],
     metadata: {
       baseUrl,
       apiPath,

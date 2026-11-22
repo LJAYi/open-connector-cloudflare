@@ -1,19 +1,20 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { optionalIntegerLike, optionalRawString, optionalRecord, requiredString } from "../../core/cast.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
-  defineApiKeyProviderExecutors,
   isAbortLikeError,
   providerInputError,
   providerUserAgent,
   ProviderRequestError,
+  defaultProviderRequestTimeoutMs,
 } from "../provider-runtime.ts";
 
 const service = "hackerrank_work";
 const hackerrankWorkApiBaseUrl = "https://www.hackerrank.com/x/api/v3";
-const hackerrankWorkDefaultRequestTimeoutMs = 30_000;
 
 type RequestMode = "validate" | "execute";
 type HackerrankWorkActionContext = ApiKeyProviderContext;
@@ -108,6 +109,16 @@ export const hackerrankWorkActionHandlers: ProviderActionHandlers<"hackerrank_wo
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, hackerrankWorkActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: hackerrankWorkApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const context: HackerrankWorkActionContext = {
@@ -131,7 +142,6 @@ export const credentialValidators: CredentialValidators = {
       profile: {
         displayName: "HackerRank Work API Key",
       },
-      grantedScopes: [],
       metadata: {
         apiBaseUrl: hackerrankWorkApiBaseUrl,
         validationEndpoint: "/tests",
@@ -147,7 +157,7 @@ async function requestHackerrankWorkJson(
   query: Record<string, string | number | undefined>,
   mode: RequestMode,
 ): Promise<Record<string, unknown>> {
-  const timeoutSignal = AbortSignal.timeout(hackerrankWorkDefaultRequestTimeoutMs);
+  const timeoutSignal = AbortSignal.timeout(defaultProviderRequestTimeoutMs);
   const signal = context.signal ? AbortSignal.any([context.signal, timeoutSignal]) : timeoutSignal;
 
   try {
@@ -193,8 +203,8 @@ function buildHackerrankWorkUrl(path: string, query: Record<string, string | num
 
 function hackerrankWorkHeaders(apiKey: string): Record<string, string> {
   return {
-    Authorization: `Bearer ${apiKey}`,
-    Accept: "application/json",
+    "Authorization": `Bearer ${apiKey}`,
+    "Accept": "application/json",
     "User-Agent": providerUserAgent,
   };
 }

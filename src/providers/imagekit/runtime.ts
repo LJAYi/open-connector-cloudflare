@@ -1,5 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 
 import { Buffer } from "node:buffer";
 import { compactObject, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
@@ -75,7 +75,6 @@ export async function validateImagekitCredential(
       accountId: "api_key",
       displayName: "ImageKit API Key",
     },
-    grantedScopes: [],
     metadata: {
       apiBaseUrl: imagekitApiBaseUrl,
       validationEndpoint: "/v1/files",
@@ -266,8 +265,8 @@ function buildImagekitUrl(path: string, query: Record<string, string | undefined
 
 function imagekitHeaders(apiKey: string, hasBody: boolean): Record<string, string> {
   const headers: Record<string, string> = {
-    accept: "application/json",
-    authorization: `Basic ${Buffer.from(`${apiKey}:`, "utf8").toString("base64")}`,
+    "accept": "application/json",
+    "authorization": `Basic ${Buffer.from(`${apiKey}:`, "utf8").toString("base64")}`,
     "user-agent": providerUserAgent,
   };
   if (hasBody) {

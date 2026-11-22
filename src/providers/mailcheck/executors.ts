@@ -1,11 +1,17 @@
-import type { CredentialValidationResult, CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type {
+  CredentialValidationResult,
+  CredentialValidators,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderRequestContext } from "../provider-runtime.ts";
 
 import { compactObject, optionalNumber, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
   createProviderTimeout,
-  defineApiKeyProviderExecutors,
   isAbortLikeError,
   providerUserAgent,
   ProviderRequestError,
@@ -52,6 +58,16 @@ export const mailcheckActionHandlers: ProviderActionHandlers<"mailcheck", Mailch
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, mailcheckActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: mailcheckApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     return validateMailcheckCredential(input.apiKey, fetcher, signal);
@@ -79,7 +95,6 @@ async function validateMailcheckCredential(
       accountId: userEmail,
       displayName: userEmail,
     },
-    grantedScopes: [],
     metadata: compactObject({
       apiBaseUrl: mailcheckApiBaseUrl,
       validationEndpoint: "/status",
@@ -95,7 +110,7 @@ async function validateMailcheckCredential(
 
 async function requestMailcheckStatus(input: {
   apiKey: string;
-  context: Pick<ApiKeyProviderContext, "fetcher" | "signal">;
+  context: ProviderRequestContext;
   phase: MailcheckRequestPhase;
 }): Promise<Record<string, unknown>> {
   const payload = await requestMailcheckJson({
@@ -110,7 +125,7 @@ async function requestMailcheckStatus(input: {
 
 async function requestMailcheckEmail(input: {
   apiKey: string;
-  context: Pick<ApiKeyProviderContext, "fetcher" | "signal">;
+  context: ProviderRequestContext;
   phase: MailcheckRequestPhase;
   email: string;
 }): Promise<Record<string, unknown>> {
@@ -126,7 +141,7 @@ async function requestMailcheckEmail(input: {
 
 async function requestMailcheckDomain(input: {
   apiKey: string;
-  context: Pick<ApiKeyProviderContext, "fetcher" | "signal">;
+  context: ProviderRequestContext;
   phase: MailcheckRequestPhase;
   domain: string;
 }): Promise<Record<string, unknown>> {
@@ -142,7 +157,7 @@ async function requestMailcheckDomain(input: {
 
 async function requestMailcheckJson(input: {
   apiKey: string;
-  context: Pick<ApiKeyProviderContext, "fetcher" | "signal">;
+  context: ProviderRequestContext;
   path: string;
   phase: MailcheckRequestPhase;
 }): Promise<unknown> {
@@ -155,8 +170,8 @@ async function requestMailcheckJson(input: {
     response = await input.context.fetcher(url, {
       method: "GET",
       headers: {
-        accept: "application/json",
-        authorization: `Bearer ${input.apiKey}`,
+        "accept": "application/json",
+        "authorization": `Bearer ${input.apiKey}`,
         "user-agent": providerUserAgent,
       },
       signal: timeout.signal,

@@ -1,5 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 import type { Client } from "@modelcontextprotocol/client";
 
 import { UnauthorizedError } from "@modelcontextprotocol/client";
@@ -9,12 +9,8 @@ import { createHash } from "node:crypto";
 import { requiredString } from "../../core/cast.ts";
 import { assertPublicHttpUrl, isPrivateNetworkAccessAllowed } from "../../core/request.ts";
 import { withMcpClient } from "../mcp-client.ts";
-import {
-  mapProviderActionNames,
-  providerInputError,
-  providerUserAgent,
-  ProviderRequestError,
-} from "../provider-runtime.ts";
+import { mapProviderActionNames } from "../provider-executors.ts";
+import { providerInputError, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
 import { jumpServerMcpToolNames } from "./actions.ts";
 
 type JumpServerActionHandler = (input: Record<string, unknown>, context: JumpServerMcpContext) => Promise<unknown>;
@@ -68,7 +64,6 @@ export async function validateJumpServerCredential(
       accountId: `jumpserver:mcp:${endpointHash}`,
       displayName: `JumpServer MCP · ${context.endpoint.host}`,
     },
-    grantedScopes: [],
     metadata: {
       mcpEndpoint: context.endpoint.toString(),
       discoveredToolCount: discoveredTools.length,
@@ -130,7 +125,7 @@ async function withJumpServerMcpClient<T>(
   run: (client: Client) => Promise<T>,
 ): Promise<T> {
   const headers = new Headers({
-    Authorization: `Bearer ${context.token}`,
+    "Authorization": `Bearer ${context.token}`,
     "user-agent": providerUserAgent,
   });
   return withMcpClient(

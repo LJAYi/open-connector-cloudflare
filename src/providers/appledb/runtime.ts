@@ -1,4 +1,5 @@
-import type { ProviderActionHandlers, ProviderFetch, ReadProviderJsonBodyOptions } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ProviderFetch, ReadProviderJsonBodyOptions } from "../provider-runtime.ts";
 
 import { looseArray, objectArray, optionalBoolean, optionalInteger, optionalString } from "../../core/cast.ts";
 import { encodePathSegment } from "../../core/request.ts";
@@ -178,7 +179,7 @@ async function requestAppleDb<T>(context: AppleDbActionContext, request: AppleDb
   return runProviderRequest({ signal: context.signal, label: "AppleDB" }, async (signal) => {
     const response = await context.fetcher(`${appledbApiBaseUrl}${request.path}`, {
       headers: {
-        accept: request.accept,
+        "accept": request.accept,
         "user-agent": providerUserAgent,
       },
       signal,

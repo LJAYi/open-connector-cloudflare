@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import { compactObject, optionalInteger, optionalString, requiredRecord } from "../../core/cast.ts";
 import {
@@ -119,7 +119,6 @@ export async function validateBuildiumCredential(input: BuildiumActionContext): 
       accountId: input.clientId,
       displayName: "Buildium API Key",
     },
-    grantedScopes: [],
     metadata: {
       clientId: input.clientId,
       apiBaseUrl: buildiumApiBaseUrl,
@@ -144,7 +143,7 @@ async function buildiumRequestJson(input: {
     const response = await input.context.fetcher(url, {
       method: "GET",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "user-agent": providerUserAgent,
         "x-buildium-client-id": input.context.clientId,
         "x-buildium-client-secret": input.context.clientSecret,

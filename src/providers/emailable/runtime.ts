@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -19,7 +19,7 @@ import {
   ProviderRequestError,
 } from "../provider-runtime.ts";
 
-const emailableApiBaseUrl = "https://api.emailable.com";
+export const emailableApiBaseUrl = "https://api.emailable.com";
 
 type EmailableRequestPhase = "validate" | "execute";
 type EmailableActionHandler = ProviderRuntimeHandler<ApiKeyProviderContext>;
@@ -74,7 +74,6 @@ export async function validateEmailableCredential(
       accountId: payload.owner_email,
       displayName: payload.owner_email,
     },
-    grantedScopes: [],
     metadata: {
       apiBaseUrl: emailableApiBaseUrl,
       validationEndpoint: "/v1/account",
@@ -235,8 +234,8 @@ async function requestEmailableJson(
 
 function emailableHeaders(apiKey: string, hasJsonBody: boolean): Record<string, string> {
   const headers: Record<string, string> = {
-    accept: "application/json",
-    authorization: `Bearer ${apiKey}`,
+    "accept": "application/json",
+    "authorization": `Bearer ${apiKey}`,
     "user-agent": providerUserAgent,
   };
   if (hasJsonBody) {

@@ -1,13 +1,9 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
 
 import { compactObject } from "../../core/cast.ts";
-import {
-  createProviderTimeout,
-  defineApiKeyProviderExecutors,
-  defineProviderProxy,
-  ProviderRequestError,
-  providerUserAgent,
-} from "../provider-runtime.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { createProviderTimeout, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
 
 const service = "eraser";
 const eraserApiBaseUrl = "https://app.eraser.io/api";
@@ -78,7 +74,6 @@ export const credentialValidators: CredentialValidators = {
     });
     return {
       profile: { accountId: "eraser", displayName: "Eraser Team API Token" },
-      grantedScopes: [],
       metadata: { apiBaseUrl: eraserApiBaseUrl, validationEndpoint: "/files?limit=1" },
     };
   },
@@ -182,8 +177,8 @@ async function requestEraser(input: EraserRequestInput) {
     const response = await input.fetcher(url, {
       method: input.method ?? "GET",
       headers: {
-        accept: "application/json",
-        authorization: `Bearer ${input.apiKey}`,
+        "accept": "application/json",
+        "authorization": `Bearer ${input.apiKey}`,
         "content-type": "application/json",
         "user-agent": providerUserAgent,
       },

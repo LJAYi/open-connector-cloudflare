@@ -1,12 +1,15 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { randomUUID } from "node:crypto";
 import { optionalRawString } from "../../core/cast.ts";
-import { defineApiKeyProviderExecutors, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
 
 const service = "zotero";
 const baseUrl = "https://api.zotero.org";
+const apiVersion = "3";
 interface Context extends ApiKeyProviderContext {
   userId?: number;
 }
@@ -151,6 +154,13 @@ const handlers = {
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, handlers, {
   skipDnsValidation: true,
 });
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl,
+  auth: { type: "api_key_header", name: "Zotero-API-Key" },
+  skipDnsValidation: true,
+  defaultHeaders: { "accept": "application/json", "zotero-api-version": apiVersion },
+});
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const result = await request("/keys/current", {}, { apiKey: input.apiKey, fetcher, signal });
@@ -159,8 +169,7 @@ export const credentialValidators: CredentialValidators = {
     const username = optionalRawString(identity.username);
     return {
       profile: { accountId: String(userId), displayName: username ?? `Zotero user ${userId}` },
-      grantedScopes: [],
-      metadata: { apiBaseUrl: baseUrl, apiVersion: "3", userId, username, access: identity.access },
+      metadata: { apiBaseUrl: baseUrl, apiVersion, userId, username, access: identity.access },
     };
   },
 };
@@ -174,16 +183,16 @@ interface RequestOptions {
 async function request(
   path: string,
   options: RequestOptions,
-  context: Pick<Context, "apiKey" | "fetcher" | "signal">,
+  context: ApiKeyProviderContext,
 ): Promise<{ response: Response; payload: unknown }> {
   const url = new URL(path, baseUrl);
   for (const [name, value] of Object.entries(options.query ?? {}))
     if (value !== undefined && value !== "") url.searchParams.set(name, String(value));
   const headers = new Headers({
-    accept: "application/json",
+    "accept": "application/json",
     "user-agent": providerUserAgent,
     "zotero-api-key": context.apiKey,
-    "zotero-api-version": "3",
+    "zotero-api-version": apiVersion,
   });
   if (options.body !== undefined) headers.set("content-type", "application/json");
   if (options.version !== undefined) headers.set("if-unmodified-since-version", String(options.version));

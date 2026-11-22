@@ -3,7 +3,9 @@ import type { FeishuJsonRequest } from "./client.ts";
 import { Buffer } from "node:buffer";
 import MailComposer from "nodemailer/lib/mail-composer/index.js";
 import { optionalBoolean, optionalNumber } from "../../../core/cast.ts";
-import { providerFetch, providerInputError, ProviderRequestError } from "../../provider-runtime.ts";
+import { providerResponseError } from "../../provider-runtime.ts";
+import { providerFetch, providerInputError } from "../../provider-runtime.ts";
+import { extractFeishuMailDraftId, readFeishuMailMessagePage } from "./mail-response.ts";
 import { downloadFeishuSource } from "./media.ts";
 
 interface MailActionHandler {
@@ -71,11 +73,11 @@ async function listMessages(input: Record<string, unknown>, request: FeishuJsonR
       folder_id: labelId ? undefined : (folderId ?? "INBOX"),
       label_id: labelId,
       only_unread: optionalBoolean(input.onlyUnread),
-      page_size: optionalNumber(input.pageSize) ?? 50,
+      page_size: optionalNumber(input.pageSize) ?? 20,
       page_token: optionalString(input.pageToken),
     },
   });
-  return normalizePage(data);
+  return readFeishuMailMessagePage(data);
 }
 
 async function searchMessages(input: Record<string, unknown>, request: FeishuJsonRequest) {
@@ -104,7 +106,7 @@ async function searchMessages(input: Record<string, unknown>, request: FeishuJso
     method: "POST",
     path: mailboxPath(input, "search"),
     query: {
-      page_size: optionalNumber(input.pageSize) ?? 50,
+      page_size: optionalNumber(input.pageSize) ?? 15,
       page_token: optionalString(input.pageToken),
     },
     body: compact({
@@ -113,6 +115,14 @@ async function searchMessages(input: Record<string, unknown>, request: FeishuJso
     }),
   });
   return normalizePage(data);
+}
+
+function normalizePage(data: Record<string, unknown>) {
+  return {
+    items: recordArray(data.items),
+    hasMore: data.has_more === true,
+    pageToken: optionalString(data.page_token) ?? null,
+  };
 }
 
 async function getMessage(input: Record<string, unknown>, request: FeishuJsonRequest) {
@@ -149,7 +159,7 @@ async function createDraft(input: Record<string, unknown>, request: FeishuJsonRe
     path: mailboxPathFromId(mailbox, "drafts"),
     body: { raw },
   });
-  return { draftId: extractDraftId(data), raw: data };
+  return { draftId: extractFeishuMailDraftId(data), raw: data };
 }
 
 async function updateDraft(input: Record<string, unknown>, request: FeishuJsonRequest, fetcher: typeof fetch) {
@@ -161,7 +171,7 @@ async function updateDraft(input: Record<string, unknown>, request: FeishuJsonRe
     path: mailboxPathFromId(mailbox, "drafts", draftId),
     body: { raw },
   });
-  return { draftId: extractDraftId(data, draftId), raw: data };
+  return { draftId: extractFeishuMailDraftId(data, draftId), raw: data };
 }
 
 async function deleteDraft(input: Record<string, unknown>, request: FeishuJsonRequest) {
@@ -281,7 +291,7 @@ async function reply(input: Record<string, unknown>, request: FeishuJsonRequest,
     path: mailboxPathFromId(mailbox, "drafts"),
     body: { raw },
   });
-  const draftId = extractDraftId(created);
+  const draftId = extractFeishuMailDraftId(created);
   const sent = await request({
     method: "POST",
     path: mailboxPathFromId(mailbox, "drafts", draftId, "send"),
@@ -312,7 +322,7 @@ async function forward(input: Record<string, unknown>, request: FeishuJsonReques
     path: mailboxPathFromId(mailbox, "drafts"),
     body: { raw },
   });
-  const draftId = extractDraftId(created);
+  const draftId = extractFeishuMailDraftId(created);
   const sent = await request({
     method: "POST",
     path: mailboxPathFromId(mailbox, "drafts", draftId, "send"),
@@ -440,8 +450,8 @@ async function downloadMailAttachments(value: unknown, fetcher: typeof fetch) {
   if (value === undefined) {
     return [];
   }
-  if (!Array.isArray(value) || value.length > 20) {
-    throw providerInputError("attachments must be an array with at most 20 items");
+  if (!Array.isArray(value) || value.length > 250) {
+    throw providerInputError("attachments must be an array with at most 250 items");
   }
   const attachments: MailAttachment[] = [];
   let totalBytes = 0;
@@ -459,7 +469,7 @@ async function downloadMailAttachments(value: unknown, fetcher: typeof fetch) {
     );
     const bytes = source.bytes;
     if (!bytes) {
-      throw new ProviderRequestError(502, "Feishu mail attachment source is not available in memory");
+      throw providerResponseError("Feishu mail attachment source is not available in memory");
     }
     totalBytes += bytes.byteLength;
     if (totalBytes > maxMailMimeBytes) {
@@ -516,11 +526,6 @@ function mailDeliveryStatus(value: unknown) {
   return { value: status, label };
 }
 
-function extractDraftId(data: Record<string, unknown>, fallback?: string) {
-  const draft = recordValue(data.draft);
-  return requiredString(data.draft_id ?? data.id ?? draft.draft_id ?? fallback, "draft_id");
-}
-
 function mailboxPath(input: Record<string, unknown>, ...parts: string[]) {
   return mailboxPathFromId(mailboxId(input), ...parts);
 }
@@ -531,14 +536,6 @@ function mailboxPathFromId(mailbox: string, ...parts: string[]) {
 
 function mailboxId(input: Record<string, unknown>) {
   return optionalString(input.mailboxId) ?? "me";
-}
-
-function normalizePage(data: Record<string, unknown>) {
-  return {
-    items: recordArray(data.items),
-    hasMore: data.has_more === true,
-    pageToken: optionalString(data.page_token) ?? null,
-  };
 }
 
 function address(value: unknown) {

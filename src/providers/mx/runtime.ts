@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import { Buffer } from "node:buffer";
 import {
@@ -69,7 +69,6 @@ export async function validateMxCredential(
       accountId: clientId,
       displayName: `MX ${clientId}`,
     },
-    grantedScopes: [],
     metadata: {
       apiBaseUrl: mxApiBaseUrl,
       apiVersion: mxVersion,
@@ -203,9 +202,9 @@ async function requestMxJson(input: MxRequestInput) {
 
 function mxHeaders(clientId: string, apiKey: string, includeContentType: boolean) {
   return {
-    accept: "application/vnd.mx.api.v1+json",
+    "accept": "application/vnd.mx.api.v1+json",
     "accept-version": mxVersion,
-    authorization: buildBasicAuthorizationHeader(clientId, apiKey),
+    "authorization": buildBasicAuthorizationHeader(clientId, apiKey),
     ...(includeContentType ? { "content-type": "application/json" } : {}),
     "user-agent": providerUserAgent,
   };
@@ -233,7 +232,7 @@ function createMxError(response: Response, payload: unknown, phase: MxPhase) {
     return new ProviderRequestError(429, message);
   }
   if (phase === "validate" || response.status < 500) {
-    return new ProviderRequestError(400, message);
+    return providerInputError(message);
   }
   return new ProviderRequestError(response.status || 502, message);
 }

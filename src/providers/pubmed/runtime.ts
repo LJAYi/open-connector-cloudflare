@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ProviderRuntimeHandler } from "../provider-executors.ts";
 import type { PubmedArticle } from "./runtime-xml.ts";
 
 import { createHash } from "node:crypto";
@@ -198,7 +198,7 @@ export class PubmedRequestGatePool {
   }
 }
 
-const pubmedApiBaseUrl = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/";
+export const pubmedApiBaseUrl = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/";
 const citationMatcherUrl = "https://pubmed.ncbi.nlm.nih.gov/api/citmatch/";
 const idConverterUrl = "https://pmc.ncbi.nlm.nih.gov/tools/idconv/api/v1/articles/";
 const pubmedToolName = "openconnector";
@@ -549,7 +549,7 @@ async function fetchLinkedArticles(
 
 async function requestNcbiJson(url: URL, source: string, context: PubmedActionContext): Promise<unknown> {
   const headers = new Headers({
-    accept: "application/json",
+    "accept": "application/json",
     "user-agent": providerUserAgent,
   });
   const text = await requestNcbiText(

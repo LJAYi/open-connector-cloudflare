@@ -1,15 +1,11 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalRecord, optionalString, recordOrEmpty } from "../../core/cast.ts";
-import {
-  defineApiKeyProviderExecutors,
-  defineProviderProxy,
-  ProviderRequestError,
-  providerUserAgent,
-  requiredInputString,
-} from "../provider-runtime.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { ProviderRequestError, providerUserAgent, requiredInputString } from "../provider-runtime.ts";
 
 const service = "statuspage";
 const statuspageApiBaseUrl = "https://api.statuspage.io/v1";
@@ -159,7 +155,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: firstPage ? (optionalString(firstPage.id) ?? "statuspage-api-token") : "statuspage-api-token",
         displayName: firstPage ? `Statuspage: ${String(firstPage.name)}` : "Statuspage API Token",
       },
-      grantedScopes: [],
       metadata: compactObject({
         apiBaseUrl: statuspageApiBaseUrl,
         validationEndpoint: statuspageValidationPath,
@@ -210,8 +205,8 @@ function buildStatuspageUrl(path: string, query?: Record<string, unknown>): URL 
 
 function statuspageHeaders(apiKey: string, extraHeaders: Record<string, string> = {}): Record<string, string> {
   return {
-    Authorization: `OAuth ${apiKey}`,
-    accept: "application/json",
+    "Authorization": `OAuth ${apiKey}`,
+    "accept": "application/json",
     "user-agent": providerUserAgent,
     ...extraHeaders,
   };

@@ -1,5 +1,5 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 
 import { isIP } from "node:net";
 import {
@@ -11,31 +11,20 @@ import {
   optionalString,
 } from "../../core/cast.ts";
 import { queryParams } from "../../core/request.ts";
-import {
-  defineBearerProviderExecutors,
-  providerInputError,
-  providerUserAgent,
-  ProviderRequestError,
-} from "../provider-runtime.ts";
+import { defineBearerProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { providerInputError, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
 
 const service = "convex";
 const apiBaseUrl = "https://api.convex.dev/v1";
-const grantedScopes = [
-  "convex.token.read",
-  "convex.projects.read",
-  "convex.projects.write",
-  "convex.deployments.read",
-  "convex.deployments.write",
-  "convex.deploy_keys.read",
-  "convex.deploy_keys.write",
-  "convex.custom_domains.read",
-  "convex.custom_domains.write",
-  "convex.functions.execute",
-  "convex.http.query",
-  "convex.http.mutation",
-  "convex.http.action",
-  "convex.http.run",
-];
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: apiBaseUrl,
+  auth: { type: "bearer" },
+  skipDnsValidation: true,
+  defaultHeaders: { accept: "application/json" },
+});
 
 interface ConvexContext {
   accessToken: string;
@@ -142,7 +131,6 @@ async function validateToken(accessToken: string, fetcher: typeof fetch, signal?
           ? `Convex Project ${projectId}`
           : `Convex Team ${teamId ?? "unknown"}`),
     },
-    grantedScopes,
     metadata: {
       tokenType: type,
       teamId,
@@ -434,8 +422,8 @@ async function requestConvex<T>(input: {
   const response = await input.fetcher(url, {
     method: input.method ?? "GET",
     headers: compactObject({
-      authorization: `Bearer ${input.accessToken}`,
-      accept: "application/json",
+      "authorization": `Bearer ${input.accessToken}`,
+      "accept": "application/json",
       "content-type": input.body === undefined ? undefined : "application/json",
       "user-agent": providerUserAgent,
     }) as Record<string, string>,
@@ -459,7 +447,7 @@ async function requestConvexFunction(input: {
   const response = await input.context.fetcher(url, {
     method: "POST",
     headers: {
-      accept: "application/json",
+      "accept": "application/json",
       "content-type": "application/json",
       "user-agent": providerUserAgent,
     },

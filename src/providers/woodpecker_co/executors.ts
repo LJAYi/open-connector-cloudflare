@@ -1,6 +1,5 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -11,22 +10,21 @@ import {
   rawStringOrNull,
   requiredString,
 } from "../../core/cast.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
   createProviderTimeout,
-  defineApiKeyProviderExecutors,
   ProviderRequestError,
   providerUserAgent,
+  defaultProviderRequestTimeoutMs,
 } from "../provider-runtime.ts";
 
 const service = "woodpecker_co";
 
 export const woodpeckerCoApiBaseUrl = "https://api.woodpecker.co/rest";
 
-const woodpeckerCoDefaultRequestTimeoutMs = 30_000;
-
 type WoodpeckerCoPhase = "validate" | "execute";
-type WoodpeckerCoContext = Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
-type WoodpeckerCoActionHandler = (input: Record<string, unknown>, context: WoodpeckerCoContext) => Promise<unknown>;
+type WoodpeckerCoActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
 interface NormalizedWoodpeckerUser {
   id: number | null;
@@ -160,6 +158,14 @@ export const woodpeckerCoActionHandlers: ProviderActionHandlers<"woodpecker_co",
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, woodpeckerCoActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: woodpeckerCoApiBaseUrl,
+  auth: { type: "api_key_header", name: "x-api-key" },
+  skipDnsValidation: true,
+  defaultHeaders: { "accept": "application/json", "content-type": "application/json" },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const payload = await requestWoodpeckerCoJson({
@@ -184,7 +190,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: firstUser?.id == null ? "woodpecker-api-key" : `woodpecker:${firstUser.id}`,
         displayName: firstUser?.email ?? "Woodpecker.co API Key",
       },
-      grantedScopes: [],
       metadata: compactObject({
         apiBaseUrl: woodpeckerCoApiBaseUrl,
         validationEndpoint: "/v2/users",
@@ -200,7 +205,7 @@ async function requestWoodpeckerCoJson(input: {
   method: "GET";
   path: string;
   params?: Record<string, string | undefined>;
-  context: WoodpeckerCoContext;
+  context: ApiKeyProviderContext;
   phase: WoodpeckerCoPhase;
 }): Promise<unknown> {
   const url = new URL(normalizeWoodpeckerCoPath(input.path), `${woodpeckerCoApiBaseUrl}/`);
@@ -210,14 +215,14 @@ async function requestWoodpeckerCoJson(input: {
     }
   }
 
-  const timeout = createProviderTimeout(input.context.signal, woodpeckerCoDefaultRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.context.signal);
 
   let response: Response;
   try {
     response = await input.context.fetcher(url, {
       method: input.method,
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "user-agent": providerUserAgent,
         "x-api-key": input.context.apiKey,
       },
@@ -227,7 +232,7 @@ async function requestWoodpeckerCoJson(input: {
     throw new ProviderRequestError(
       timeout.didTimeout() ? 504 : 502,
       timeout.didTimeout()
-        ? `Woodpecker.co request timed out after ${woodpeckerCoDefaultRequestTimeoutMs}ms`
+        ? `Woodpecker.co request timed out after ${defaultProviderRequestTimeoutMs}ms`
         : `Woodpecker.co request failed: ${error instanceof Error ? error.message : "Unknown transport error"}`,
       error,
     );

@@ -1,6 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import {
   objectArray,
@@ -18,7 +17,7 @@ import {
   providerUserAgent,
 } from "../provider-runtime.ts";
 
-const webscraperIoApiBaseUrl = "https://api.webscraper.io/api/v1";
+export const webscraperIoApiBaseUrl = "https://api.webscraper.io/api/v1";
 
 type WebscraperIoPhase = "validate" | "execute";
 type WebscraperIoActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
@@ -158,7 +157,6 @@ export async function validateWebscraperIoCredential(
       accountId: account.email ?? "webscraper-io-api-token",
       displayName: buildAccountLabel(account),
     },
-    grantedScopes: [],
     metadata: {
       apiBaseUrl: webscraperIoApiBaseUrl,
       validationEndpoint: "/account",
@@ -172,7 +170,7 @@ export async function validateWebscraperIoCredential(
 
 async function requestWebscraperIoJson(
   input: WebscraperIoRequestInput,
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
+  context: ApiKeyProviderContext,
 ): Promise<Record<string, unknown>> {
   const timeout = createProviderTimeout(context.signal);
   try {
@@ -208,8 +206,8 @@ async function requestWebscraperIoJson(
 }
 
 async function requestWebscraperIoText(
-  input: Pick<WebscraperIoRequestInput, "path" | "query" | "phase">,
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
+  input: WebscraperIoRequestInput,
+  context: ApiKeyProviderContext,
 ): Promise<string> {
   const timeout = createProviderTimeout(context.signal);
   try {
@@ -248,7 +246,7 @@ function buildWebscraperIoUrl(path: string, apiKey: string, query?: Record<strin
 
 function buildHeaders(hasBody: boolean): Record<string, string> {
   const headers: Record<string, string> = {
-    accept: "application/json",
+    "accept": "application/json",
     "user-agent": providerUserAgent,
   };
   if (hasBody) headers["content-type"] = "application/json";

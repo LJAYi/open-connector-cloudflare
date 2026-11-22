@@ -2,14 +2,14 @@ import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } f
 
 import { compactObject, optionalRecord, optionalString, optionalStringArray, requiredString } from "../../core/cast.ts";
 import { assertPublicHttpUrl, isPrivateNetworkAccessAllowed } from "../../core/request.ts";
+import { requireApiKeyCredential } from "../provider-credentials.ts";
+import { defineProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
   createProviderFetch,
-  defineProviderExecutors,
-  defineProviderProxy,
   providerInputError,
   ProviderRequestError,
   providerUserAgent,
-  requireApiKeyCredential,
 } from "../provider-runtime.ts";
 
 const service = "countly";
@@ -44,7 +44,7 @@ async function request(context: Context, path: string, query: Record<string, unk
   url.searchParams.set("api_key", context.apiKey);
   for (const [key, value] of Object.entries(query)) if (value !== undefined) url.searchParams.set(key, String(value));
   const response = await context.fetcher(url, {
-    headers: { accept: "application/json", "user-agent": providerUserAgent },
+    headers: { "accept": "application/json", "user-agent": providerUserAgent },
     signal: context.signal,
   });
   const text = await response.text();
@@ -179,7 +179,6 @@ export const credentialValidators: CredentialValidators = {
           optionalString(user.email) ??
           "Countly API Key",
       },
-      grantedScopes: [],
       metadata: compactObject({ baseUrl, apiBaseUrl: baseUrl, validationEndpoint: validationPath, userId }),
     };
   },

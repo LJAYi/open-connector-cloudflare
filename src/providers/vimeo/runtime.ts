@@ -1,6 +1,7 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { OAuthProviderContext, ProviderFetch, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { OAuthProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
+import type { ProviderFetch } from "../provider-runtime.ts";
 
 import {
   compactObject,
@@ -10,7 +11,7 @@ import {
   optionalString,
   requiredString,
 } from "../../core/cast.ts";
-import { assertPublicHttpUrl, queryParams, readBoundedResponseBytes } from "../../core/request.ts";
+import { assertPublicHttpUrl, queryParams, storeResponseInTransit } from "../../core/request.ts";
 import {
   createProviderTimeout,
   isAbortLikeError,
@@ -20,7 +21,7 @@ import {
   requiredResponseRecord,
 } from "../provider-runtime.ts";
 
-const vimeoApiBaseUrl = "https://api.vimeo.com";
+export const vimeoApiBaseUrl = "https://api.vimeo.com";
 
 type VimeoActionContext = OAuthProviderContext;
 type VimeoActionHandler = ProviderRuntimeHandler<VimeoActionContext>;
@@ -124,7 +125,6 @@ export async function validateVimeoCredential(
       accountId: user.accountId,
       displayName: user.displayName,
     },
-    grantedScopes: [],
     metadata: user.metadata,
   };
 }
@@ -259,12 +259,13 @@ async function vimeoDownloadVideoFile(input: Record<string, unknown>, context: V
 
   const mimeType = response.headers.get("content-type") ?? optionalString(selected.type) ?? "application/octet-stream";
   const name = resolveDownloadFileName(input, selected, mimeType);
-  const bytes = await readBoundedResponseBytes(response, {
-    maxBytes: context.transitFiles.maxBytes,
+  const upload = await storeResponseInTransit(response, context.transitFiles, {
+    name,
+    mimeType,
     fieldName: "Vimeo video download",
     createError: (message) => new ProviderRequestError(413, message),
+    signal: context.signal,
   });
-  const upload = await context.transitFiles.create(new File([Uint8Array.from(bytes)], name, { type: mimeType }));
 
   return {
     videoId: input.videoId,
@@ -535,8 +536,8 @@ async function vimeoRequestJson(input: VimeoRequestInput): Promise<unknown> {
   const timeout = createProviderTimeout(input.signal);
   try {
     const headers: Record<string, string> = {
-      authorization: `Bearer ${input.accessToken}`,
-      accept: "application/vnd.vimeo.*+json;version=3.4",
+      "authorization": `Bearer ${input.accessToken}`,
+      "accept": "application/vnd.vimeo.*+json;version=3.4",
       "user-agent": providerUserAgent,
     };
     if (input.body !== undefined) {

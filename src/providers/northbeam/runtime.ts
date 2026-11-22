@@ -1,6 +1,7 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ProviderFetch, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ProviderRuntimeHandler } from "../provider-executors.ts";
+import type { ProviderFetch } from "../provider-runtime.ts";
 
 import {
   compactObject,
@@ -104,7 +105,6 @@ export async function validateNorthbeamCredential(
       accountId: context.clientId,
       displayName: `Northbeam ${context.clientId}`,
     },
-    grantedScopes: [],
     metadata: compactObject({
       clientId: context.clientId,
       metricCount: metrics.length,
@@ -139,8 +139,8 @@ async function requestNorthbeamJson(options: NorthbeamRequestOptions): Promise<R
       response = await options.context.fetcher(buildNorthbeamUrl(options.path, options.params), {
         method: "GET",
         headers: {
-          accept: "application/json",
-          authorization: options.context.apiKey,
+          "accept": "application/json",
+          "authorization": options.context.apiKey,
           "data-client-id": options.context.clientId,
           "user-agent": providerUserAgent,
         },
@@ -204,7 +204,7 @@ function mapNorthbeamError(status: number, payload: unknown, phase: NorthbeamPha
   }
 
   if (phase === "validate" && status >= 400 && status < 500) {
-    return new ProviderRequestError(400, message);
+    return providerInputError(message);
   }
 
   if (phase === "execute" && (status === 401 || status === 403)) {

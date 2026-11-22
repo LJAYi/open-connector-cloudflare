@@ -1,6 +1,9 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlerSubset, ProviderActionHandlers } from "../provider-runtime.ts";
-import type { OAuthProviderContext } from "../provider-runtime.ts";
+import type {
+  ProviderActionHandlerSubset,
+  ProviderActionHandlers,
+  OAuthProviderContext,
+} from "../provider-executors.ts";
 import type { LongbridgeReadonlyActionSpec, LongbridgeReadonlyParamSpec } from "./readonly-action-specs.ts";
 
 import {
@@ -13,18 +16,17 @@ import {
   stringArray,
 } from "../../core/cast.ts";
 import { encodePathSegment } from "../../core/request.ts";
+import { mapProviderActionHandlers } from "../provider-executors.ts";
 import {
-  mapProviderActionHandlers,
   providerInputError,
   providerUserAgent,
   ProviderRequestError,
   runProviderRequest,
 } from "../provider-runtime.ts";
-import { longbridgeOAuthScopes } from "./actions.ts";
 import { indexSymbolToCounterId, symbolToCounterId } from "./counter-id.ts";
 import { longbridgeReadonlyActionSpecs, longbridgeScreenerDefaultReturns } from "./readonly-action-specs.ts";
 
-const longbridgeApiBaseUrl = "https://openapi.longbridge.com";
+export const longbridgeApiBaseUrl = "https://openapi.longbridge.com";
 
 export type LongbridgeHttpMethod = "GET" | "POST" | "PUT" | "DELETE";
 type LongbridgeRequestPhase = "connect" | "execute";
@@ -33,7 +35,7 @@ type LongbridgeQueryValue = string | readonly string[] | undefined;
 export interface LongbridgeRequestOptions {
   method: LongbridgeHttpMethod;
   path: string;
-  context: Pick<OAuthProviderContext, "accessToken" | "fetcher" | "signal">;
+  context: OAuthProviderContext;
   phase: LongbridgeRequestPhase;
   query?: Record<string, LongbridgeQueryValue>;
   body?: Record<string, unknown>;
@@ -364,9 +366,7 @@ export async function validateLongbridgeCredential(
     profile: {
       accountId: "longbridge:account",
       displayName: "Longbridge account",
-      grantedScopes: longbridgeOAuthScopes,
     },
-    grantedScopes: longbridgeOAuthScopes,
     metadata: compactObject({
       apiBaseUrl: longbridgeApiBaseUrl,
       validationEndpoint: "/v1/asset/account",
@@ -390,8 +390,8 @@ export async function requestLongbridgeJson(input: LongbridgeRequestOptions): Pr
 
 function buildLongbridgeRequestInit(input: LongbridgeRequestOptions, signal: AbortSignal): RequestInit {
   const headers: Record<string, string> = {
-    accept: "application/json",
-    authorization: `Bearer ${input.context.accessToken}`,
+    "accept": "application/json",
+    "authorization": `Bearer ${input.context.accessToken}`,
     "user-agent": providerUserAgent,
   };
   if ((input.method === "POST" || input.method === "PUT") && input.body !== undefined) {

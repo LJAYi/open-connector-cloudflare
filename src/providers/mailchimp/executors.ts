@@ -5,24 +5,21 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import { Buffer } from "node:buffer";
 import { createHash } from "node:crypto";
 import { compactObject, optionalBoolean, optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
+import { defineProviderExecutors } from "../provider-executors.ts";
 import {
   createProviderProxyUrl,
-  defineProviderExecutors,
   normalizeProviderProxyHeaders,
-  providerFetch,
-  ProviderRequestError,
-  providerUserAgent,
   readProviderProxyErrorMessage,
   readProviderProxyResponse,
-  requiredInputString,
   toProviderProxyError,
-} from "../provider-runtime.ts";
+} from "../provider-proxy.ts";
+import { providerFetch, ProviderRequestError, providerUserAgent, requiredInputString } from "../provider-runtime.ts";
 
 type MailchimpJsonObject = Record<string, unknown>;
 type MailchimpRequestMode = "validate" | "execute";
@@ -265,7 +262,6 @@ async function validateMailchimpApiKeyCredential(
       accountId: accountId ?? loginId ?? `mailchimp:${dataCenter}`,
       displayName: accountName ?? email ?? `Mailchimp ${dataCenter}`,
     },
-    grantedScopes: [],
     metadata: compactObject({
       apiBaseUrl,
       dataCenter,
@@ -295,7 +291,6 @@ async function validateMailchimpOAuthCredential(
       accountId: accountId ?? `mailchimp:${dataCenter}`,
       displayName: accountName ?? email ?? `Mailchimp ${dataCenter}`,
     },
-    grantedScopes: [],
     metadata: compactObject({
       apiBaseUrl,
       dataCenter,
@@ -359,8 +354,8 @@ function buildMailchimpUrl(apiBaseUrl: string, path: string, query?: MailchimpRe
 
 function mailchimpHeaders(context: MailchimpActionContext, hasBody: boolean): Record<string, string> {
   return {
-    accept: "application/json",
-    authorization: context.authorization,
+    "accept": "application/json",
+    "authorization": context.authorization,
     ...(hasBody ? { "content-type": "application/json" } : {}),
     "user-agent": providerUserAgent,
   };
@@ -513,8 +508,8 @@ async function requestMailchimpOAuthMetadata(
 ): Promise<MailchimpJsonObject> {
   const response = await fetcher(mailchimpOAuthMetadataUrl, {
     headers: {
-      accept: "application/json",
-      authorization: `OAuth ${accessToken}`,
+      "accept": "application/json",
+      "authorization": `OAuth ${accessToken}`,
       "user-agent": providerUserAgent,
     },
     signal,

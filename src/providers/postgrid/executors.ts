@@ -1,11 +1,11 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalBoolean, optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
-  defineApiKeyProviderExecutors,
-  defineProviderProxy,
   ProviderRequestError,
   providerUserAgent,
   requiredInputString,
@@ -147,7 +147,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: "api_key",
         displayName: "PostGrid API Key",
       },
-      grantedScopes: [],
       metadata: compactObject({
         apiBaseUrl: postgridApiBaseUrl,
         validationEndpoint: "/templates",
@@ -199,7 +198,7 @@ function buildPostgridUrl(path: string, params: Record<string, string | undefine
 
 function postgridHeaders(apiKey: string, includeBodyHeaders: boolean): Record<string, string> {
   return {
-    accept: "application/json",
+    "accept": "application/json",
     ...(includeBodyHeaders ? { "content-type": "application/json" } : {}),
     "user-agent": providerUserAgent,
     "x-api-key": apiKey,

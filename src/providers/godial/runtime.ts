@@ -1,11 +1,11 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { optionalRecord, optionalString } from "../../core/cast.ts";
 import { ProviderRequestError, providerUserAgent, requiredInputString } from "../provider-runtime.ts";
 
-const godialApiBaseUrl = "https://enterprise.godial.cc";
+export const godialApiBaseUrl = "https://enterprise.godial.cc";
 const godialValidationPath = "/meta/api/externals/accounts/list";
 
 type GodialMode = "validation" | "execution";
@@ -51,7 +51,6 @@ export async function validateGodialCredential(
       accountId: "godial",
       displayName: "GoDial API Access Token",
     },
-    grantedScopes: [],
     metadata: {
       apiBaseUrl: godialApiBaseUrl,
       validationEndpoint: godialValidationPath,
@@ -191,7 +190,7 @@ async function godialRequest(input: GodialRequestInput): Promise<unknown> {
     response = await input.fetcher(url.toString(), {
       method: input.method,
       headers: {
-        accept: "application/json, multipart/form-data, application/x-www-form-urlencoded",
+        "accept": "application/json, multipart/form-data, application/x-www-form-urlencoded",
         ...(input.body
           ? {
               "content-type": "application/x-www-form-urlencoded;charset=UTF-8",

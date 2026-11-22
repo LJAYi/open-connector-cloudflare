@@ -1,15 +1,12 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 import type { ProviderFetch } from "../provider-runtime.ts";
 
 import { optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
-import {
-  defineProviderExecutors,
-  ProviderRequestError,
-  providerUserAgent,
-  requireApiKeyCredential,
-  runProviderRequest,
-} from "../provider-runtime.ts";
+import { requireApiKeyCredential } from "../provider-credentials.ts";
+import { defineProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { ProviderRequestError, providerUserAgent, runProviderRequest } from "../provider-runtime.ts";
 
 const service = "clari_copilot";
 const clariCopilotApiBaseUrl = "https://rest-api.copilot.clari.com";
@@ -86,6 +83,20 @@ export const executors: ProviderExecutors = defineProviderExecutors<ClariCopilot
   },
 });
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: clariCopilotApiBaseUrl,
+  auth: {
+    type: "credential_headers",
+    headers: [
+      { name: "X-Api-Key", source: { type: "api_key" } },
+      { name: "X-Api-Password", source: { type: "credential_value", name: "apiPassword" } },
+    ],
+  },
+  skipDnsValidation: true,
+  defaultHeaders: { accept: "application/json" },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const context = readClariCopilotCredentials({
@@ -106,7 +117,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: "clari_copilot:api-key",
         displayName: "Clari Copilot API Key",
       },
-      grantedScopes: [],
       metadata: {
         apiBaseUrl: clariCopilotApiBaseUrl,
         validationEndpoint: clariCopilotValidationPath,
@@ -140,7 +150,7 @@ async function requestClariCopilotJson(input: {
     const response = await input.context.fetcher(buildClariCopilotUrl(input.path, input.query), {
       method: "GET",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "x-api-key": input.context.apiKey,
         "x-api-password": input.context.apiPassword,
         "user-agent": providerUserAgent,

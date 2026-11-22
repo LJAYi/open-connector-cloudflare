@@ -1,11 +1,10 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import { compactObject, optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
 import { providerUserAgent, ProviderRequestError, runProviderRequest } from "../provider-runtime.ts";
 
-const builtwithApiBaseUrl = "https://api.builtwith.com";
+export const builtwithApiBaseUrl = "https://api.builtwith.com";
 const builtwithValidationPath = "/whoamiv1/api.json";
 
 type BuiltwithActionHandler = ProviderRuntimeHandler<ApiKeyProviderContext>;
@@ -51,7 +50,6 @@ export async function validateBuiltwithCredential(input: {
       accountId: "builtwith_api_key",
       displayName: "BuiltWith API Key",
     },
-    grantedScopes: [],
     metadata: {
       apiBaseUrl: builtwithApiBaseUrl,
       validationEndpoint: builtwithValidationPath,
@@ -157,14 +155,14 @@ async function builtwithRequest(
     path: string;
     query?: Record<string, string | undefined>;
   },
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
+  context: ApiKeyProviderContext,
   phase: "validate" | "execute",
 ): Promise<unknown> {
   return runProviderRequest({ signal: context.signal, label: "BuiltWith" }, async (signal) => {
     const response = await context.fetcher(buildBuiltwithUrl(input, context.apiKey), {
       method: "GET",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "user-agent": providerUserAgent,
       },
       signal,

@@ -2,6 +2,7 @@ import type { ActionDefinition } from "../../core/types.ts";
 
 import { s } from "../../core/json-schema.ts";
 import { defineProviderAction } from "../../core/provider-definition.ts";
+import { minimaxTextModels } from "./text-models.ts";
 
 const service = "minimax";
 
@@ -74,9 +75,12 @@ const responseInputSchema = s.anyOf("MiniMax Responses API text or conversation 
 ]);
 
 const responseReasoningSchema = s.object(
-  "MiniMax reasoning control. MiniMax-M3 defaults to none when omitted.",
+  "MiniMax reasoning control. Flash defaults to max; MiniMax-M3 defaults to none when omitted.",
   {
-    effort: s.stringEnum("Reasoning effort value.", ["minimal", "low", "medium", "high", "none"]),
+    effort: s.stringEnum(
+      "Flash supports low, medium, high, xhigh, and max. minimal and none are retained for older models and rejected for Flash.",
+      ["minimal", "low", "medium", "high", "none", "xhigh", "max"],
+    ),
   },
   { optional: ["effort"] },
 );
@@ -109,7 +113,14 @@ const responseToolSchema = s.object(
 const createResponseInputSchema = s.object(
   "Request body for creating a non-streaming MiniMax response.",
   {
-    model: trimmedNonEmptyString("MiniMax model name to invoke, for example MiniMax-M3."),
+    model: s.string(
+      "MiniMax text model: MiniMax-M3.1-Flash (default) or MiniMax-M3. Explicit model IDs are preserved.",
+      {
+        minLength: 1,
+        pattern: "\\S",
+        default: minimaxTextModels[0],
+      },
+    ),
     input: responseInputSchema,
     instructions: optionalTrimmedString("System instructions for the response."),
     max_output_tokens: s.integer("Maximum output token count.", { minimum: 1 }),
@@ -121,7 +132,10 @@ const createResponseInputSchema = s.object(
       minimum: 0,
       maximum: 1,
     }),
-    service_tier: s.stringEnum("MiniMax service tier for request admission.", ["standard", "priority"]),
+    service_tier: s.stringEnum("MiniMax service tier for request admission. Not supported by Flash.", [
+      "standard",
+      "priority",
+    ]),
     tools: s.array("Function tools available to MiniMax.", responseToolSchema, { minItems: 1 }),
     tool_choice: s.stringEnum("Tool selection strategy.", ["none", "auto"]),
     metadata: s.record("String metadata to attach to the MiniMax request.", s.string("Metadata value.")),
@@ -132,6 +146,7 @@ const createResponseInputSchema = s.object(
   },
   {
     optional: [
+      "model",
       "instructions",
       "max_output_tokens",
       "temperature",
@@ -151,7 +166,14 @@ const createResponseInputSchema = s.object(
 const estimateInputTokensInputSchema = s.object(
   "Request body for estimating MiniMax response input tokens.",
   {
-    model: trimmedNonEmptyString("MiniMax model name to estimate against, for example MiniMax-M3."),
+    model: s.string(
+      "MiniMax text model to estimate against. Defaults to MiniMax-M3.1-Flash; explicit IDs are preserved.",
+      {
+        minLength: 1,
+        pattern: "\\S",
+        default: minimaxTextModels[0],
+      },
+    ),
     input: responseInputSchema,
     instructions: optionalTrimmedString("System instructions included in the estimate."),
     tools: s.array("Function tools included in the estimate.", responseToolSchema, { minItems: 1 }),
@@ -159,7 +181,7 @@ const estimateInputTokensInputSchema = s.object(
     text: responseTextSchema,
     reasoning: responseReasoningSchema,
   },
-  { optional: ["instructions", "tools", "tool_choice", "text", "reasoning"] },
+  { optional: ["model", "instructions", "tools", "tool_choice", "text", "reasoning"] },
 );
 
 const usageSchema = s.unknownObject("MiniMax usage object with token counts and details.");
@@ -351,8 +373,9 @@ const videoGenerationV2InputSchema = s.object(
       default: "adaptive",
     }),
     callback_url: videoCallbackUrlSchema,
+    aigc_watermark: s.boolean("Whether to add an AIGC watermark to the generated video."),
   },
-  { optional: ["ratio", "callback_url"] },
+  { optional: ["ratio", "callback_url", "aigc_watermark"] },
 );
 
 const textToVideoInputSchema = s.object(
@@ -698,8 +721,19 @@ const textToAudioOutputSchema = s.looseRequiredObject(
 export const minimaxActions: ActionDefinition[] = [
   defineProviderAction(service, {
     name: "list_models",
-    description: "List OpenAI-compatible MiniMax models available to the API key.",
-    inputSchema: s.object("No input is required to list MiniMax models.", {}),
+    operationType: "read",
+    description:
+      "List MiniMax models available to the API key, preferring MiniMax-M3.1-Flash then MiniMax-M3 and hiding legacy text models by default.",
+    inputSchema: s.object(
+      "Options for listing MiniMax models. Non-text models are preserved.",
+      {
+        include_legacy: s.boolean({
+          description: "Return the complete upstream model list, including legacy text models.",
+          default: false,
+        }),
+      },
+      { optional: ["include_legacy"] },
+    ),
     outputSchema: s.looseRequiredObject("MiniMax model list response.", {
       object: s.string("Object type returned by MiniMax, usually list."),
       data: s.array("MiniMax models returned by the API.", modelSchema),
@@ -707,18 +741,21 @@ export const minimaxActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "retrieve_model",
+    operationType: "read",
     description: "Retrieve OpenAI-compatible metadata for one MiniMax model.",
     inputSchema: modelIdInputSchema,
     outputSchema: modelSchema,
   }),
   defineProviderAction(service, {
     name: "create_response",
+    operationType: "write",
     description: "Create a non-streaming MiniMax response using the OpenAI Responses API shape.",
     inputSchema: createResponseInputSchema,
     outputSchema: createResponseOutputSchema,
   }),
   defineProviderAction(service, {
     name: "estimate_input_tokens",
+    operationType: "read",
     description: "Estimate MiniMax response input tokens without invoking the model.",
     inputSchema: estimateInputTokensInputSchema,
     outputSchema: s.looseRequiredObject("MiniMax input token estimate response.", {
@@ -728,54 +765,63 @@ export const minimaxActions: ActionDefinition[] = [
   }),
   defineProviderAction(service, {
     name: "create_video_generation_v2",
+    operationType: "write",
     description: "Create a MiniMax H3 video generation task with text, image, video, or audio content.",
     inputSchema: videoGenerationV2InputSchema,
     outputSchema: videoGenerationV2CreatedOutputSchema,
   }),
   defineProviderAction(service, {
     name: "text_to_video",
+    operationType: "write",
     description: "Create a MiniMax asynchronous text-to-video generation task.",
     inputSchema: textToVideoInputSchema,
     outputSchema: videoTaskCreatedOutputSchema,
   }),
   defineProviderAction(service, {
     name: "image_to_video",
+    operationType: "write",
     description: "Create a MiniMax asynchronous image-to-video generation task from a first frame image.",
     inputSchema: imageToVideoInputSchema,
     outputSchema: videoTaskCreatedOutputSchema,
   }),
   defineProviderAction(service, {
     name: "query_video_generation",
+    operationType: "read",
     description: "Query the status of a MiniMax video generation task and read its file id when it completes.",
     inputSchema: queryVideoGenerationInputSchema,
     outputSchema: videoTaskStatusOutputSchema,
   }),
   defineProviderAction(service, {
     name: "query_video_generation_v2",
+    operationType: "read",
     description: "Query a MiniMax H3 video generation task.",
     inputSchema: queryVideoGenerationInputSchema,
     outputSchema: videoGenerationV2QueryOutputSchema,
   }),
   defineProviderAction(service, {
     name: "list_video_generation_v2",
+    operationType: "read",
     description: "List MiniMax H3 video generation tasks.",
     inputSchema: listVideoGenerationV2InputSchema,
     outputSchema: videoGenerationV2ListOutputSchema,
   }),
   defineProviderAction(service, {
     name: "delete_video_generation_v2",
+    operationType: "destructive",
     description: "Delete a MiniMax H3 video generation task.",
     inputSchema: queryVideoGenerationInputSchema,
     outputSchema: videoGenerationV2DeleteOutputSchema,
   }),
   defineProviderAction(service, {
     name: "download_video",
+    operationType: "read",
     description: "Retrieve the download URL and metadata for a generated MiniMax video file.",
     inputSchema: downloadVideoInputSchema,
     outputSchema: videoFileOutputSchema,
   }),
   defineProviderAction(service, {
     name: "text_to_audio",
+    operationType: "write",
     description: "Synthesize text into audio with the MiniMax T2A v2 API.",
     inputSchema: textToAudioInputSchema,
     outputSchema: textToAudioOutputSchema,

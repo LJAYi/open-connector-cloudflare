@@ -1,14 +1,10 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
 
 import { compactObject, optionalInteger, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
-import {
-  defineProviderExecutors,
-  defineProviderProxy,
-  providerInputError,
-  ProviderRequestError,
-  providerUserAgent,
-  requireApiKeyCredential,
-} from "../provider-runtime.ts";
+import { requireApiKeyCredential } from "../provider-credentials.ts";
+import { defineProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { providerInputError, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
 
 const service = "neetocal";
 const suffix = ".neetocal.com";
@@ -47,7 +43,7 @@ async function request(
   for (const [key, value] of Object.entries(query)) if (value !== undefined) url.searchParams.set(key, String(value));
   append?.(url);
   const response = await context.fetcher(url, {
-    headers: { accept: "application/json", "x-api-key": context.apiKey, "user-agent": providerUserAgent },
+    headers: { "accept": "application/json", "x-api-key": context.apiKey, "user-agent": providerUserAgent },
     signal: context.signal,
   });
   const text = await response.text();
@@ -193,7 +189,6 @@ export const credentialValidators: CredentialValidators = {
     });
     return {
       profile: { accountId: `neetocal:${workspace}`, displayName: `${workspace}.neetocal.com` },
-      grantedScopes: [],
       metadata: { subdomain: workspace, apiBaseUrl: baseUrl(workspace), validationEndpoint: "/meetings" },
     };
   },

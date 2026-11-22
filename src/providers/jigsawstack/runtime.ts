@@ -1,6 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import { compactObject, optionalBoolean, optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
 import { providerUserAgent, ProviderRequestError, runProviderRequest } from "../provider-runtime.ts";
@@ -104,9 +103,7 @@ export async function validateJigsawstackCredential(
     profile: {
       accountId: "jigsawstack",
       displayName: "JigsawStack API Key",
-      grantedScopes: [],
     },
-    grantedScopes: [],
     metadata: {
       apiBaseUrl: jigsawstackApiBaseUrl,
       validationEndpoint: jigsawstackValidationPath,
@@ -151,7 +148,7 @@ function buildSummarizeTextBody(input: Record<string, unknown>): Record<string, 
 }
 
 async function requestJigsawstackJson(
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
+  context: ApiKeyProviderContext,
   request: JigsawstackRequest,
 ): Promise<Record<string, unknown>> {
   return runProviderRequest({ signal: context.signal, label: "JigsawStack" }, async (signal) => {
@@ -176,7 +173,7 @@ async function requestJigsawstackJson(
 
 function jigsawstackHeaders(apiKey: string): Record<string, string> {
   return {
-    accept: "application/json",
+    "accept": "application/json",
     "content-type": "application/json",
     "user-agent": providerUserAgent,
     "x-api-key": apiKey,

@@ -1,12 +1,8 @@
 import type { CredentialValidators, ExecutionContext, ProviderExecutors } from "../../core/types.ts";
 
-import {
-  createProviderTimeout,
-  defineProviderExecutors,
-  ProviderRequestError,
-  providerUserAgent,
-  requireApiKeyCredential,
-} from "../provider-runtime.ts";
+import { requireApiKeyCredential } from "../provider-credentials.ts";
+import { defineProviderExecutors } from "../provider-executors.ts";
+import { createProviderTimeout, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
 
 const service = "formaloo";
 const formalooApiBaseUrl = "https://api.formaloo.me/v3.0";
@@ -72,7 +68,6 @@ export const credentialValidators: CredentialValidators = {
       readString(profile.email) ?? readString(profile.username) ?? readString(profile.first_name) ?? "Formaloo API Key";
     return {
       profile: { accountId: displayName, displayName },
-      grantedScopes: [],
       metadata: { apiBaseUrl: formalooApiBaseUrl },
     };
   },
@@ -152,8 +147,8 @@ async function requestFormaloo(input: FormalooRequestInput): Promise<unknown> {
     const response = await input.fetcher(url, {
       method: input.method ?? "GET",
       headers: {
-        Accept: "application/json",
-        Authorization: `JWT ${token}`,
+        "Accept": "application/json",
+        "Authorization": `JWT ${token}`,
         "Content-Type": "application/json",
         "User-Agent": providerUserAgent,
         "x-api-key": input.credentials.apiKey,
@@ -182,8 +177,8 @@ async function obtainAuthorizationToken(
     const response = await fetcher(`${formalooApiBaseUrl}/oauth2/authorization-token/`, {
       method: "POST",
       headers: {
-        Accept: "application/json",
-        Authorization: `Basic ${credentials.apiSecret}`,
+        "Accept": "application/json",
+        "Authorization": `Basic ${credentials.apiSecret}`,
         "Content-Type": "application/json",
         "User-Agent": providerUserAgent,
         "x-api-key": credentials.apiKey,

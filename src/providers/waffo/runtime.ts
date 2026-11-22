@@ -1,6 +1,7 @@
 import type { CredentialValidationResult, ExecutionResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ProviderFetch, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ProviderRuntimeHandler } from "../provider-executors.ts";
+import type { ProviderFetch } from "../provider-runtime.ts";
 import type { KeyObject } from "node:crypto";
 
 import { createHash, createPrivateKey, createSign } from "node:crypto";
@@ -305,7 +306,6 @@ export async function validateWaffoCredential(
       accountId: credential.merchantId,
       displayName: `Waffo ${credential.merchantId}`,
     },
-    grantedScopes: [],
     metadata: {
       apiBaseUrl: waffoApiBaseUrl,
       merchantId: credential.merchantId,
@@ -329,7 +329,7 @@ export function readWaffoCredential(values: Record<string, string>): WaffoCreden
 export async function requestWaffoJson(input: WaffoRequestInput): Promise<Record<string, unknown>> {
   const body = JSON.stringify(input.body);
   const headers = new Headers({
-    accept: "application/json",
+    "accept": "application/json",
     "content-type": "application/json",
     "user-agent": providerUserAgent,
   });
@@ -347,7 +347,7 @@ export async function requestWaffoJson(input: WaffoRequestInput): Promise<Record
       method: "POST",
       headers,
       body,
-      redirect: "error",
+      redirect: "manual",
       signal: timeout.signal,
     });
     const payload = await readProviderJsonBody(response, {

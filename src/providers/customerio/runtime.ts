@@ -1,5 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 
 import { Buffer } from "node:buffer";
 import {
@@ -150,7 +150,6 @@ export async function validateCustomerioCredential(
           ? `Customer.io Track API (${region})`
           : `Customer.io environment ${environmentId} (${region})`,
     },
-    grantedScopes: [],
     metadata: compactObject({
       apiBaseUrl,
       region,
@@ -185,8 +184,8 @@ async function customerioRequest(input: {
 }): Promise<unknown> {
   const timeoutHandle = createProviderTimeout(input.context.signal);
   const headers: Record<string, string> = {
-    accept: "application/json",
-    authorization: buildCustomerioAuthorization(input.context.siteId, input.context.apiKey),
+    "accept": "application/json",
+    "authorization": buildCustomerioAuthorization(input.context.siteId, input.context.apiKey),
     "user-agent": providerUserAgent,
   };
   if (input.body !== undefined) {

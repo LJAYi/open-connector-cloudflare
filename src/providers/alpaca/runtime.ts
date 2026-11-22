@@ -1,14 +1,19 @@
 import type { CredentialValidationResult, ResolvedCredential } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 
 import { booleanString, compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
-import { isAbortLikeError, providerUserAgent, ProviderRequestError, requiredInputString } from "../provider-runtime.ts";
+import {
+  isAbortLikeError,
+  providerUserAgent,
+  ProviderRequestError,
+  requiredInputString,
+  defaultProviderRequestTimeoutMs,
+} from "../provider-runtime.ts";
 import { readAlpacaGrantedScopes } from "./scopes.ts";
 
 const paperTradingBaseUrl = "https://paper-api.alpaca.markets";
 const liveTradingBaseUrl = "https://api.alpaca.markets";
 const dataBaseUrl = "https://data.alpaca.markets";
-const requestTimeoutMs = 30_000;
 
 type Environment = "paper" | "live";
 type ApiFamily = "trading" | "data";
@@ -518,7 +523,7 @@ async function requestAlpacaJson(input: {
   context: ActionContext;
   phase: Phase;
 }): Promise<unknown> {
-  const timeoutSignal = AbortSignal.timeout(requestTimeoutMs);
+  const timeoutSignal = AbortSignal.timeout(defaultProviderRequestTimeoutMs);
   const signal = input.context.signal ? AbortSignal.any([input.context.signal, timeoutSignal]) : timeoutSignal;
 
   try {
@@ -574,14 +579,14 @@ function buildAlpacaUrl(
 export function alpacaCredentialHeaders(credential: Credential): Record<string, string> {
   if (credential.authType === "oauth2") {
     return {
-      accept: "application/json",
-      authorization: `${credential.tokenType} ${credential.accessToken}`,
+      "accept": "application/json",
+      "authorization": `${credential.tokenType} ${credential.accessToken}`,
       "user-agent": providerUserAgent,
     };
   }
 
   return {
-    accept: "application/json",
+    "accept": "application/json",
     "APCA-API-KEY-ID": credential.apiKeyId,
     "APCA-API-SECRET-KEY": credential.apiSecretKey,
     "user-agent": providerUserAgent,

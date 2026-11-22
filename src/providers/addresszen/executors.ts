@@ -1,14 +1,16 @@
-import type { CredentialValidators, ExecutionContext, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type {
+  CredentialValidators,
+  ExecutionContext,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 
 import { compactObject, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
-import {
-  defineProviderExecutors,
-  providerUserAgent,
-  ProviderRequestError,
-  requireApiKeyCredential,
-  requiredResponseRecord,
-} from "../provider-runtime.ts";
+import { requireApiKeyCredential } from "../provider-credentials.ts";
+import { defineProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { providerUserAgent, ProviderRequestError, requiredResponseRecord } from "../provider-runtime.ts";
 
 const service = "addresszen";
 const addresszenApiBaseUrl = "https://api.addresszen.com";
@@ -67,6 +69,13 @@ export const executors: ProviderExecutors = defineProviderExecutors<AddresszenAc
   },
 });
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: `${addresszenApiBaseUrl}/${addresszenApiVersion}`,
+  auth: { type: "api_key_query", name: "api_key" },
+  skipDnsValidation: true,
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const payload = await requestKeyAvailability(
@@ -84,7 +93,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: "api_key",
         displayName: "AddressZen API Key",
       },
-      grantedScopes: [],
       metadata: compactObject({
         apiBaseUrl: `${addresszenApiBaseUrl}/${addresszenApiVersion}`,
         validationEndpoint: "/keys/{key}",

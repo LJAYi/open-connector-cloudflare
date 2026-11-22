@@ -1,5 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 
 import { optionalInteger, optionalRecord, optionalString, optionalStringOrNull } from "../../core/cast.ts";
 import {
@@ -95,7 +95,6 @@ export async function validateJuniperMistCredential(
       accountId: self.id ?? self.email ?? "juniper_mist",
       displayName: self.name ?? self.email ?? "Juniper Mist API Token",
     },
-    grantedScopes: [],
     metadata: {
       validationEndpoint: "/self",
       apiBaseUrl,
@@ -178,8 +177,8 @@ async function requestJuniperMistJson(input: {
     const response = await input.fetcher(buildJuniperMistUrl(input), {
       method: "GET",
       headers: {
-        accept: "application/json",
-        authorization: `Token ${input.apiKey}`,
+        "accept": "application/json",
+        "authorization": `Token ${input.apiKey}`,
         "user-agent": providerUserAgent,
       },
       signal: timeout.signal,

@@ -1,12 +1,13 @@
-import type { ApiKeyActionRequest, ProviderActionHandlers } from "../provider-runtime.ts";
+import type { ApiKeyActionRequest, ProviderActionHandlers } from "../provider-executors.ts";
 
 import { optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
+import { getProviderActionHandler } from "../provider-executors.ts";
 import {
   createProviderTimeout,
-  getProviderActionHandler,
   ProviderRequestError,
   providerUserAgent,
   requiredResponseRecord,
+  providerInputError,
 } from "../provider-runtime.ts";
 
 export interface ZylvieCredentialCheck {
@@ -170,7 +171,7 @@ export async function validateZylvieCredential(
   fetcher: typeof fetch,
 ): Promise<ZylvieCredentialCheck> {
   const payload = await requestZylvieJson({
-    apiKey: requiredString(input.apiKey, "apiKey", (message) => new ProviderRequestError(400, message)),
+    apiKey: requiredString(input.apiKey, "apiKey", providerInputError),
     path: "/me",
     method: "GET",
     fetcher,
@@ -217,9 +218,9 @@ export async function requestZylvieJson(input: {
     const response = await input.fetcher(url, {
       method: input.method,
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         ...(input.body ? { "content-type": "application/json" } : {}),
-        authorization: `Bearer ${input.apiKey}`,
+        "authorization": `Bearer ${input.apiKey}`,
         "user-agent": providerUserAgent,
       },
       ...(input.body ? { body: JSON.stringify(input.body) } : {}),
@@ -287,13 +288,13 @@ function createRequestError(response: Response, payload: unknown, phase: Request
     return new ProviderRequestError(429, message);
   }
   if (phase === "validate" && response.status >= 400 && response.status < 500) {
-    return new ProviderRequestError(400, message);
+    return providerInputError(message);
   }
   if (phase === "execute" && (response.status === 401 || response.status === 403)) {
     return new ProviderRequestError(401, message);
   }
   if ([400, 404, 409, 422].includes(response.status)) {
-    return new ProviderRequestError(400, message);
+    return providerInputError(message);
   }
   return new ProviderRequestError(response.status || 500, message);
 }

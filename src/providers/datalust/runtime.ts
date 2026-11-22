@@ -1,5 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 
 import {
   optionalBoolean,
@@ -117,7 +117,6 @@ export async function validateDatalustCredential(
       accountId: `datalust:${host}`,
       displayName: `Seq ${host}`,
     },
-    grantedScopes: [],
     metadata: {
       baseUrl: context.baseUrl,
       validationEndpoint,
@@ -514,7 +513,7 @@ async function requestSeqStatus(input: DatalustRequestOptions): Promise<number> 
 async function requestSeq(input: DatalustRequestOptions): Promise<Response> {
   const url = buildDatalustUrl(input.context.baseUrl, input.path, input.query);
   const headers = new Headers({
-    accept: seqAcceptHeader,
+    "accept": seqAcceptHeader,
     [seqApiKeyHeader]: input.context.apiKey,
     "user-agent": providerUserAgent,
   });

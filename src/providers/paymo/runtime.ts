@@ -1,6 +1,6 @@
 import type { CredentialValidationResult, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { Buffer } from "node:buffer";
 import {
@@ -11,8 +11,8 @@ import {
   requiredRecord,
   requiredString,
 } from "../../core/cast.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
 import {
-  defineApiKeyProviderExecutors,
   providerInputError,
   ProviderRequestError,
   providerResponseError,
@@ -213,7 +213,6 @@ export async function validatePaymoCredential(
       accountId:
         readNonEmptyString(user.id) ?? readNonEmptyString(user.email) ?? readNonEmptyString(user.name) ?? "paymo",
       displayName: readNonEmptyString(user.name) ?? readNonEmptyString(user.email) ?? "Paymo API Key",
-      grantedScopes: [],
     },
     metadata: compactObject({
       userId: readNonEmptyString(user.id),
@@ -258,8 +257,8 @@ async function requestPaymoJson(input: PaymoRequestInput) {
     response = await input.fetcher(url, {
       method: input.method ?? "GET",
       headers: {
-        accept: "application/json",
-        authorization: `Basic ${Buffer.from(`${input.apiKey}:x`).toString("base64")}`,
+        "accept": "application/json",
+        "authorization": `Basic ${Buffer.from(`${input.apiKey}:x`).toString("base64")}`,
         "content-type": "application/json",
         "user-agent": providerUserAgent,
       },

@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import { compactObject, optionalBoolean, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
 import { ProviderRequestError, providerUserAgent, requiredResponseRecord } from "../provider-runtime.ts";
@@ -162,7 +162,6 @@ export async function validateSwaggerhubCredential(
       accountId: "swaggerhub",
       displayName: "SwaggerHub API Key",
     },
-    grantedScopes: [],
     metadata: {
       apiBaseUrl: swaggerhubApiOrigin,
       validationEndpoint: "/apis?limit=1",
@@ -255,8 +254,8 @@ async function requestSwaggerhubPayload<T>(input: {
 
 function swaggerhubHeaders(apiKey: string, accept?: string): Record<string, string> {
   return {
-    accept: accept ?? "application/json",
-    authorization: apiKey,
+    "accept": accept ?? "application/json",
+    "authorization": apiKey,
     "user-agent": providerUserAgent,
   };
 }

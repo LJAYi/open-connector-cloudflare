@@ -6,18 +6,18 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import { CastError, compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
 import { encodePathSegment } from "../../core/request.ts";
+import { requireApiKeyCredential } from "../provider-credentials.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
   createProviderFetch,
-  defineProviderProxy,
   ProviderRequestError,
   providerUserAgent,
-  requireApiKeyCredential,
   toProviderExecutionError,
+  providerInputError,
 } from "../provider-runtime.ts";
 
 const service = "aftership";
@@ -144,14 +144,7 @@ export const proxy: ProviderProxyExecutor = defineProviderProxy({
   baseUrl: aftershipApiBaseUrl,
   auth: { type: "api_key_header", name: "as-api-key" },
   skipDnsValidation: true,
-  customizeRequest({ headers }) {
-    if (!headers.has("accept")) {
-      headers.set("accept", "application/json");
-    }
-    if (!headers.has("content-type")) {
-      headers.set("content-type", "application/json");
-    }
-  },
+  defaultHeaders: { "accept": "application/json", "content-type": "application/json" },
 });
 
 export const credentialValidators: CredentialValidators = {
@@ -180,7 +173,6 @@ export const credentialValidators: CredentialValidators = {
       profile: {
         displayName: "AfterShip API Key",
       },
-      grantedScopes: [],
       metadata: {
         apiBaseUrl: aftershipApiBaseUrl,
         validationEndpoint: "/couriers?active=true",
@@ -192,7 +184,7 @@ export const credentialValidators: CredentialValidators = {
 
 async function requestAftership(
   request: AftershipRequest,
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
+  context: ApiKeyProviderContext,
   phase: "validate" | "execute",
 ): Promise<unknown> {
   const url = new URL(normalizePath(request.path), `${aftershipApiBaseUrl}/`);
@@ -231,7 +223,7 @@ function normalizePath(path: string): string {
 
 function aftershipHeaders(apiKey: string, hasBody: boolean): Record<string, string> {
   const headers: Record<string, string> = {
-    accept: "application/json",
+    "accept": "application/json",
     "as-api-key": apiKey,
     "user-agent": providerUserAgent,
   };
@@ -266,7 +258,7 @@ function createAftershipError(
 
   if (response.status === 401 || response.status === 403) {
     if (phase === "validate") {
-      return new ProviderRequestError(400, message);
+      return providerInputError(message);
     }
     return new ProviderRequestError(response.status, message, payload);
   }

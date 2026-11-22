@@ -1,13 +1,16 @@
-import type { CredentialValidators, ExecutionContext, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type {
+  CredentialValidators,
+  ExecutionContext,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 
 import { booleanString, compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
-import {
-  defineProviderExecutors,
-  providerUserAgent,
-  ProviderRequestError,
-  requireApiKeyCredential,
-} from "../provider-runtime.ts";
+import { requireApiKeyCredential } from "../provider-credentials.ts";
+import { defineProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
 
 const service = "api_bible";
 const apiBibleApiBaseUrl = "https://api.scripture.api.bible";
@@ -63,6 +66,16 @@ export const executors: ProviderExecutors = defineProviderExecutors<ApiBibleActi
   },
 });
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: apiBibleApiBaseUrl,
+  auth: { type: "api_key_header", name: "api-key" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const payload = await requestApiBibleJson({
@@ -82,7 +95,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: "api_key",
         displayName: "API.Bible API Key",
       },
-      grantedScopes: [],
       metadata: compactObject({
         validationEndpoint: apiBibleValidationPath,
         apiBaseUrl: apiBibleApiBaseUrl,
@@ -221,7 +233,7 @@ async function searchScripture(input: Record<string, unknown>, context: ApiBible
 
 function buildDisplayQuery(input: Record<string, unknown>): Record<string, string | undefined> {
   return compactObject({
-    parallels: optionalString(input.parallels),
+    "parallels": optionalString(input.parallels),
     "content-type": optionalString(input.contentType),
     "include-notes": booleanString(input.includeNotes),
     "include-titles": booleanString(input.includeTitles),
@@ -245,7 +257,7 @@ async function requestApiBibleJson(input: {
     response = await input.fetcher(buildApiBibleUrl(input.path, input.query), {
       method: "GET",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "api-key": input.apiKey,
         "user-agent": providerUserAgent,
       },

@@ -1,5 +1,5 @@
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import {
   booleanString,
@@ -55,7 +55,6 @@ export async function validateHexCredential(
   options: { fetcher: typeof fetch; signal?: AbortSignal },
 ): Promise<{
   profile: { accountId: string; displayName: string };
-  grantedScopes: string[];
   metadata: Record<string, unknown>;
 }> {
   await requestHexJson({
@@ -74,7 +73,6 @@ export async function validateHexCredential(
       accountId: "api_token",
       displayName: "Hex API Token",
     },
-    grantedScopes: [],
     metadata: {
       apiBaseUrl: hexApiBaseUrl,
       validationEndpoint: "/projects",
@@ -244,8 +242,8 @@ async function requestHexJson(options: HexRequestOptions): Promise<unknown> {
   }
 
   const headers = new Headers({
-    accept: "application/json",
-    authorization: `Bearer ${options.apiKey}`,
+    "accept": "application/json",
+    "authorization": `Bearer ${options.apiKey}`,
     "user-agent": providerUserAgent,
   });
   for (const [key, value] of Object.entries(options.headers ?? {})) {

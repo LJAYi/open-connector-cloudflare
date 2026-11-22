@@ -1,5 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
 import { createProviderTimeout, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
@@ -232,8 +232,8 @@ async function requestFormstack(options: {
     const response = await options.fetcher(url, {
       method: options.method,
       headers: {
-        accept: "application/json",
-        authorization: `Bearer ${requireApiKey(options.apiKey)}`,
+        "accept": "application/json",
+        "authorization": `Bearer ${requireApiKey(options.apiKey)}`,
         ...(options.body ? { "content-type": "application/json" } : {}),
         ...options.headers,
         "user-agent": providerUserAgent,

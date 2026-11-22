@@ -1,4 +1,4 @@
-import type { ProviderActionHandlerSubset } from "../provider-runtime.ts";
+import type { ProviderActionHandlerSubset } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -227,7 +227,6 @@ function readHistoryEntityIds(value: unknown): string {
 
 export function validateHomeAssistantCredential(input: { values: Record<string, string> }): {
   profile: { accountId: string; displayName: string };
-  grantedScopes: string[];
   metadata: Record<string, unknown>;
 } {
   const baseUrl = normalizeBaseUrl(input.values.baseUrl);
@@ -237,7 +236,6 @@ export function validateHomeAssistantCredential(input: { values: Record<string, 
       accountId: `home_assistant:${host}`,
       displayName: `Home Assistant (${host})`,
     },
-    grantedScopes: [],
     metadata: {
       baseUrl,
     },
@@ -279,8 +277,8 @@ async function requestHomeAssistant(input: HomeAssistantRequest): Promise<Respon
     const response = await input.context.fetcher(buildHomeAssistantUrl(input), {
       method: input.method,
       headers: {
-        accept: "application/json",
-        authorization: `Bearer ${input.context.apiKey}`,
+        "accept": "application/json",
+        "authorization": `Bearer ${input.context.apiKey}`,
         "content-type": "application/json",
         "user-agent": providerUserAgent,
       },

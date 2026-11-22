@@ -1,6 +1,11 @@
-import type { CredentialValidationResult, CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { BearerProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type {
+  CredentialValidationResult,
+  CredentialValidators,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { BearerProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -10,12 +15,9 @@ import {
   optionalString,
   optionalStringArray,
 } from "../../core/cast.ts";
-import {
-  defineBearerProviderExecutors,
-  ProviderRequestError,
-  providerUserAgent,
-  requiredInputString,
-} from "../provider-runtime.ts";
+import { defineBearerProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { ProviderRequestError, providerUserAgent, requiredInputString } from "../provider-runtime.ts";
 
 const service = "webflow";
 const webflowApiBaseUrl = "https://api.webflow.com/v2";
@@ -61,6 +63,14 @@ const webflowActionHandlers: ProviderActionHandlers<"webflow", WebflowActionHand
 
 export const executors: ProviderExecutors = defineBearerProviderExecutors(service, webflowActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: webflowApiBaseUrl,
+  auth: { type: "bearer" },
+  skipDnsValidation: true,
+  defaultHeaders: { "accept": "application/json", "content-type": "application/json" },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }): Promise<CredentialValidationResult> {
     return validateWebflowApiKeyCredential(input.apiKey, fetcher, signal);
@@ -86,7 +96,6 @@ async function validateWebflowApiKeyCredential(
       accountId: userId ?? "webflow:credential",
       displayName: (userEmail ?? userName) || "Webflow credential",
     },
-    grantedScopes: [],
     metadata: compactObject({
       apiBaseUrl: webflowApiBaseUrl,
       validationEndpoint: "/token/authorized_by",
@@ -410,8 +419,8 @@ async function webflowFetchJson(
 
 function webflowHeaders(accessToken: string, contentType?: string): Record<string, string> {
   return compactObject({
-    accept: "application/json",
-    authorization: `Bearer ${accessToken}`,
+    "accept": "application/json",
+    "authorization": `Bearer ${accessToken}`,
     "content-type": contentType,
     "user-agent": providerUserAgent,
   }) as Record<string, string>;

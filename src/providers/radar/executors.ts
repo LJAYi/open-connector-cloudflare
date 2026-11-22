@@ -1,6 +1,6 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderRequestContext } from "../provider-runtime.ts";
 
 import {
   compactObject,
@@ -10,9 +10,10 @@ import {
   optionalString,
   recordOrEmpty,
 } from "../../core/cast.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
   createProviderTimeout,
-  defineApiKeyProviderExecutors,
   isAbortLikeError,
   providerUserAgent,
   ProviderRequestError,
@@ -130,6 +131,16 @@ export const radarActionHandlers: ProviderActionHandlers<"radar", RadarActionHan
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, radarActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: radarApiBaseUrl,
+  auth: { type: "api_key_header", name: "Authorization" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const context = { apiKey: input.apiKey, fetcher, signal };
@@ -147,7 +158,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: "radar:api_key",
         displayName: "Radar API Key",
       },
-      grantedScopes: [],
       metadata: compactObject({
         apiBaseUrl: radarApiBaseUrl,
         validationEndpoint: radarValidationPath,
@@ -163,7 +173,7 @@ async function requestRadarJson(input: {
   path: string;
   apiKey: string;
   query: Record<string, string | undefined>;
-  context: Pick<ApiKeyProviderContext, "fetcher" | "signal">;
+  context: ProviderRequestContext;
   phase: RadarRequestPhase;
 }): Promise<Record<string, unknown>> {
   const timeout = createProviderTimeout(input.context.signal);
@@ -172,8 +182,8 @@ async function requestRadarJson(input: {
     const response = await input.context.fetcher(buildRadarUrl(input.path, input.query), {
       method: "GET",
       headers: {
-        accept: "application/json",
-        authorization: input.apiKey,
+        "accept": "application/json",
+        "authorization": input.apiKey,
         "user-agent": providerUserAgent,
       },
       signal: timeout.signal,

@@ -1,6 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { optionalRecord, optionalString, optionalStringArray, requiredString } from "../../core/cast.ts";
 import {
@@ -171,8 +170,8 @@ export async function validateRaiselyCredential(
   const { response, payload } = await fetchRaiselyJson(fetcher, `${raiselyApiBaseUrl}/authenticate`, {
     method: "GET",
     headers: {
-      accept: "application/json",
-      authorization: `Bearer ${apiKey}`,
+      "accept": "application/json",
+      "authorization": `Bearer ${apiKey}`,
       "user-agent": providerUserAgent,
     },
     signal,
@@ -200,7 +199,6 @@ export async function validateRaiselyCredential(
       accountId: userUuid,
       displayName: fullName ?? email ?? preferredName ?? "Raisely API Key",
     },
-    grantedScopes: [],
     metadata: {
       validationEndpoint: "/authenticate",
       userUuid,
@@ -213,7 +211,7 @@ export async function validateRaiselyCredential(
 }
 
 async function requestRaiselyJson(input: {
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   method: RaiselyRequestMethod;
   path: string;
   query?: URLSearchParams;
@@ -225,8 +223,8 @@ async function requestRaiselyJson(input: {
     url.search = input.query.toString();
   }
   const headers: Record<string, string> = {
-    accept: "application/json",
-    authorization: `Bearer ${input.context.apiKey}`,
+    "accept": "application/json",
+    "authorization": `Bearer ${input.context.apiKey}`,
     "user-agent": providerUserAgent,
   };
   if (input.body) {

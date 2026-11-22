@@ -1,5 +1,5 @@
 import { optionalRecord, optionalString, compactObject } from "../../core/cast.ts";
-import { ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
+import { ProviderRequestError, providerUserAgent, providerInputError } from "../provider-runtime.ts";
 
 export const planetScaleApiBaseUrl = "https://api.planetscale.com/v1/";
 
@@ -145,7 +145,7 @@ async function requestPlanetScale(
     response = await fetcher(url, {
       method: endpoint.method,
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         authorization,
         "content-type": "application/json",
         "user-agent": providerUserAgent,
@@ -239,7 +239,7 @@ function createPlanetScaleError(status: number, payload: unknown) {
     return new ProviderRequestError(status, message);
   }
   if (status == 400 || status == 404 || status == 409 || status == 422) {
-    return new ProviderRequestError(400, message);
+    return providerInputError(message);
   }
   return new ProviderRequestError(status >= 500 ? status : 502, message);
 }

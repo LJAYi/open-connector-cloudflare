@@ -1,10 +1,12 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { OAuthProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { OAuthProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import { optionalInteger, optionalNumber, optionalString, requiredString } from "../../core/cast.ts";
 import { arrayPayload, definedBody, firstString, objectPayload, requestJson } from "../http-json-runtime.ts";
-import { defineOAuthProviderExecutors, ProviderRequestError } from "../provider-runtime.ts";
+import { defineOAuthProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { ProviderRequestError } from "../provider-runtime.ts";
 
 const service = "xero";
 const apiBaseUrl = "https://api.xero.com/api.xro/2.0";
@@ -205,6 +207,14 @@ export const xeroActionHandlers: ProviderActionHandlers<"xero", XeroHandler> = {
 
 export const executors: ProviderExecutors = defineOAuthProviderExecutors(service, xeroActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: identityBaseUrl,
+  auth: { type: "oauth_bearer" },
+  skipDnsValidation: true,
+  defaultHeaders: { accept: "application/json" },
+});
+
 export const credentialValidators: CredentialValidators = {
   async oauth2(input, { fetcher, signal }) {
     const payload = objectPayload(
@@ -302,7 +312,7 @@ function defaultDueDate(date: string | undefined): string | undefined {
 
 function bearerHeaders(accessToken: string, tenantId?: string): Record<string, string> {
   return {
-    authorization: `Bearer ${accessToken}`,
+    "authorization": `Bearer ${accessToken}`,
     "xero-api-package": apiPackage,
     ...(tenantId ? { "xero-tenant-id": tenantId } : {}),
   };

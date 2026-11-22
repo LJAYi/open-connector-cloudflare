@@ -1,13 +1,13 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import { randomUUID } from "node:crypto";
 import { compactObject, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
   createProviderTimeout,
-  defineApiKeyProviderExecutors,
-  defineProviderProxy,
   providerInputError,
   providerUserAgent,
   ProviderRequestError,
@@ -130,7 +130,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: "api_key",
         displayName: deviceName ? `Govee: ${deviceName}` : "Govee API Key",
       },
-      grantedScopes: [],
       metadata: compactObject({
         apiBaseUrl: goveeApiBaseUrl,
         validationEndpoint: "/router/api/v1/user/devices",
@@ -178,7 +177,7 @@ async function requestGovee(input: GoveeRequestInput): Promise<unknown> {
     response = await input.fetcher(`${goveeApiBaseUrl}${input.path}`, {
       method: input.method,
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "Govee-API-Key": input.apiKey,
         "user-agent": providerUserAgent,
         ...(input.body ? { "content-type": "application/json" } : {}),

@@ -1,6 +1,5 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -10,13 +9,10 @@ import {
   optionalString,
   requiredString,
 } from "../../core/cast.ts";
-import {
-  defineProviderExecutors,
-  providerInputError,
-  ProviderRequestError,
-  providerUserAgent,
-  requireApiKeyCredential,
-} from "../provider-runtime.ts";
+import { requireApiKeyCredential } from "../provider-credentials.ts";
+import { defineProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { providerInputError, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
 
 const service = "ayrshare";
 const ayrshareBaseUrl = "https://api.ayrshare.com/api";
@@ -82,6 +78,19 @@ export const executors: ProviderExecutors = defineProviderExecutors<AyrshareCont
   },
 });
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: ayrshareBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ credential, headers }) {
+    if (credential?.authType !== "api_key") throw new ProviderRequestError(400, "api_key credential is required");
+    const profileKey = optionalString(credential?.values[profileKeyField]);
+    if (profileKey) headers.set("profile-key", profileKey);
+    if (!headers.has("accept")) headers.set("accept", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const profileKey = optionalString(input.values[profileKeyField]);
@@ -103,7 +112,6 @@ export const credentialValidators: CredentialValidators = {
       profile: {
         displayName: profileKey ? "Ayrshare User Profile" : "Ayrshare Primary Profile",
       },
-      grantedScopes: [],
       metadata: {
         apiBaseUrl: ayrshareBaseUrl,
         validationEndpoint: "/user",
@@ -388,7 +396,7 @@ async function requestAyrshareJson(
   input: {
     method: AyrshareMethod;
     path: string;
-    context: Pick<AyrshareContext, "apiKey" | "fetcher" | "profileKey" | "signal">;
+    context: AyrshareContext;
     query?: Record<string, unknown>;
     body?: Record<string, unknown>;
   },
@@ -402,8 +410,8 @@ async function requestAyrshareJson(
   }
 
   const headers = new Headers({
-    accept: "application/json",
-    authorization: `Bearer ${input.context.apiKey}`,
+    "accept": "application/json",
+    "authorization": `Bearer ${input.context.apiKey}`,
     "user-agent": providerUserAgent,
   });
   if (input.body) {

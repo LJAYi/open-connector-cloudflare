@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import { Buffer } from "node:buffer";
 import { createHash } from "node:crypto";
@@ -13,7 +13,7 @@ import {
   ProviderRequestError,
 } from "../provider-runtime.ts";
 
-const emailListVerifyApiBaseUrl = "https://apps.emaillistverify.com";
+export const emailListVerifyApiBaseUrl = "https://apps.emaillistverify.com";
 const emailListVerifyApiKeyRejectedStatus = "error_credit";
 
 type EmailListVerifyRequestPhase = "validate" | "execute";
@@ -119,7 +119,6 @@ export async function validateEmailListVerifyCredential(
       accountId: buildEmailListVerifyProviderAccountId(apiKey),
       displayName: "EmailListVerify API Key",
     },
-    grantedScopes: [],
     metadata: {
       apiBaseUrl: emailListVerifyApiBaseUrl,
       validationEndpoint: "/api/credits",
@@ -331,7 +330,7 @@ async function requestEmailListVerifyApi(
     const response = await input.fetcher(url, {
       method: input.method ?? "GET",
       headers: {
-        accept: input.responseType === "binary" ? "*/*" : "application/json, text/plain",
+        "accept": input.responseType === "binary" ? "*/*" : "application/json, text/plain",
         "user-agent": providerUserAgent,
       },
       body: input.body,

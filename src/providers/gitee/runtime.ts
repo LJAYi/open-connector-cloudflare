@@ -1,12 +1,11 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { BearerProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlers, BearerProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import { compactObject, optionalIntegerLike, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import { encodePathSegment, queryParams } from "../../core/request.ts";
 import { providerInputError, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
 
-const giteeApiBaseUrl = "https://gitee.com/api/v5";
+export const giteeApiBaseUrl: string = "https://gitee.com/api/v5";
 
 type GiteeRequestPhase = "validate" | "execute";
 
@@ -86,7 +85,7 @@ export function parseGiteeScopes(value: unknown): string[] {
 
 async function giteeRequestJson<T = unknown>(
   path: string,
-  context: Pick<BearerProviderContext, "accessToken" | "fetcher" | "signal">,
+  context: BearerProviderContext,
   phase: GiteeRequestPhase = "execute",
   options: GiteeRequestOptions = {},
 ): Promise<T> {
@@ -99,8 +98,8 @@ async function giteeRequestJson<T = unknown>(
   try {
     response = await context.fetcher(url, {
       headers: {
-        accept: "application/json",
-        authorization: `Bearer ${context.accessToken}`,
+        "accept": "application/json",
+        "authorization": `Bearer ${context.accessToken}`,
         "user-agent": providerUserAgent,
       },
       signal: context.signal,

@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import { optionalBoolean, optionalString, requiredString } from "../../core/cast.ts";
 import {
@@ -71,7 +71,6 @@ export async function validateBugsnagCredential(input: {
       accountId: userId,
       displayName: name ?? email ?? "Bugsnag Personal Auth Token",
     },
-    grantedScopes: [],
     metadata: {
       apiBaseUrl: bugsnagApiBaseUrl,
       validationEndpoint: "/user",
@@ -250,8 +249,8 @@ async function requestBugsnagJson(input: {
     const response = await input.fetcher(url, {
       method: "GET",
       headers: {
-        accept: "application/json",
-        authorization: `token ${input.apiKey}`,
+        "accept": "application/json",
+        "authorization": `token ${input.apiKey}`,
         "user-agent": providerUserAgent,
       },
       signal: timeout.signal,

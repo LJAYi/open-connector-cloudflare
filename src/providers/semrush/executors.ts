@@ -1,15 +1,16 @@
-import type { CredentialValidators, ExecutionContext, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type {
+  CredentialValidators,
+  ExecutionContext,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 
 import { compactObject, optionalIntegerLike, optionalRawString } from "../../core/cast.ts";
-import {
-  defineProviderExecutors,
-  mapProviderActionSources,
-  providerUserAgent,
-  ProviderRequestError,
-  requireApiKeyCredential,
-  runProviderRequest,
-} from "../provider-runtime.ts";
+import { requireApiKeyCredential } from "../provider-credentials.ts";
+import { defineProviderExecutors, mapProviderActionSources } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { providerUserAgent, ProviderRequestError, runProviderRequest } from "../provider-runtime.ts";
 
 export const semrushApiBaseUrl = "https://api.semrush.com";
 
@@ -92,6 +93,16 @@ export const executors: ProviderExecutors = defineProviderExecutors<SemrushActio
   },
 });
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service: "semrush",
+  baseUrl: semrushApiBaseUrl,
+  auth: { type: "api_key_query", name: "key" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "text/csv, text/plain, */*");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher }) {
     const report = await requestSemrushReport({
@@ -111,7 +122,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: "api_key",
         displayName: "Semrush API Key",
       },
-      grantedScopes: [],
       metadata: {
         apiBaseUrl: semrushApiBaseUrl,
         validationReportType: "domain_ranks",
@@ -131,7 +141,7 @@ async function requestSemrushReport(input: {
     const response = await input.fetcher(buildSemrushUrl(input.apiKey, input.params), {
       method: "GET",
       headers: {
-        accept: "text/csv, text/plain, */*",
+        "accept": "text/csv, text/plain, */*",
         "user-agent": providerUserAgent,
       },
       signal,

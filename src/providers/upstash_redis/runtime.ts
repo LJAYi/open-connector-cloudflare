@@ -1,6 +1,7 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ProviderFetch, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ProviderRuntimeHandler } from "../provider-executors.ts";
+import type { ProviderFetch } from "../provider-runtime.ts";
 
 import {
   optionalIntegerLike,
@@ -128,7 +129,6 @@ export async function validateUpstashRedisCredential(
       accountId: `${service}:${context.restUrl.hostname}`,
       displayName: `Upstash Redis - ${context.restUrl.hostname}`,
     },
-    grantedScopes: [],
     metadata: {
       restUrl: context.restUrl.origin,
       validationCommand: "PING",
@@ -146,8 +146,8 @@ async function executeUpstashCommand(
     const response = await context.fetcher(new URL(context.restUrl), {
       method: "POST",
       headers: {
-        accept: "application/json",
-        authorization: `Bearer ${context.restToken}`,
+        "accept": "application/json",
+        "authorization": `Bearer ${context.restToken}`,
         "content-type": "application/json",
         "user-agent": providerUserAgent,
       },
@@ -188,7 +188,7 @@ async function executeUpstashCommand(
   }
 }
 
-function normalizeUpstashRestUrl(value: string | undefined): URL {
+export function normalizeUpstashRestUrl(value: string | undefined): URL {
   const restUrl = assertPublicHttpUrl(requiredString(value, "restUrl", providerInputError), {
     fieldName: "restUrl",
     createError: providerInputError,

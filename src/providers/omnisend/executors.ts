@@ -1,19 +1,24 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalBoolean, optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
-import {
-  defineApiKeyProviderExecutors,
-  providerUserAgent,
-  ProviderRequestError,
-  requiredInputString,
-} from "../provider-runtime.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { providerUserAgent, ProviderRequestError, requiredInputString } from "../provider-runtime.ts";
 
 const service = "omnisend";
 const omnisendApiBaseUrl = "https://api.omnisend.com/api";
 const omnisendApiVersion = "2026-03-15";
 const omnisendValidationPath = "/contacts";
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: omnisendApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Omnisend-API-Key " },
+  skipDnsValidation: true,
+  defaultHeaders: { "accept": "application/json", "omnisend-version": omnisendApiVersion },
+});
 
 const contactBodyKeys = [
   "address",
@@ -99,7 +104,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: "omnisend",
         displayName: "Omnisend API Key",
       },
-      grantedScopes: [],
       metadata: compactObject({
         apiBaseUrl: omnisendApiBaseUrl,
         apiVersion: omnisendApiVersion,
@@ -338,8 +342,8 @@ async function omnisendFetch(input: OmnisendRequestOptions): Promise<Response> {
 
 function omnisendHeaders(apiKey: string, hasBody: boolean): Record<string, string> {
   const headers: Record<string, string> = {
-    accept: "application/json",
-    authorization: `Omnisend-API-Key ${apiKey}`,
+    "accept": "application/json",
+    "authorization": `Omnisend-API-Key ${apiKey}`,
     "omnisend-version": omnisendApiVersion,
     "user-agent": providerUserAgent,
   };

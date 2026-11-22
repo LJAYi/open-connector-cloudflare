@@ -1,5 +1,10 @@
-import type { CredentialValidators, ExecutionContext, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type {
+  CredentialValidators,
+  ExecutionContext,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -10,11 +15,14 @@ import {
   optionalString,
   rawStringOrNull,
 } from "../../core/cast.ts";
+import { requireApiKeyCredential } from "../provider-credentials.ts";
+import { defineProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
-  defineProviderExecutors,
   ProviderRequestError,
   providerUserAgent,
-  requireApiKeyCredential,
+  providerInputError,
+  providerResponseError,
 } from "../provider-runtime.ts";
 
 type MocoRequestPhase = "validate" | "execute";
@@ -44,6 +52,20 @@ interface MocoJsonResponse {
 }
 
 const service = "moco";
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  async baseUrl(context) {
+    const credential = await requireApiKeyCredential(context, service);
+    return (
+      optionalString(credential.metadata.apiBaseUrl) ??
+      buildMocoApiBaseUrl(normalizeMocoAccount(credential.values.account))
+    );
+  },
+  auth: { type: "api_key_authorization", prefix: "Token token=" },
+  defaultHeaders: { "accept": "application/json", "content-type": "application/json" },
+});
+
 const mocoValidationPath = "/session";
 const mocoCredentialHelpUrl = "https://everii-group.github.io/mocoapp-api-docs/authentication.html";
 
@@ -114,7 +136,6 @@ async function validateMocoCredential(
       accountId: `moco:${account}:user:${userId}`,
       displayName: `MOCO ${account}`,
     },
-    grantedScopes: [],
     metadata: compactObject({
       account,
       apiBaseUrl,
@@ -242,8 +263,8 @@ async function requestMocoJson(options: MocoRequestOptions): Promise<MocoJsonRes
 
 function mocoHeaders(apiKey: string): Record<string, string> {
   return {
-    accept: "application/json",
-    authorization: `Token token=${apiKey}`,
+    "accept": "application/json",
+    "authorization": `Token token=${apiKey}`,
     "content-type": "application/json",
     "user-agent": providerUserAgent,
   };
@@ -422,21 +443,21 @@ function mapMocoError(
 ): ProviderRequestError {
   const message = extractErrorMessage(payload) ?? (response.statusText || "MOCO request failed");
   if (phase === "validate" && (response.status === 401 || response.status === 403)) {
-    return new ProviderRequestError(400, message);
+    return providerInputError(message);
   }
   if (phase === "execute" && (response.status === 401 || response.status === 403)) {
     return new ProviderRequestError(401, message);
   }
   if (response.status === 404 && notFoundAsInvalidInput) {
-    return new ProviderRequestError(400, message);
+    return providerInputError(message);
   }
   if (response.status === 400 || response.status === 404 || response.status === 422) {
-    return new ProviderRequestError(400, message);
+    return providerInputError(message);
   }
   if (response.status === 429) {
     return new ProviderRequestError(429, message);
   }
-  return new ProviderRequestError(502, message);
+  return providerResponseError(message);
 }
 
 async function readResponsePayload(response: Response): Promise<unknown> {

@@ -1,5 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 
 import { Buffer } from "node:buffer";
 import { optionalInteger, optionalRecord, optionalString, pickOptionalInteger } from "../../core/cast.ts";
@@ -125,7 +125,6 @@ export async function validateAircallCredential(
       accountId: apiId,
       displayName: `Aircall API ${apiId}`,
     },
-    grantedScopes: [],
     metadata: {
       apiBaseUrl: aircallApiBaseUrl,
       validationEndpoint: aircallValidationPath,
@@ -227,8 +226,8 @@ function normalizePagination(value: unknown): Record<string, unknown> {
 
 export function buildAircallHeaders(apiId: string, apiKey: string): Record<string, string> {
   return {
-    accept: "application/json",
-    authorization: buildBasicAuthorizationHeader(apiId, apiKey),
+    "accept": "application/json",
+    "authorization": buildBasicAuthorizationHeader(apiId, apiKey),
     "user-agent": providerUserAgent,
   };
 }

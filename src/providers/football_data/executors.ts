@@ -1,14 +1,15 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
-import { defineApiKeyProviderExecutors, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { providerUserAgent, ProviderRequestError, defaultProviderRequestTimeoutMs } from "../provider-runtime.ts";
 
 const service = "football_data";
 const footballDataBaseUrl = "https://api.football-data.org/v4";
 const footballDataApiOrigin = "https://api.football-data.org";
-const defaultRequestTimeoutMs = 30_000;
 
 type FootballDataContext = ApiKeyProviderContext;
 type FootballDataPhase = "validate" | "execute";
@@ -133,6 +134,16 @@ export const footballDataActionHandlers: ProviderActionHandlers<"football_data",
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, footballDataActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: footballDataBaseUrl,
+  auth: { type: "api_key_header", name: "X-Auth-Token" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const payload = await footballDataRequestJson(
@@ -160,7 +171,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: firstCompetitionCode,
         displayName: "football-data.org API Token",
       },
-      grantedScopes: [],
       metadata: compactObject({
         apiBaseUrl: footballDataBaseUrl,
         validationEndpoint: "/competitions",
@@ -182,14 +192,14 @@ async function footballDataRequestJson(
     }
   }
 
-  const timeoutSignal = AbortSignal.timeout(defaultRequestTimeoutMs);
+  const timeoutSignal = AbortSignal.timeout(defaultProviderRequestTimeoutMs);
   const signal = context.signal ? AbortSignal.any([context.signal, timeoutSignal]) : timeoutSignal;
 
   try {
     const response = await context.fetcher(url, {
       method: "GET",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "user-agent": providerUserAgent,
         "x-auth-token": context.apiKey,
       },

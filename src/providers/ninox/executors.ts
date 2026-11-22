@@ -1,14 +1,10 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
-import {
-  defineApiKeyProviderExecutors,
-  providerUserAgent,
-  ProviderRequestError,
-  runProviderRequest,
-} from "../provider-runtime.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { providerUserAgent, ProviderRequestError, runProviderRequest } from "../provider-runtime.ts";
 
 export const ninoxApiBaseUrl = "https://api.ninox.com/v1";
 
@@ -21,7 +17,7 @@ type NinoxActionHandler = (input: Record<string, unknown>, context: ApiKeyProvid
 
 interface NinoxRequestInput {
   path: string;
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   phase: NinoxPhase;
   method?: "GET" | "POST" | "DELETE";
   query?: Record<string, NinoxQueryValue>;
@@ -76,6 +72,16 @@ export const ninoxActionHandlers: ProviderActionHandlers<"ninox", NinoxActionHan
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, ninoxActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: ninoxApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const workspaces = normalizeWorkspaceList(
@@ -96,7 +102,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: firstWorkspace?.id ?? "ninox-api-key",
         displayName: firstWorkspace?.name ?? "Ninox API Token",
       },
-      grantedScopes: [],
       metadata: compactObject({
         validationEndpoint: ninoxValidationPath,
         workspaceCount: workspaces.length,
@@ -321,8 +326,8 @@ async function requestNinoxJson(input: NinoxRequestInput): Promise<unknown> {
     const response = await input.context.fetcher(buildNinoxUrl(input.path, input.query), {
       method: input.method ?? "GET",
       headers: {
-        accept: "application/json",
-        authorization: `Bearer ${input.context.apiKey}`,
+        "accept": "application/json",
+        "authorization": `Bearer ${input.context.apiKey}`,
         "content-type": "application/json",
         "user-agent": providerUserAgent,
       },

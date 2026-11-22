@@ -1,5 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -90,9 +90,7 @@ export async function validateContentstackContentManagementCredential(
         optionalString(firstContentType?.title) ??
         optionalString(firstContentType?.uid) ??
         "Contentstack Management Token",
-      grantedScopes: [],
     },
-    grantedScopes: [],
     metadata: compactObject({
       apiBaseUrl: contentstackContentManagementApiBaseUrl,
       validationEndpoint: "/content_types",
@@ -311,10 +309,10 @@ function buildContentstackHeaders(
   branch?: string,
 ): Record<string, string> {
   const headers: Record<string, string> = {
-    accept: "application/json",
+    "accept": "application/json",
     "content-type": "application/json",
-    authorization: managementToken,
-    api_key: stackApiKey,
+    "authorization": managementToken,
+    "api_key": stackApiKey,
     "user-agent": providerUserAgent,
   };
   if (branch) {

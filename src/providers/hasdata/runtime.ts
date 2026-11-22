@@ -1,5 +1,4 @@
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -54,7 +53,7 @@ export const hasdataActionHandlers: ProviderActionHandlers<"hasdata", HasdataAct
 async function requestHasdataJson(input: {
   path: string;
   init: RequestInit;
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
 }): Promise<Record<string, unknown>> {
   input.context.signal?.throwIfAborted();
   const timeout = createProviderTimeout(input.context.signal, hasdataDefaultRequestTimeoutMs);
@@ -63,7 +62,7 @@ async function requestHasdataJson(input: {
     const response = await input.context.fetcher(new URL(input.path, hasdataApiBaseUrl), {
       ...input.init,
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "content-type": "application/json",
         "user-agent": providerUserAgent,
         "x-api-key": input.context.apiKey,

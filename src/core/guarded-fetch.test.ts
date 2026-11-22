@@ -1,13 +1,13 @@
 import type { GuardedFetchDnsLookup } from "./guarded-fetch.ts";
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   createGuardedFetch,
   crossOriginSafeHeaders,
   resolveGuardedEgressTarget,
   unwrapGuardedFetch,
 } from "./guarded-fetch.ts";
-import { setEgressTrustedHosts } from "./request.ts";
+import { withProviderNetworkPolicy } from "./provider-network-policy.ts";
 
 interface RecordedCall {
   url: string;
@@ -81,7 +81,7 @@ describe("resolveGuardedEgressTarget", () => {
 // here instead of silently breaking a provider mid-upload, and a widening fails
 // here instead of silently re-opening the leak.
 const crossOriginSafeHeaderFixture: Record<string, string> = {
-  accept: "application/json",
+  "accept": "application/json",
   "accept-charset": "utf-8",
   "accept-encoding": "gzip",
   "accept-language": "en-US",
@@ -93,13 +93,13 @@ const crossOriginSafeHeaderFixture: Record<string, string> = {
   "content-md5": "1B2M2Y8AsgTpgAmY7PhCfg==",
   "content-range": "bytes 0-9/100",
   "content-type": "application/octet-stream",
-  dnt: "1",
+  "dnt": "1",
   "idempotency-key": "abc",
   "if-match": '"etag-1"',
   "if-modified-since": "Wed, 21 Oct 2015 07:28:00 GMT",
   "if-none-match": '"etag-2"',
   "if-unmodified-since": "Wed, 21 Oct 2015 07:28:00 GMT",
-  range: "bytes=0-9",
+  "range": "bytes=0-9",
   "user-agent": "oomol-connect/0.1",
   "x-correlation-id": "cid",
   "x-request-id": "req-1",
@@ -271,8 +271,8 @@ describe("createGuardedFetch redirects", () => {
 
     await guarded("https://api.example.com/", {
       headers: {
-        authorization: "Bearer secret",
-        cookie: "sid=1",
+        "authorization": "Bearer secret",
+        "cookie": "sid=1",
         "x-api-key": "provider-secret",
         "x-auth-token": "tok",
         "x-seq-apikey": "seq-secret",
@@ -285,7 +285,7 @@ describe("createGuardedFetch redirects", () => {
         "client-token": "client-secret",
         "x-session-key": "session-secret",
         "x-redmine-api-key": "redmine-secret",
-        authkey: "authkey-secret",
+        "authkey": "authkey-secret",
         "x-oksign-authorization": "oksign-secret",
         "x-filesapi-key": "files-secret",
         "x-trace": "keep",
@@ -347,13 +347,13 @@ describe("createGuardedFetch redirects", () => {
         // Provider credential headers no name list enumerated ahead of time.
         "x-esri-authorization": "Bearer esri-secret",
         "x-els-insttoken": "insttoken-secret",
-        secret: "autotask-secret",
-        session: "tanium-secret",
-        web_api_key: "finerworks-secret",
+        "secret": "autotask-secret",
+        "session": "tanium-secret",
+        "web_api_key": "finerworks-secret",
         // A real stored credential (autotask) whose name matches no credential
         // word, plus a header that is neither safe-listed nor credential-shaped.
         // Both pin the rule as deny-by-default rather than a smarter heuristic.
-        apiintegrationcode: "autotask-integration-code",
+        "apiintegrationcode": "autotask-integration-code",
         "x-vendor-quirk": "anything",
         // Non-credential headers that must survive a cross-origin hop.
         "x-trace": "keep",
@@ -494,74 +494,74 @@ describe("createGuardedFetch request URL guard", () => {
 });
 
 describe("createGuardedFetch trusted egress hosts", () => {
-  afterEach(() => setEgressTrustedHosts([]));
-
   it("lets a trusted host use private and VPN-mapped results while other hosts stay blocked", async () => {
-    setEgressTrustedHosts([".feishu.cn"]);
-    const mappedAddresses = [
-      { address: "198.18.0.196", family: 4 },
-      { address: "10.0.0.5", family: 4 },
-      { address: "fd00::1", family: 6 },
-      { address: "::ffff:198.18.0.196", family: 6 },
-    ];
-    const entries = {
-      "open.feishu.cn": mappedAddresses,
-      "open.other.example": mappedAddresses,
-    };
+    return withProviderNetworkPolicy({ trustedHosts: [".feishu.cn"] }, async () => {
+      const mappedAddresses = [
+        { address: "198.18.0.196", family: 4 },
+        { address: "10.0.0.5", family: 4 },
+        { address: "fd00::1", family: 6 },
+        { address: "::ffff:198.18.0.196", family: 6 },
+      ];
+      const entries = {
+        "open.feishu.cn": mappedAddresses,
+        "open.other.example": mappedAddresses,
+      };
 
-    const { transport, calls } = createTransport([new Response("ok", { status: 200 })]);
-    const allowed = createGuardedFetch({ fetch: transport, lookup: lookupTable(entries) });
-    await allowed("https://open.feishu.cn/open-apis/authen/v2/oauth/token");
-    expect(calls).toHaveLength(1);
+      const { transport, calls } = createTransport([new Response("ok", { status: 200 })]);
+      const allowed = createGuardedFetch({ fetch: transport, lookup: lookupTable(entries) });
+      await allowed("https://open.feishu.cn/open-apis/authen/v2/oauth/token");
+      expect(calls).toHaveLength(1);
 
-    const blocked = createGuardedFetch({ fetch: createTransport([]).transport, lookup: lookupTable(entries) });
-    await expect(blocked("https://open.other.example/")).rejects.toThrow(/must not resolve/u);
+      const blocked = createGuardedFetch({ fetch: createTransport([]).transport, lookup: lookupTable(entries) });
+      await expect(blocked("https://open.other.example/")).rejects.toThrow(/must not resolve/u);
+    });
   });
 
   it("keeps the URL guard intact for a trusted host", async () => {
     // The trusted-host setting covers only DNS results. A literal reserved address in the
     // URL, a non-http scheme, and a redirect into a blocked target are all still
     // rejected, so trusting a host does not turn off the guard for it.
-    setEgressTrustedHosts([".feishu.cn", "198.18.0.196"]);
-    const guarded = createGuardedFetch({
-      fetch: createTransport([]).transport,
-      lookup: lookupTable({ "open.feishu.cn": [{ address: "198.18.0.196", family: 4 }] }),
-    });
-    await expect(guarded("https://198.18.0.196/")).rejects.toThrow(/must not/u);
-    await expect(guarded("ftp://open.feishu.cn/")).rejects.toThrow(/must use http or https/u);
+    return withProviderNetworkPolicy({ trustedHosts: [".feishu.cn", "198.18.0.196"] }, async () => {
+      const guarded = createGuardedFetch({
+        fetch: createTransport([]).transport,
+        lookup: lookupTable({ "open.feishu.cn": [{ address: "198.18.0.196", family: 4 }] }),
+      });
+      await expect(guarded("https://198.18.0.196/")).rejects.toThrow(/must not/u);
+      await expect(guarded("ftp://open.feishu.cn/")).rejects.toThrow(/must use http or https/u);
 
-    const redirecting = createGuardedFetch({
-      fetch: createTransport([redirectTo("http://169.254.169.254/latest/meta-data/")]).transport,
-      lookup: lookupTable({
-        "open.feishu.cn": [{ address: "198.18.0.196", family: 4 }],
-        "169.254.169.254": [{ address: "169.254.169.254", family: 4 }],
-      }),
+      const redirecting = createGuardedFetch({
+        fetch: createTransport([redirectTo("http://169.254.169.254/latest/meta-data/")]).transport,
+        lookup: lookupTable({
+          "open.feishu.cn": [{ address: "198.18.0.196", family: 4 }],
+          "169.254.169.254": [{ address: "169.254.169.254", family: 4 }],
+        }),
+      });
+      await expect(redirecting("https://open.feishu.cn/")).rejects.toThrow(/must not/u);
     });
-    await expect(redirecting("https://open.feishu.cn/")).rejects.toThrow(/must not/u);
   });
 
   it("keeps local and metadata DNS results blocked for a trusted host", async () => {
-    setEgressTrustedHosts(["metadata.attacker.com"]);
+    return withProviderNetworkPolicy({ trustedHosts: ["metadata.attacker.com"] }, async () => {
+      for (const address of [
+        "127.0.0.1",
+        "169.254.169.254",
+        "100.100.100.200",
+        "::1",
+        "fe80::1",
+        "::ffff:169.254.169.254",
+      ]) {
+        const { transport, calls } = createTransport([]);
+        const guarded = createGuardedFetch({
+          fetch: transport,
+          lookup: lookupTable({
+            "metadata.attacker.com": [{ address, family: address.includes(":") ? 6 : 4 }],
+          }),
+        });
 
-    for (const address of [
-      "127.0.0.1",
-      "169.254.169.254",
-      "100.100.100.200",
-      "::1",
-      "fe80::1",
-      "::ffff:169.254.169.254",
-    ]) {
-      const { transport, calls } = createTransport([]);
-      const guarded = createGuardedFetch({
-        fetch: transport,
-        lookup: lookupTable({
-          "metadata.attacker.com": [{ address, family: address.includes(":") ? 6 : 4 }],
-        }),
-      });
-
-      await expect(guarded("https://metadata.attacker.com/latest/meta-data/")).rejects.toThrow(/must not resolve/u);
-      expect(calls).toHaveLength(0);
-    }
+        await expect(guarded("https://metadata.attacker.com/latest/meta-data/")).rejects.toThrow(/must not resolve/u);
+        expect(calls).toHaveLength(0);
+      }
+    });
   });
 
   it("is re-read per request so a bootstrap after module load is honored", async () => {
@@ -572,8 +572,9 @@ describe("createGuardedFetch trusted egress hosts", () => {
     });
 
     await expect(guarded("https://open.feishu.cn/")).rejects.toThrow(/must not resolve/u);
-    setEgressTrustedHosts([".feishu.cn"]);
-    await expect(guarded("https://open.feishu.cn/")).resolves.toBeInstanceOf(Response);
+    return withProviderNetworkPolicy({ trustedHosts: [".feishu.cn"] }, async () => {
+      await expect(guarded("https://open.feishu.cn/")).resolves.toBeInstanceOf(Response);
+    });
   });
 });
 

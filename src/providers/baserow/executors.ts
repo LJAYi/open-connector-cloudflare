@@ -1,6 +1,5 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -10,12 +9,10 @@ import {
   optionalString,
   recordOrEmpty,
 } from "../../core/cast.ts";
-import {
-  defineProviderExecutors,
-  ProviderRequestError,
-  providerUserAgent,
-  requireApiKeyCredential,
-} from "../provider-runtime.ts";
+import { requireApiKeyCredential } from "../provider-credentials.ts";
+import { defineProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
 
 const service = "baserow";
 const baserowApiBaseUrl = "https://api.baserow.io";
@@ -164,6 +161,14 @@ export const executors: ProviderExecutors = defineProviderExecutors<ApiKeyProvid
   },
 });
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: baserowApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Token " },
+  skipDnsValidation: true,
+  defaultHeaders: { accept: "application/json" },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const tables = asObjectArray(
@@ -185,7 +190,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: firstTableId !== undefined ? `baserow:table:${firstTableId}` : undefined,
         displayName: optionalString(firstTable?.name) ?? "Baserow Database Token",
       },
-      grantedScopes: [],
       metadata: compactObject({
         apiBaseUrl: baserowApiBaseUrl,
         validationEndpoint: baserowValidationPath,
@@ -199,7 +203,7 @@ export const credentialValidators: CredentialValidators = {
 };
 
 async function requestBaserowJson(input: {
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   path: string;
   phase: BaserowPhase;
   method?: "GET" | "POST" | "PATCH" | "DELETE";
@@ -239,8 +243,8 @@ async function requestBaserowJson(input: {
 
 function baserowHeaders(apiKey: string, hasBody: boolean): Headers {
   const headers = new Headers({
-    Authorization: `Token ${apiKey}`,
-    Accept: "application/json",
+    "Authorization": `Token ${apiKey}`,
+    "Accept": "application/json",
     "User-Agent": providerUserAgent,
   });
   if (hasBody) {

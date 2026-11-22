@@ -1,6 +1,6 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -12,12 +12,9 @@ import {
   optionalRecord,
   optionalString,
 } from "../../core/cast.ts";
-import {
-  defineApiKeyProviderExecutors,
-  defineProviderProxy,
-  providerProxyEndpointPrefixes,
-  ProviderRequestError,
-} from "../provider-runtime.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy, providerProxyEndpointPrefixes } from "../provider-proxy.ts";
+import { ProviderRequestError, providerInputError } from "../provider-runtime.ts";
 
 const service = "enigma";
 const enigmaGraphqlApiUrl = "https://api.enigma.com/graphql";
@@ -358,7 +355,6 @@ export const credentialValidators: CredentialValidators = {
         accountId,
         displayName,
       },
-      grantedScopes: [],
       metadata: {
         validationEndpoint: "/graphql",
         account,
@@ -620,7 +616,7 @@ async function enigmaVerifyBusinessV2(
     response = await context.fetcher(enigmaKybApiUrl, {
       method: "POST",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "content-type": "application/json",
         "x-api-key": context.apiKey,
       },
@@ -657,7 +653,7 @@ async function enigmaGraphqlRequest<TData>(
     response = await fetcher(enigmaGraphqlApiUrl, {
       method: "POST",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "content-type": "application/json",
         "x-api-key": apiKey,
       },
@@ -712,7 +708,7 @@ function createEnigmaError(response: Response, payload: unknown, phase: EnigmaRe
   }
 
   if (phase === "validate" && (status === 401 || status === 403)) {
-    return new ProviderRequestError(400, message);
+    return providerInputError(message);
   }
 
   if (phase === "execute" && status === 401) {
@@ -724,7 +720,7 @@ function createEnigmaError(response: Response, payload: unknown, phase: EnigmaRe
   }
 
   if (status === 400 || status === 404 || status === 422) {
-    return new ProviderRequestError(400, message);
+    return providerInputError(message);
   }
 
   return new ProviderRequestError(status >= 500 ? 502 : status, message);

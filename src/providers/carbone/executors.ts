@@ -1,9 +1,11 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalBoolean, optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
-import { defineApiKeyProviderExecutors, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
 
 const service = "carbone";
 const carboneApiBaseUrl = "https://api.carbone.io";
@@ -33,6 +35,17 @@ export const carboneActionHandlers: ProviderActionHandlers<"carbone", CarboneAct
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, carboneActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: carboneApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    if (!headers.has("accept")) headers.set("accept", "application/json");
+    if (!headers.has("carbone-version")) headers.set("carbone-version", String(carboneDefaultVersion));
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const payload = await carboneGetJson(carboneStatusPath, {}, undefined, input.apiKey, fetcher, "validate", signal);
@@ -42,7 +55,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: "carbone",
         displayName: "Carbone API Key",
       },
-      grantedScopes: [],
       metadata: compactObject({
         apiBaseUrl: carboneApiBaseUrl,
         validationEndpoint: carboneStatusPath,
@@ -191,7 +203,7 @@ function carboneUrl(path: string, query: Record<string, unknown>) {
 
 function carboneHeaders(apiKey: string, carboneVersion: number | undefined, extraHeaders: Record<string, string>) {
   return {
-    Authorization: `Bearer ${apiKey}`,
+    "Authorization": `Bearer ${apiKey}`,
     "carbone-version": String(carboneVersion ?? carboneDefaultVersion),
     "user-agent": providerUserAgent,
     ...extraHeaders,

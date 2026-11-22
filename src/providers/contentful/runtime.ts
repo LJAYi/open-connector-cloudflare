@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalBoolean, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
 import {
@@ -8,10 +8,11 @@ import {
   providerUserAgent,
   requiredInputString,
   requiredResponseRecord,
+  providerInputError,
 } from "../provider-runtime.ts";
 
-const contentfulApiBaseUrl = "https://api.contentful.com";
-const contentfulJsonContentType = "application/vnd.contentful.management.v1+json";
+export const contentfulApiBaseUrl = "https://api.contentful.com";
+export const contentfulJsonContentType = "application/vnd.contentful.management.v1+json";
 
 interface ContentfulRequestInput {
   path: string;
@@ -98,9 +99,7 @@ export async function validateContentfulCredential(
     profile: {
       accountId: userId,
       displayName: accountLabel || userId,
-      grantedScopes: [],
     },
-    grantedScopes: [],
     metadata: compactObject({
       userId,
       email,
@@ -339,9 +338,9 @@ function buildContentfulHeaders(
   includeJsonContentType = false,
 ): Record<string, string> {
   return compactObject({
-    authorization: `Bearer ${apiKey}`,
+    "authorization": `Bearer ${apiKey}`,
     "user-agent": providerUserAgent,
-    accept: contentfulJsonContentType,
+    "accept": contentfulJsonContentType,
     "content-type": includeJsonContentType ? contentfulJsonContentType : undefined,
     ...extraHeaders,
   }) as Record<string, string>;
@@ -355,7 +354,7 @@ function createContentfulError(
 ): ProviderRequestError {
   const message = optionalString(optionalRecord(payload)?.message);
   if (response.status === 404 && notFoundMessage) {
-    return new ProviderRequestError(400, notFoundMessage);
+    return providerInputError(notFoundMessage);
   }
   if (response.status === 400) {
     return new ProviderRequestError(400, message ?? "invalid Contentful request");

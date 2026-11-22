@@ -1,4 +1,5 @@
-import type { BearerProviderContext, ProviderFetch } from "../provider-runtime.ts";
+import type { BearerProviderContext } from "../provider-executors.ts";
+import type { ProviderFetch } from "../provider-runtime.ts";
 
 import {
   compactObject,
@@ -142,8 +143,8 @@ export async function huggingfaceRequestJson<T>(input: HuggingfaceRequestJsonInp
     response = await input.fetcher(url.toString(), {
       method: input.method ?? (input.body ? "POST" : "GET"),
       headers: compactObject({
-        accept: "application/json",
-        authorization: `${input.tokenType ?? "Bearer"} ${input.accessToken}`,
+        "accept": "application/json",
+        "authorization": `${input.tokenType ?? "Bearer"} ${input.accessToken}`,
         "content-type": input.body ? "application/json" : undefined,
         "user-agent": providerUserAgent,
       }) as HeadersInit,

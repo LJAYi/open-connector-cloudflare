@@ -1,14 +1,11 @@
-import type { CredentialValidationResult, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { CredentialValidationResult, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderRequestContext } from "../provider-runtime.ts";
 
 import { compactObject, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
-import {
-  defineApiKeyProviderExecutors,
-  isAbortLikeError,
-  providerUserAgent,
-  ProviderRequestError,
-} from "../provider-runtime.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { isAbortLikeError, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
 
 const service = "reducto";
 const reductoApiBaseUrl = "https://platform.reducto.ai";
@@ -31,6 +28,14 @@ export const reductoActionHandlers: ProviderActionHandlers<"reducto", ReductoAct
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, reductoActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: reductoApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  defaultHeaders: { accept: "application/json" },
+});
+
 export const credentialValidators = {
   async apiKey(
     input: { apiKey: string; values: Record<string, string> },
@@ -49,9 +54,7 @@ export const credentialValidators = {
       profile: {
         accountId: "reducto-api-key",
         displayName: "Reducto API Key",
-        grantedScopes: [],
       },
-      grantedScopes: [],
       metadata: {
         apiBaseUrl: reductoApiBaseUrl,
         validationEndpoint: "/jobs",
@@ -110,7 +113,7 @@ async function executeSplitDocument(input: Record<string, unknown>, context: Api
 
 async function reductoGetJson(
   path: string,
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
+  context: ApiKeyProviderContext,
   phase: ReductoPhase,
   params: Record<string, string> = {},
 ): Promise<unknown> {
@@ -139,7 +142,7 @@ async function reductoPostJson(
     {
       method: "POST",
       headers: reductoHeaders(context.apiKey, {
-        accept: "application/json",
+        "accept": "application/json",
         "content-type": "application/json",
       }),
       body: JSON.stringify(body),
@@ -153,7 +156,7 @@ async function reductoRequestJson(
   url: URL,
   init: RequestInit,
   phase: ReductoPhase,
-  context: Pick<ApiKeyProviderContext, "fetcher" | "signal">,
+  context: ProviderRequestContext,
 ): Promise<unknown> {
   const timeoutController = new AbortController();
   const timeout = setTimeout(() => timeoutController.abort(), reductoDefaultRequestTimeoutMs);
@@ -189,7 +192,7 @@ async function reductoRequestJson(
 function reductoHeaders(apiKey: string, extraHeaders: Record<string, string>): Record<string, string> {
   return {
     "user-agent": providerUserAgent,
-    Authorization: `Bearer ${apiKey}`,
+    "Authorization": `Bearer ${apiKey}`,
     ...extraHeaders,
   };
 }

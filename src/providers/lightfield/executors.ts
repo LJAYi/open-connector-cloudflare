@@ -1,15 +1,11 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalString, requiredString } from "../../core/cast.ts";
 import { encodePathSegment } from "../../core/request.ts";
-import {
-  defineApiKeyProviderExecutors,
-  providerInputError,
-  ProviderRequestError,
-  providerUserAgent,
-} from "../provider-runtime.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { providerInputError, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
 
 const service = "lightfield";
 const lightfieldApiBaseUrl = "https://api.lightfield.app";
@@ -73,6 +69,14 @@ export const lightfieldActionHandlers: ProviderActionHandlers<"lightfield", Ligh
 };
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, lightfieldActionHandlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: lightfieldApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  defaultHeaders: { "accept": "application/json", "lightfield-version": lightfieldApiVersion },
+});
 
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
@@ -150,7 +154,7 @@ async function getLightfieldRecord(
 
 async function requestLightfield(input: {
   path: string;
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   mode: LightfieldRequestMode;
   query?: Record<string, string>;
 }): Promise<unknown> {
@@ -182,8 +186,8 @@ async function requestLightfield(input: {
 
 function lightfieldHeaders(apiKey: string): Record<string, string> {
   return {
-    accept: "application/json",
-    authorization: `Bearer ${apiKey}`,
+    "accept": "application/json",
+    "authorization": `Bearer ${apiKey}`,
     "lightfield-version": lightfieldApiVersion,
     "user-agent": providerUserAgent,
   };

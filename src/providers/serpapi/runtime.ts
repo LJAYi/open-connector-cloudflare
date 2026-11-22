@@ -1,17 +1,13 @@
 import type { CredentialValidationResult, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext, ProviderFetch, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
+import type { ProviderFetch } from "../provider-runtime.ts";
 
 import { compactObject, optionalNumber, optionalRecord, optionalString, requiredRecord } from "../../core/cast.ts";
-import {
-  defineApiKeyProviderExecutors,
-  providerUserAgent,
-  ProviderRequestError,
-  requiredInputString,
-} from "../provider-runtime.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { providerUserAgent, ProviderRequestError, requiredInputString } from "../provider-runtime.ts";
 
 const service = "serpapi";
-const serpapiBaseUrl = "https://serpapi.com";
+export const serpapiBaseUrl: string = "https://serpapi.com";
 
 type SerpapiPhase = "validate" | "execute";
 type SerpapiQueryValue = string | number | boolean | undefined;
@@ -123,7 +119,6 @@ export async function validateSerpapiCredential(
       accountId: "api_key",
       displayName: "SerpApi API Key",
     },
-    grantedScopes: [],
     metadata: {
       validationEndpoint: "/search.json",
       validationEngine: "google",
@@ -134,7 +129,7 @@ export async function validateSerpapiCredential(
 
 async function requestSerpApiJson(
   query: Record<string, SerpapiQueryValue>,
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
+  context: ApiKeyProviderContext,
   phase: SerpapiPhase,
 ): Promise<unknown> {
   let response: Response;
@@ -144,7 +139,7 @@ async function requestSerpApiJson(
     response = await context.fetcher(buildSerpApiUrl(query, context.apiKey), {
       method: "GET",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "user-agent": providerUserAgent,
       },
       signal: context.signal,

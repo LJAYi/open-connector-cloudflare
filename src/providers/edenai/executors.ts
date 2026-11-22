@@ -1,14 +1,10 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import { compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
-import {
-  defineApiKeyProviderExecutors,
-  providerUserAgent,
-  ProviderRequestError,
-  requiredResponseRecord,
-} from "../provider-runtime.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { providerUserAgent, ProviderRequestError, requiredResponseRecord } from "../provider-runtime.ts";
 
 const service = "edenai";
 const edenaiApiBaseUrl = "https://api.edenai.run/v3";
@@ -39,6 +35,16 @@ export const edenaiActionHandlers: ProviderActionHandlers<"edenai", EdenAiAction
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, edenaiActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: edenaiApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const payload = await edenaiRequest(
@@ -59,7 +65,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: "edenai-api-key",
         displayName: "Eden AI API Key",
       },
-      grantedScopes: [],
       metadata: {
         validationEndpoint: "/v3/models",
         availableModels: data
@@ -70,10 +75,7 @@ export const credentialValidators: CredentialValidators = {
   },
 };
 
-async function edenaiRequest(
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
-  request: EdenAiRequest,
-): Promise<unknown> {
+async function edenaiRequest(context: ApiKeyProviderContext, request: EdenAiRequest): Promise<unknown> {
   let response: Response;
   try {
     response = await context.fetcher(`${edenaiApiBaseUrl}${request.path}`, {
@@ -101,7 +103,7 @@ async function edenaiRequest(
 
 function edenaiHeaders(apiKey: string): Headers {
   return new Headers({
-    authorization: `Bearer ${apiKey}`,
+    "authorization": `Bearer ${apiKey}`,
     "content-type": "application/json",
     "user-agent": providerUserAgent,
   });

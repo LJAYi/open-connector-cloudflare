@@ -1,5 +1,5 @@
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import { compactObject, optionalRawString, rawStringOrNull } from "../../core/cast.ts";
 import {
@@ -9,7 +9,7 @@ import {
   ProviderRequestError,
 } from "../provider-runtime.ts";
 
-const fomoApiBaseUrl = "https://api.fomo.com/api/v1";
+export const fomoApiBaseUrl = "https://api.fomo.com/api/v1";
 const fomoEventsPath = "/applications/me/events";
 
 type FomoRequestMode = "validate" | "execute";
@@ -102,7 +102,6 @@ export async function validateFomoCredential(
   signal?: AbortSignal,
 ): Promise<{
   profile: { accountId: string; displayName: string };
-  grantedScopes: string[];
   metadata: Record<string, unknown>;
 }> {
   const payload = await requestFomoJson(
@@ -127,7 +126,6 @@ export async function validateFomoCredential(
       accountId: "fomo:site-token",
       displayName: "Fomo site token",
     },
-    grantedScopes: [],
     metadata: {
       apiBaseUrl: fomoApiBaseUrl,
       validationEndpoint: fomoEventsPath,
@@ -188,9 +186,9 @@ async function requestFomoJson(
 
 function buildFomoHeaders(apiKey: string, hasBody: boolean): Record<string, string> {
   const headers: Record<string, string> = {
-    accept: "application/json",
+    "accept": "application/json",
     "user-agent": providerUserAgent,
-    authorization: `Token ${apiKey}`,
+    "authorization": `Token ${apiKey}`,
   };
   if (hasBody) {
     headers["content-type"] = "application/json";

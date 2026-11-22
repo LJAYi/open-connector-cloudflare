@@ -1,10 +1,10 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 
 import { compactObject, looseArray, optionalBoolean, optionalRawString } from "../../core/cast.ts";
 import { ProviderRequestError } from "../provider-runtime.ts";
 
-const ragieApiBaseUrl = "https://api.ragie.ai";
+export const ragieApiBaseUrl: string = "https://api.ragie.ai";
 
 interface RagieRequestInput {
   method?: string;
@@ -59,7 +59,7 @@ export async function validateRagieCredential(
   );
 
   return {
-    profile: { accountId: "ragie", displayName: "Ragie API Key", grantedScopes: [] },
+    profile: { accountId: "ragie", displayName: "Ragie API Key" },
     metadata: {
       validationEndpoint: "/connections/source-type",
       connectorCount: Array.isArray(payload.connectors) ? payload.connectors.length : 0,

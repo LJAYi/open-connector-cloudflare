@@ -1,4 +1,4 @@
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 
 import {
   optionalBoolean,
@@ -7,7 +7,12 @@ import {
   optionalRecord as asOptionalObject,
   optionalString as asOptionalString,
 } from "../../core/cast.ts";
-import { ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
+import {
+  ProviderRequestError,
+  providerUserAgent,
+  providerInputError,
+  defaultProviderRequestTimeoutMs,
+} from "../provider-runtime.ts";
 
 function requiredApiKey(input: { apiKey?: string }): string {
   if (input.apiKey?.trim()) return input.apiKey.trim();
@@ -16,8 +21,6 @@ function requiredApiKey(input: { apiKey?: string }): string {
 
 export const spyfuApiBaseUrl: string = "https://api.spyfu.com";
 export const spyfuProxyBaseUrl: string = `${spyfuApiBaseUrl}/apis`;
-
-const spyfuDefaultRequestTimeoutMs = 30_000;
 
 type SpyfuRequestPhase = "validate" | "execute";
 type SpyfuRequestMethod = "GET" | "POST";
@@ -109,10 +112,10 @@ export const spyfuActionHandlers: ProviderActionHandlers<"spyfu", SpyfuActionHan
       apiKey,
       path: "/apis/domain_stats_api/v2/getMatchingDomains",
       query: {
-        query: readRequiredString(input.query, "query"),
-        countryCode: readOptionalString(input.countryCode),
-        sortBy: readOptionalString(input.sortBy),
-        sortOrder: readOptionalString(input.sortOrder),
+        "query": readRequiredString(input.query, "query"),
+        "countryCode": readOptionalString(input.countryCode),
+        "sortBy": readOptionalString(input.sortBy),
+        "sortOrder": readOptionalString(input.sortOrder),
         "monthlyBudget.min": asOptionalNumber(input.minMonthlyBudget),
         "monthlyBudget.max": asOptionalNumber(input.maxMonthlyBudget),
         "monthlyOrganicClicks.min": asOptionalNumber(input.minMonthlyOrganicClicks),
@@ -129,8 +132,8 @@ export const spyfuActionHandlers: ProviderActionHandlers<"spyfu", SpyfuActionHan
         "averageOrganicRank.max": asOptionalNumber(input.maxAverageOrganicRank),
         "averageAdRank.min": asOptionalNumber(input.minAverageAdRank),
         "averageAdRank.max": asOptionalNumber(input.maxAverageAdRank),
-        pageSize: asOptionalInteger(input.pageSize) ?? 5,
-        startingRow: asOptionalInteger(input.startingRow),
+        "pageSize": asOptionalInteger(input.pageSize) ?? 5,
+        "startingRow": asOptionalInteger(input.startingRow),
       },
       fetcher,
       phase: "execute",
@@ -164,15 +167,15 @@ export const spyfuActionHandlers: ProviderActionHandlers<"spyfu", SpyfuActionHan
       apiKey,
       path: "/apis/serp_api/v2/seo/getTopPages",
       query: {
-        query: readRequiredString(input.query, "query"),
+        "query": readRequiredString(input.query, "query"),
         searchType,
-        keywordFilter: readOptionalString(input.keywordFilter),
+        "keywordFilter": readOptionalString(input.keywordFilter),
         "seoClicks.min": asOptionalNumber(input.minSeoClicks),
         "seoClicks.max": asOptionalNumber(input.maxSeoClicks),
-        countryCode: readOptionalString(input.countryCode),
-        pageSize: asOptionalInteger(input.pageSize) ?? 5,
-        startingRow: asOptionalInteger(input.startingRow),
-        sortOrder: readOptionalString(input.sortOrder),
+        "countryCode": readOptionalString(input.countryCode),
+        "pageSize": asOptionalInteger(input.pageSize) ?? 5,
+        "startingRow": asOptionalInteger(input.startingRow),
+        "sortOrder": readOptionalString(input.sortOrder),
       },
       fetcher,
       phase: "execute",
@@ -513,7 +516,7 @@ async function requestSpyfuJson(input: {
   fetcher: typeof fetch;
   phase: SpyfuRequestPhase;
 }) {
-  const timeoutSignal = AbortSignal.timeout(spyfuDefaultRequestTimeoutMs);
+  const timeoutSignal = AbortSignal.timeout(defaultProviderRequestTimeoutMs);
   const method = input.method ?? "GET";
   const url = new URL(input.path, spyfuApiBaseUrl);
   url.searchParams.set("api_key", input.apiKey);
@@ -524,7 +527,7 @@ async function requestSpyfuJson(input: {
   }
 
   const headers: Record<string, string> = {
-    accept: "application/json",
+    "accept": "application/json",
     "user-agent": providerUserAgent,
   };
   if (input.body !== undefined) {
@@ -580,7 +583,7 @@ function createSpyfuError(response: Response, payload: unknown, phase: SpyfuRequ
   }
 
   if (phase === "validate" && response.status >= 400 && response.status < 500) {
-    return new ProviderRequestError(400, message);
+    return providerInputError(message);
   }
 
   if (phase === "execute" && (response.status === 401 || response.status === 403)) {
@@ -588,7 +591,7 @@ function createSpyfuError(response: Response, payload: unknown, phase: SpyfuRequ
   }
 
   if (phase === "execute" && response.status >= 400 && response.status < 500) {
-    return new ProviderRequestError(400, message);
+    return providerInputError(message);
   }
 
   return new ProviderRequestError(response.status || 500, message);

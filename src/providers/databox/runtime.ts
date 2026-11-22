@@ -1,10 +1,15 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
 import { encodePathSegment } from "../../core/request.ts";
-import { ProviderRequestError, providerUserAgent, runProviderRequest } from "../provider-runtime.ts";
+import {
+  ProviderRequestError,
+  providerUserAgent,
+  runProviderRequest,
+  providerInputError,
+} from "../provider-runtime.ts";
 
 const databoxApiBaseUrl = "https://api.databox.com";
 const validateKeyPath = "/v1/auth/validate-key";
@@ -80,7 +85,6 @@ export async function validateDataboxCredential(
   const record = requireDataboxPayloadObject(payload);
   return {
     profile: { accountId: "databox:token", displayName: "Databox API Key" },
-    grantedScopes: [],
     metadata: compactObject({
       apiBaseUrl: databoxApiBaseUrl,
       validationEndpoint: validateKeyPath,
@@ -118,7 +122,7 @@ async function databoxRequestJson(input: {
 }): Promise<unknown> {
   return runProviderRequest({ signal: input.context.signal, label: "Databox" }, async (signal) => {
     const headers: Record<string, string> = {
-      accept: "application/json",
+      "accept": "application/json",
       "user-agent": providerUserAgent,
       "x-api-key": input.context.apiKey,
     };
@@ -147,7 +151,7 @@ async function readDataboxPayload(response: Response): Promise<unknown> {
 
 function createDataboxError(status: number, payload: unknown, phase: DataboxPhase): ProviderRequestError {
   const message = extractDataboxErrorMessage(payload) ?? `Databox request failed with status ${status}`;
-  if (phase === "validate" && status >= 400 && status < 500) return new ProviderRequestError(400, message);
+  if (phase === "validate" && status >= 400 && status < 500) return providerInputError(message);
   return new ProviderRequestError(status || 500, message);
 }
 

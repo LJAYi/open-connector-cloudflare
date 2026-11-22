@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import { optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
 import {
@@ -10,7 +10,7 @@ import {
   ProviderRequestError,
 } from "../provider-runtime.ts";
 
-const fiberAiApiBaseUrl = "https://api.fiber.ai";
+export const fiberAiApiBaseUrl = "https://api.fiber.ai";
 const getOrgCreditsPath = "/v1/get-org-credits";
 const getRateLimitsPath = "/v1/rate-limits";
 
@@ -103,7 +103,6 @@ export async function validateFiberAiCredential(
     profile: {
       displayName: organizationId ? `Fiber AI ${organizationId}` : "Fiber AI API Key",
     },
-    grantedScopes: [],
     metadata: {
       apiBaseUrl: fiberAiApiBaseUrl,
       validationEndpoint: getOrgCreditsPath,
@@ -162,7 +161,7 @@ async function fiberAiGetJson(input: {
 
 function fiberAiHeaders(): Record<string, string> {
   return {
-    accept: "application/json",
+    "accept": "application/json",
     "user-agent": providerUserAgent,
   };
 }

@@ -1,11 +1,17 @@
-import type { CredentialValidationResult, CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type {
+  CredentialValidationResult,
+  CredentialValidators,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { optionalInteger, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
   createProviderTimeout,
-  defineApiKeyProviderExecutors,
   isAbortLikeError,
   ProviderRequestError,
   providerUserAgent,
@@ -43,6 +49,16 @@ export const satismeterActionHandlers: ProviderActionHandlers<"satismeter", Sati
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, satismeterActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: satismeterApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }): Promise<CredentialValidationResult> {
     const apiKey = requiredString(input.apiKey, "apiKey", (message) => new ProviderRequestError(401, message));
@@ -61,7 +77,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: "satismeter-api-key",
         displayName: "SatisMeter API Key",
       },
-      grantedScopes: [],
       metadata: {
         apiBaseUrl: satismeterApiBaseUrl,
         validationEndpoint: satismeterValidationPath,
@@ -246,8 +261,8 @@ async function satismeterFetch(input: {
   return input.fetcher(url, {
     method: "GET",
     headers: {
-      accept: "application/json",
-      authorization: `Bearer ${input.apiKey}`,
+      "accept": "application/json",
+      "authorization": `Bearer ${input.apiKey}`,
       "user-agent": providerUserAgent,
     },
     signal: input.signal,

@@ -1,17 +1,13 @@
 import type { CredentialValidationResult, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { booleanString, compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
-import {
-  defineApiKeyProviderExecutors,
-  providerUserAgent,
-  ProviderRequestError,
-  requiredInputString,
-} from "../provider-runtime.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { providerUserAgent, ProviderRequestError, requiredInputString } from "../provider-runtime.ts";
 
 const service = "postgrid_verify";
-const postgridVerifyApiBaseUrl = "https://api.postgrid.com/v1/addver";
+export const postgridVerifyApiBaseUrl = "https://api.postgrid.com/v1/addver";
 const postgridVerifyValidationEndpoint = "/zip_codes";
 
 type PostgridVerifyPhase = "validate" | "execute";
@@ -101,7 +97,6 @@ export async function validatePostgridVerifyCredential(
     profile: {
       accountId: "postgrid-verify-api-key",
       displayName: "PostGrid Verify API Key",
-      grantedScopes: [],
     },
     metadata: compactObject({
       apiBaseUrl: postgridVerifyApiBaseUrl,
@@ -126,7 +121,7 @@ async function requestPostgridVerifyJson(input: PostgridVerifyRequest): Promise<
     response = await input.context.fetcher(buildPostgridVerifyUrl(input.path, input.query ?? {}), {
       method: "POST",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "content-type": "application/json",
         "user-agent": providerUserAgent,
         "x-api-key": input.context.apiKey,

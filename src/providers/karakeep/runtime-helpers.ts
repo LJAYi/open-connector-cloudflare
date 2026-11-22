@@ -1,5 +1,6 @@
 import type { TransitFileWriter } from "../../core/types.ts";
-import type { ProviderActionHandlerSubset, ProviderFetch, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlerSubset, ProviderRuntimeHandler } from "../provider-executors.ts";
+import type { ProviderFetch } from "../provider-runtime.ts";
 
 import { optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import { assertPublicHttpUrl, encodePathSegment, isPrivateNetworkAccessAllowed } from "../../core/request.ts";
@@ -112,7 +113,6 @@ export async function validateKarakeepCredential(
   signal?: AbortSignal,
 ): Promise<{
   profile: { accountId: string; displayName: string };
-  grantedScopes: string[];
   metadata: Record<string, unknown>;
 }> {
   const context = createKarakeepContext(values, apiKey, fetcher, signal);
@@ -130,7 +130,6 @@ export async function validateKarakeepCredential(
     optionalString(user.name) ?? optionalString(user.email) ?? `Karakeep ${new URL(context.apiBaseUrl).host}`;
   return {
     profile: { accountId, displayName },
-    grantedScopes: [],
     metadata: {
       apiBaseUrl: context.apiBaseUrl,
       validationEndpoint: "/users/me",
@@ -152,8 +151,8 @@ async function performKarakeepRequest<T>(
     { signal: context.signal, timeoutMs: options.timeoutMs, label: "Karakeep" },
     async (signal) => {
       const headers = new Headers({
-        accept: "application/json",
-        authorization: `Bearer ${context.apiKey}`,
+        "accept": "application/json",
+        "authorization": `Bearer ${context.apiKey}`,
         "user-agent": providerUserAgent,
       });
       let body: BodyInit | undefined;

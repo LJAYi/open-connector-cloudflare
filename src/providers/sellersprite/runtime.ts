@@ -1,6 +1,5 @@
 import type { CredentialValidationResult, ExecutionResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import { compactObject, optionalRecord, optionalString, requiredStringArray } from "../../core/cast.ts";
 import {
@@ -39,7 +38,7 @@ type SellerSpritePhase = "validate" | "execute";
 
 interface SellerSpriteRequest {
   path: string;
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   phase: SellerSpritePhase;
   method?: "GET" | "POST";
   body?: Record<string, unknown>;
@@ -131,7 +130,6 @@ export async function validateSellerSpriteCredential(
       accountId: "sellersprite",
       displayName: "SellerSprite API Key",
     },
-    grantedScopes: [],
     metadata: {
       apiBaseUrl: sellerSpriteApiBaseUrl,
       validationEndpoint: sellerSpriteValidationPath,
@@ -153,7 +151,7 @@ async function requestSellerSpriteData(input: SellerSpriteRequest): Promise<unkn
     response = await input.context.fetcher(new URL(input.path, sellerSpriteApiBaseUrl), {
       method: input.method ?? "GET",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "content-type": "application/json;charset=UTF-8",
         "secret-key": input.context.apiKey,
         "user-agent": providerUserAgent,

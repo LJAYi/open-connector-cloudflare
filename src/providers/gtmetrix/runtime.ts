@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import { Buffer } from "node:buffer";
 import { createHash } from "node:crypto";
@@ -21,7 +21,7 @@ import {
   ProviderRequestError,
 } from "../provider-runtime.ts";
 
-const gtmetrixApiBaseUrl = "https://gtmetrix.com/api/2.0";
+export const gtmetrixApiBaseUrl: string = "https://gtmetrix.com/api/2.0";
 const gtmetrixJsonMediaType = "application/vnd.api+json";
 
 type GtmetrixRequestPhase = "validate" | "execute";
@@ -312,7 +312,6 @@ export async function validateGtmetrixCredential(
       accountId: `gtmetrix:api_key:${createHash("sha256").update(apiKey).digest("hex").slice(0, 16)}`,
       displayName: "GTmetrix API Key",
     },
-    grantedScopes: [],
     metadata: compactObject({
       apiBaseUrl: gtmetrixApiBaseUrl,
       validationEndpoint: "/status",
@@ -376,8 +375,8 @@ async function fetchGtmetrix(input: GtmetrixRequestInput): Promise<Response> {
 
 function buildGtmetrixHeaders(apiKey: string, hasBody: boolean): Record<string, string> {
   const headers: Record<string, string> = {
-    accept: gtmetrixJsonMediaType,
-    authorization: `Basic ${Buffer.from(`${apiKey}:`).toString("base64")}`,
+    "accept": gtmetrixJsonMediaType,
+    "authorization": `Basic ${Buffer.from(`${apiKey}:`).toString("base64")}`,
     "user-agent": providerUserAgent,
   };
   if (hasBody) {
@@ -444,7 +443,7 @@ function buildListTestsQuery(input: Record<string, unknown>): Record<string, Gtm
   const query: Record<string, GtmetrixQueryValue> = {
     "page[size]": optionalInteger(input.page_size),
     "page[number]": optionalInteger(input.page_number),
-    sort: readStringArray(input.sort),
+    "sort": readStringArray(input.sort),
     "filter[:bool]": optionalString(input.filter_bool),
     "filter[source]": readStringArray(input.sources),
     "filter[state]": readStringArray(input.states),
@@ -461,7 +460,7 @@ function buildListPagesQuery(input: Record<string, unknown>): Record<string, Gtm
   const query: Record<string, GtmetrixQueryValue> = {
     "page[size]": optionalInteger(input.page_size),
     "page[number]": optionalInteger(input.page_number),
-    sort: readStringArray(input.sort),
+    "sort": readStringArray(input.sort),
     "filter[:bool]": optionalString(input.filter_bool),
     "filter[location]": readStringArray(input.location_ids),
     "filter[browser]": readStringArray(input.browser_ids),
@@ -477,7 +476,7 @@ function buildListPageReportsQuery(input: Record<string, unknown>): Record<strin
   return {
     "page[size]": optionalInteger(input.page_size),
     "page[number]": optionalInteger(input.page_number),
-    sort: readStringArray(input.sort),
+    "sort": readStringArray(input.sort),
   };
 }
 

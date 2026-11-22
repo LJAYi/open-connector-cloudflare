@@ -1,5 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -90,9 +90,7 @@ export async function validateOpsgenieCredential(
     profile: {
       accountId: accountName || environment,
       displayName: accountName || `Opsgenie ${environment.toUpperCase()} Account`,
-      grantedScopes: [],
     },
-    grantedScopes: [],
     metadata: compactObject({
       apiBaseUrl,
       environment,
@@ -237,8 +235,8 @@ async function requestOpsgenieJson<T>(input: OpsgenieRequestInput): Promise<T> {
   const timeout = createProviderTimeout(input.context.signal);
   try {
     const headers = compactObject({
-      accept: "application/json",
-      authorization: `GenieKey ${input.context.apiKey}`,
+      "accept": "application/json",
+      "authorization": `GenieKey ${input.context.apiKey}`,
       "content-type": input.body === undefined ? undefined : "application/json",
       "user-agent": providerUserAgent,
     }) as Record<string, string>;

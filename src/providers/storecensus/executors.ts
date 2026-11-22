@@ -1,10 +1,10 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
-  defineApiKeyProviderExecutors,
   providerInputError,
   ProviderRequestError,
   providerUserAgent,
@@ -79,6 +79,16 @@ export const storecensusActionHandlers: ProviderActionHandlers<"storecensus", St
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, storecensusActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: storecensusApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const payload = await requestStorecensusJson({
@@ -95,7 +105,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: "storecensus:api-key",
         displayName: firstCategoryName ? `StoreCensus (${firstCategoryName})` : "StoreCensus API Key",
       },
-      grantedScopes: [],
       metadata: {
         apiBaseUrl: storecensusApiBaseUrl,
         validationEndpoint: storecensusValidationPath,
@@ -106,7 +115,7 @@ export const credentialValidators: CredentialValidators = {
 };
 
 async function requestStorecensusJson(input: {
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   method: "GET" | "POST";
   path: string;
   phase: StorecensusPhase;
@@ -115,8 +124,8 @@ async function requestStorecensusJson(input: {
 }): Promise<unknown> {
   return runProviderRequest({ signal: input.context.signal, label: "StoreCensus" }, async (signal) => {
     const headers: Record<string, string> = {
-      accept: "application/json",
-      authorization: `Bearer ${input.context.apiKey}`,
+      "accept": "application/json",
+      "authorization": `Bearer ${input.context.apiKey}`,
       "user-agent": providerUserAgent,
     };
     let body: BodyInit | undefined;

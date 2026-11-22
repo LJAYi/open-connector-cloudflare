@@ -1,5 +1,5 @@
 import type { TransitFileWriter } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 
 import { optionalString, requiredString } from "../../core/cast.ts";
 import { ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
@@ -22,7 +22,7 @@ const defaultEapiDomains = ["z-library.ec", "z-library.sk", "1lib.sk"];
 
 const eapiHeaders = {
   "user-agent": providerUserAgent,
-  accept: "application/json, text/plain, */*",
+  "accept": "application/json, text/plain, */*",
   "content-type": "application/x-www-form-urlencoded",
 };
 
@@ -246,7 +246,7 @@ async function downloadBookFile(
     method: "GET",
     headers: {
       "user-agent": providerUserAgent,
-      cookie: `remix_userid=${session.remixUserid}; remix_userkey=${session.remixUserkey}`,
+      "cookie": `remix_userid=${session.remixUserid}; remix_userkey=${session.remixUserkey}`,
     },
     signal: context.signal,
   });

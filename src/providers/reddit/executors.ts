@@ -1,9 +1,15 @@
-import type { CredentialValidationResult, CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { OAuthProviderContext, ProviderActionHandlers } from "../provider-runtime.ts";
+import type {
+  CredentialValidationResult,
+  CredentialValidators,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { OAuthProviderContext, ProviderActionHandlers } from "../provider-executors.ts";
 
 import { optionalBoolean, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
+import { defineOAuthProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
-  defineOAuthProviderExecutors,
   ProviderRequestError,
   providerUserAgent,
   readProviderJsonBody,
@@ -150,6 +156,16 @@ export const executors: ProviderExecutors = defineOAuthProviderExecutors(service
   skipDnsValidation: true,
 });
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: redditApiBaseUrl,
+  auth: { type: "oauth_bearer" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async oauth2(input, { fetcher, signal }): Promise<CredentialValidationResult> {
     const account = requireRedditObject(
@@ -180,8 +196,8 @@ async function redditRequest(context: OAuthProviderContext, options: RedditReque
   }
 
   const headers: Record<string, string> = {
-    accept: "application/json",
-    authorization: `Bearer ${context.accessToken}`,
+    "accept": "application/json",
+    "authorization": `Bearer ${context.accessToken}`,
     "user-agent": providerUserAgent,
   };
   let body: URLSearchParams | undefined;

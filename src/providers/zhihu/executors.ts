@@ -1,4 +1,4 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
 
 import { createWriteStream, openAsBlob } from "node:fs";
 import { mkdtemp, rm, stat } from "node:fs/promises";
@@ -7,12 +7,15 @@ import { basename, extname, join } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { compactObject, optionalRecord } from "../../core/cast.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
   createProviderFetch,
   createProviderTimeout,
-  defineApiKeyProviderExecutors,
   ProviderRequestError,
   providerUserAgent,
+  providerInputError,
+  providerResponseError,
 } from "../provider-runtime.ts";
 
 type ZhihuActionHandler = (
@@ -331,7 +334,7 @@ async function zhihuRawRequest(apiKey: string, input: ZhihuRequestInput, fetcher
 
   try {
     const headers = new Headers({
-      authorization: `Bearer ${apiKey}`,
+      "authorization": `Bearer ${apiKey}`,
       "user-agent": zhihuUserAgent,
       "x-request-timestamp": String(Math.floor(Date.now() / 1000)),
     });
@@ -361,7 +364,7 @@ async function buildZhihuError(response: Response, mode: "validate" | "execute")
   }
 
   if (mode === "validate" && (response.status === 400 || response.status === 401 || response.status === 403)) {
-    return new ProviderRequestError(400, message);
+    return providerInputError(message);
   }
 
   if (mode === "execute" && (response.status === 401 || response.status === 403)) {
@@ -369,7 +372,7 @@ async function buildZhihuError(response: Response, mode: "validate" | "execute")
   }
 
   if (mode === "execute" && (response.status === 400 || response.status === 404)) {
-    return new ProviderRequestError(400, message);
+    return providerInputError(message);
   }
 
   return new ProviderRequestError(response.status || 500, message);
@@ -385,7 +388,7 @@ function buildZhihuPayloadError(payload: unknown, mode: "validate" | "execute") 
   }
 
   if (mode === "validate" && (code === 10001 || code === 20001)) {
-    return new ProviderRequestError(400, message);
+    return providerInputError(message);
   }
 
   if (mode === "execute" && code === 20001) {
@@ -393,10 +396,10 @@ function buildZhihuPayloadError(payload: unknown, mode: "validate" | "execute") 
   }
 
   if (mode === "execute" && code === 10001) {
-    return new ProviderRequestError(400, message);
+    return providerInputError(message);
   }
 
-  return new ProviderRequestError(502, message);
+  return providerResponseError(message);
 }
 
 async function readZhihuPayload(response: Response) {
@@ -505,12 +508,24 @@ export const executors: ProviderExecutors = defineApiKeyProviderExecutors("zhihu
   skipDnsValidation: true,
 });
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service: "zhihu",
+  baseUrl: zhihuApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("x-request-timestamp", String(Math.floor(Date.now() / 1000)));
+    if (!headers.has("content-type")) {
+      headers.set("content-type", "application/json");
+    }
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher }) {
     const result = await validateZhihuCredential(input.apiKey, fetcher);
     return {
       profile: { accountId: "zhihu", displayName: result.accountLabel },
-      grantedScopes: [],
       metadata: result.providerMetadata,
     };
   },

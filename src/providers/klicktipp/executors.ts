@@ -1,11 +1,11 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { optionalNumber, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
   createProviderTimeout,
-  defineApiKeyProviderExecutors,
   isAbortLikeError,
   providerInputError,
   providerUserAgent,
@@ -16,8 +16,15 @@ const service = "klicktipp";
 const klicktippApiBaseUrl = "https://api.klicktipp.com";
 const klicktippDocsUrl = "https://developers.klicktipp.com/guides/listbuilding-api";
 
-type KlicktippActionContext = Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
-type KlicktippActionHandler = (input: Record<string, unknown>, context: KlicktippActionContext) => Promise<unknown>;
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: klicktippApiBaseUrl,
+  auth: { type: "api_key_json_body", name: "apikey" },
+  skipDnsValidation: true,
+  defaultHeaders: { "accept": "application/json", "content-type": "application/json" },
+});
+
+type KlicktippActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
 export const klicktippActionHandlers: ProviderActionHandlers<"klicktipp", KlicktippActionHandler> = {
   async signin(input, context): Promise<unknown> {
@@ -54,7 +61,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: "listbuilding_api_key",
         displayName: "KlickTipp Listbuilding API Key",
       },
-      grantedScopes: [],
       metadata: {
         apiBaseUrl: klicktippApiBaseUrl,
         credentialHelpUrl: klicktippDocsUrl,
@@ -84,7 +90,7 @@ function buildSigninBody(input: Record<string, unknown>): Record<string, unknown
 async function requestKlicktippJson(
   path: string,
   body: Record<string, unknown>,
-  context: KlicktippActionContext,
+  context: ApiKeyProviderContext,
 ): Promise<unknown> {
   const timeout = createProviderTimeout(context.signal);
   let response: Response;
@@ -93,7 +99,7 @@ async function requestKlicktippJson(
     response = await context.fetcher(new URL(path, klicktippApiBaseUrl), {
       method: "POST",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "content-type": "application/json",
         "user-agent": providerUserAgent,
       },

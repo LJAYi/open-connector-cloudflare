@@ -1,5 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 import type { ProviderFetch } from "../provider-runtime.ts";
 
 import { optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
@@ -87,7 +87,6 @@ export async function validateStackOverflowForTeamsCredential(
       accountId: typeof user.id === "number" ? String(user.id) : `stack-internal:${context.team}`,
       displayName: displayName ? `${displayName} (${context.team})` : `Stack Internal ${context.team}`,
     },
-    grantedScopes: [],
     metadata: {
       team: context.team,
       apiBaseUrl: stackOverflowForTeamsApiBaseUrl,
@@ -115,8 +114,8 @@ async function requestJson(input: RequestInput): Promise<unknown> {
   return runProviderRequest({ signal: input.signal, label: "Stack Internal" }, async (signal) => {
     const response = await input.fetcher(url, {
       headers: {
-        accept: "application/json",
-        authorization: `Bearer ${input.apiKey}`,
+        "accept": "application/json",
+        "authorization": `Bearer ${input.apiKey}`,
         "user-agent": providerUserAgent,
       },
       signal,

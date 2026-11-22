@@ -1,14 +1,20 @@
-import type { CredentialValidators, ExecutionContext, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type {
+  CredentialValidators,
+  ExecutionContext,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 
 import { compactObject, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
+import { requireApiKeyCredential } from "../provider-credentials.ts";
+import { defineProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
   createProviderTimeout,
-  defineProviderExecutors,
   isAbortLikeError,
   providerUserAgent,
   ProviderRequestError,
-  requireApiKeyCredential,
 } from "../provider-runtime.ts";
 
 const service = "onesignal_rest_api";
@@ -107,6 +113,14 @@ export const executors: ProviderExecutors = defineProviderExecutors<OneSignalCon
   },
 });
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: onesignalRestApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Key " },
+  skipDnsValidation: true,
+  defaultHeaders: { accept: "application/json" },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const appId = requireAppId(input.values.appId);
@@ -134,7 +148,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: appId,
         displayName: "OneSignal App API Key",
       },
-      grantedScopes: [],
       metadata: {
         apiBaseUrl: onesignalRestApiBaseUrl,
         appId,
@@ -149,8 +162,8 @@ async function requestOneSignalJson(input: OneSignalRequestInput): Promise<Recor
 
   try {
     const headers = new Headers({
-      accept: "application/json",
-      authorization: `Key ${input.context.apiKey}`,
+      "accept": "application/json",
+      "authorization": `Key ${input.context.apiKey}`,
       "user-agent": providerUserAgent,
     });
     if (input.body) {

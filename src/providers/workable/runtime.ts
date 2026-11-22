@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import { compactObject, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
 import {
@@ -9,6 +9,7 @@ import {
   providerUserAgent,
   ProviderRequestError,
   requiredInputString,
+  providerInputError,
 } from "../provider-runtime.ts";
 
 interface WorkableContext {
@@ -114,7 +115,6 @@ export async function validateWorkableCredential(
       accountId: `${subdomain}.workable.com`,
       displayName: `${subdomain}.workable.com`,
     },
-    grantedScopes: [],
     metadata: {
       subdomain,
       apiBaseUrl: buildWorkableApiBaseUrl(subdomain),
@@ -169,8 +169,8 @@ async function rawWorkableRequest(input: WorkableRequestInput): Promise<Response
     return await input.fetcher(url, {
       method: "GET",
       headers: {
-        accept: "application/json",
-        authorization: `Bearer ${input.apiKey}`,
+        "accept": "application/json",
+        "authorization": `Bearer ${input.apiKey}`,
         "user-agent": providerUserAgent,
       },
       signal: timeout.signal,
@@ -193,13 +193,13 @@ async function buildWorkableError(response: Response, input: WorkableRequestInpu
   const message = extractWorkableErrorMessage(payload) ?? `Workable request failed with ${response.status}`;
   if (response.status === 429) return new ProviderRequestError(429, message);
   if (input.phase === "validate" && [400, 401, 403, 404].includes(response.status)) {
-    return new ProviderRequestError(400, message);
+    return providerInputError(message);
   }
   if (input.phase === "execute" && (response.status === 401 || response.status === 403)) {
     return new ProviderRequestError(401, message);
   }
   if (response.status === 400 || response.status === 422 || (response.status === 404 && input.notFoundAsInvalidInput)) {
-    return new ProviderRequestError(400, message);
+    return providerInputError(message);
   }
   return new ProviderRequestError(response.status || 500, message);
 }

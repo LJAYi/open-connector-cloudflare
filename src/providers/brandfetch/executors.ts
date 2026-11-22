@@ -1,14 +1,11 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
+import type { ProviderRequestContext } from "../provider-runtime.ts";
 
 import { compactObject, optionalBoolean, optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
-import {
-  defineApiKeyProviderExecutors,
-  providerUserAgent,
-  ProviderRequestError,
-  requiredInputString,
-} from "../provider-runtime.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { providerUserAgent, ProviderRequestError, requiredInputString } from "../provider-runtime.ts";
 
 const service = "brandfetch";
 const brandfetchApiBaseUrl = "https://api.brandfetch.io";
@@ -50,6 +47,16 @@ export const brandfetchActionHandlers: ProviderActionHandlers<"brandfetch", Bran
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, brandfetchActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: brandfetchApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const payload = await requestBrandfetchJson({
@@ -69,7 +76,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: "brandfetch-api-key",
         displayName: "Brandfetch API Key",
       },
-      grantedScopes: [],
       metadata: {
         validationEndpoint: brandfetchValidationPath,
         apiBaseUrl: brandfetchApiBaseUrl,
@@ -84,7 +90,7 @@ async function requestBrandfetchJson(input: {
   path: string;
   method: "GET" | "POST";
   body?: unknown;
-  context: Pick<ApiKeyProviderContext, "fetcher" | "signal">;
+  context: ProviderRequestContext;
   phase: BrandfetchPhase;
 }): Promise<unknown> {
   let response: Response;
@@ -119,8 +125,8 @@ function buildBrandfetchUrl(path: string): string {
 
 function buildBrandfetchHeaders(apiKey: string, contentType?: string): Record<string, string> {
   const headers: Record<string, string> = {
-    accept: "application/json",
-    authorization: `Bearer ${apiKey}`,
+    "accept": "application/json",
+    "authorization": `Bearer ${apiKey}`,
     "user-agent": providerUserAgent,
   };
   if (contentType) {

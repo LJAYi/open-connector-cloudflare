@@ -1,10 +1,10 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { objectArray, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
-  defineApiKeyProviderExecutors,
   providerInputError,
   ProviderRequestError,
   providerResponseError,
@@ -93,6 +93,16 @@ export const storeLeadsActionHandlers: ProviderActionHandlers<"store_leads", Sto
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, storeLeadsActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: storeLeadsApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const body = await requestStoreLeadsObject({
@@ -110,7 +120,6 @@ export const credentialValidators: CredentialValidators = {
           ? `Store Leads (${optionalString(firstApp?.name)})`
           : "Store Leads API Key",
       },
-      grantedScopes: [],
       metadata: {
         apiBaseUrl: storeLeadsApiBaseUrl,
         validationEndpoint: `${storeLeadsValidationPath}?page_size=1`,
@@ -121,7 +130,7 @@ export const credentialValidators: CredentialValidators = {
 };
 
 async function requestStoreLeadsObject(input: {
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   path: string;
   phase: StoreLeadsPhase;
   query?: URLSearchParams;
@@ -131,7 +140,7 @@ async function requestStoreLeadsObject(input: {
 }
 
 async function requestStoreLeadsJson(input: {
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   path: string;
   phase: StoreLeadsPhase;
   query?: URLSearchParams;
@@ -140,8 +149,8 @@ async function requestStoreLeadsJson(input: {
     const response = await input.context.fetcher(buildStoreLeadsUrl(input.path, input.query), {
       method: "GET",
       headers: {
-        accept: "application/json",
-        authorization: `Bearer ${input.context.apiKey}`,
+        "accept": "application/json",
+        "authorization": `Bearer ${input.context.apiKey}`,
         "user-agent": providerUserAgent,
       },
       signal,

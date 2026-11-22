@@ -1,15 +1,11 @@
 import type { CredentialValidationResult, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalInteger, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import { compactJson } from "../../core/request.ts";
-import {
-  defineApiKeyProviderExecutors,
-  providerInputError,
-  ProviderRequestError,
-  providerUserAgent,
-} from "../provider-runtime.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { providerInputError, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
 
 export const pineconeControlApiBaseUrl = "https://api.pinecone.io";
 export const pineconeApiVersion = "2026-04";
@@ -217,7 +213,6 @@ export async function validatePineconeCredential(
     profile: {
       accountId: firstName ?? "pinecone-api-key",
       displayName: firstName ? `Pinecone project (${firstName})` : "Pinecone API key",
-      grantedScopes: [],
     },
     metadata: compactObject({
       apiBaseUrl: pineconeControlApiBaseUrl,
@@ -324,7 +319,7 @@ function buildPineconeUrl(baseUrl: string, path: string, query?: Record<string, 
 
 function buildPineconeHeaders(apiKey: string, hasBody: boolean) {
   const headers = new Headers({
-    accept: "application/json",
+    "accept": "application/json",
     "api-key": apiKey,
     "user-agent": providerUserAgent,
     "x-pinecone-api-version": pineconeApiVersion,

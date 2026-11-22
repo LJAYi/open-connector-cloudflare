@@ -1,15 +1,10 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
-import {
-  defineApiKeyProviderExecutors,
-  isAbortLikeError,
-  providerUserAgent,
-  ProviderRequestError,
-  requiredInputString,
-} from "../provider-runtime.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { isAbortLikeError, providerUserAgent, ProviderRequestError, requiredInputString } from "../provider-runtime.ts";
 
 const service = "next_dns";
 const nextDnsApiBaseUrl = "https://api.nextdns.io";
@@ -68,6 +63,16 @@ export const nextDnsActionHandlers: ProviderActionHandlers<"next_dns", NextDnsAc
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, nextDnsActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: nextDnsApiBaseUrl,
+  auth: { type: "api_key_header", name: "X-Api-Key" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const context: ApiKeyProviderContext = {
@@ -87,7 +92,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: optionalString(firstProfile?.id) ?? "next_dns:api_key",
         displayName: "NextDNS API Key",
       },
-      grantedScopes: [],
       metadata: compactObject({
         apiBaseUrl: nextDnsApiBaseUrl,
         validationEndpoint: nextDnsValidationPath,
@@ -114,7 +118,7 @@ function requestNextDnsAnalytics(
 async function requestNextDnsJson(input: {
   path: string;
   query: Record<string, unknown>;
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   phase: NextDnsRequestPhase;
 }): Promise<unknown> {
   const url = buildNextDnsUrl(input.path, input.query);
@@ -125,7 +129,7 @@ async function requestNextDnsJson(input: {
     response = await input.context.fetcher(url, {
       method: "GET",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "user-agent": providerUserAgent,
         "X-Api-Key": input.context.apiKey,
       },

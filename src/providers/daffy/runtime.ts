@@ -1,12 +1,12 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalInteger, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import { encodePathSegment, queryParams } from "../../core/request.ts";
 import { providerInputError, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
 
-const daffyApiBaseUrl = "https://public.daffy.org/v1";
+export const daffyApiBaseUrl = "https://public.daffy.org/v1";
 
 type DaffyPhase = "validate" | "execute";
 type DaffyHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
@@ -100,7 +100,6 @@ export async function validateDaffyCredential(
       accountId,
       displayName: readStringField(user, "name") ?? email ?? slug ?? userId ?? "Daffy API Key",
     },
-    grantedScopes: [],
     metadata: compactObject({
       apiBaseUrl: daffyApiBaseUrl,
       userId,
@@ -159,7 +158,7 @@ async function daffyGet(
     response = await context.fetcher(url, {
       method: "GET",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "content-type": "application/json",
         "user-agent": providerUserAgent,
         "x-api-key": context.apiKey,

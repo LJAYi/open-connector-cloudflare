@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
 import { createProviderTimeout, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
@@ -84,7 +84,6 @@ export async function validateCensysCredential(
       accountId: "censys",
       displayName: "Censys Personal Access Token",
     },
-    grantedScopes: [],
     metadata: {
       apiBaseUrl: censysApiBaseUrl,
       validationEndpoint: "/global/asset/host/8.8.8.8",
@@ -149,8 +148,8 @@ async function requestCensysJson(
 
 function buildCensysHeaders(apiKey: string) {
   return {
-    accept: "application/json",
-    authorization: `Bearer ${apiKey}`,
+    "accept": "application/json",
+    "authorization": `Bearer ${apiKey}`,
     "user-agent": providerUserAgent,
   };
 }

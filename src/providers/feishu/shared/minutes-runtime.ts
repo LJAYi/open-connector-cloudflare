@@ -2,6 +2,8 @@ import type { FeishuJsonRequest } from "./client.ts";
 
 import { optionalNumber } from "../../../core/cast.ts";
 import { providerInputError } from "../../provider-runtime.ts";
+import { fetchFeishuNote } from "./note-runtime.ts";
+import { requireFeishuResponseString } from "./response.ts";
 
 interface MinutesActionHandler {
   (input: Record<string, unknown>): Promise<unknown>;
@@ -146,6 +148,7 @@ async function searchMinutes(input: Record<string, unknown>, request: FeishuJson
     },
     body: compact({
       query: optionalString(input.query),
+      sorter: "create_time_desc",
       filter: Object.keys(filter).length > 0 ? filter : undefined,
     }),
   });
@@ -185,7 +188,7 @@ async function getDownloadMetadata(input: Record<string, unknown>, request: Feis
   const data = await request({ path: `/minutes/v1/minutes/${encode(token)}/media` });
   return {
     minuteToken: token,
-    downloadUrl: requiredString(data.download_url, "download_url"),
+    downloadUrl: requireFeishuResponseString(data.download_url, "download_url"),
     raw: data,
   };
 }
@@ -215,14 +218,30 @@ async function searchMeetings(input: Record<string, unknown>, request: FeishuJso
 
 async function getMeeting(input: Record<string, unknown>, request: FeishuJsonRequest) {
   const meetingId = requiredString(input.meetingId, "meetingId");
+  const path = `/vc/v1/meetings/${encode(meetingId)}`;
   const data = await request({
-    path: `/vc/v1/meetings/${encode(meetingId)}`,
+    path,
     query: {
       with_participants: input.includeParticipants === true,
       query_mode: 0,
     },
   });
-  return { meeting: recordValue(data.meeting) };
+  const meeting = recordValue(data.meeting);
+  if (input.includeArtifacts !== true) {
+    return { meeting };
+  }
+  const noteId = optionalString(meeting.note_id);
+  if (!noteId) {
+    return { meeting, relatedArtifacts: {} };
+  }
+  const note = await fetchFeishuNote(noteId, request);
+  return {
+    meeting,
+    relatedArtifacts: {
+      note_doc_token: note.noteDocumentToken,
+      verbatim_doc_token: note.verbatimDocumentToken,
+    },
+  };
 }
 
 async function getRecording(input: Record<string, unknown>, request: FeishuJsonRequest) {

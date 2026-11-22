@@ -1,10 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type {
-  ApiKeyProviderContext,
-  ProviderActionHandlers,
-  ProviderRuntimeHandler,
-  ProviderTransitFile,
-} from "../provider-runtime.ts";
+import type { ApiKeyProviderContext, ProviderActionHandlers, ProviderRuntimeHandler } from "../provider-executors.ts";
+import type { ProviderTransitFile } from "../provider-files.ts";
 
 import { Buffer } from "node:buffer";
 import {
@@ -78,7 +74,6 @@ export async function validateCredential(
       accountId: "api_key",
       displayName: "Torii Image Translator API Key",
     },
-    grantedScopes: [],
     metadata: {
       apiBaseUrl,
       validationEndpoint: creditsPath,
@@ -201,7 +196,7 @@ async function downloadSource(url: string, fieldName: string, signal?: AbortSign
   let response: Response;
   try {
     response = await providerFetch(url, {
-      headers: { accept: "image/jpeg, image/png, image/webp", "user-agent": providerUserAgent },
+      headers: { "accept": "image/jpeg, image/png, image/webp", "user-agent": providerUserAgent },
       signal,
     });
   } catch (error) {
@@ -244,8 +239,8 @@ async function requestJsonWith(input: {
     response = await input.fetcher(new URL(input.path, apiBaseUrl), {
       method: input.body ? "POST" : "GET",
       headers: {
-        accept: "application/json",
-        authorization: `Bearer ${input.apiKey}`,
+        "accept": "application/json",
+        "authorization": `Bearer ${input.apiKey}`,
         "user-agent": providerUserAgent,
       },
       body: input.body,

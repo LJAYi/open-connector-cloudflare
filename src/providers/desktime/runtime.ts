@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import {
@@ -11,7 +11,7 @@ import {
   ProviderRequestError,
 } from "../provider-runtime.ts";
 
-const desktimeApiBaseUrl = "https://desktime.com/api/v2/json";
+export const desktimeApiBaseUrl = "https://desktime.com/api/v2/json";
 
 type DeskTimePhase = "validate" | "execute";
 type DeskTimeHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
@@ -124,7 +124,6 @@ export async function validateDeskTimeCredential(
       accountId: companyName ?? "api_key",
       displayName: companyName ?? "DeskTime API Key",
     },
-    grantedScopes: [],
     metadata: compactObject({
       apiBaseUrl: desktimeApiBaseUrl,
       validationEndpoint: "/company",
@@ -147,7 +146,7 @@ async function requestDeskTimeJson(input: {
     response = await input.context.fetcher(buildDeskTimeUrl(input.path, input.apiKey, input.params), {
       method: input.method,
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "user-agent": providerUserAgent,
       },
       signal: timeout.signal,

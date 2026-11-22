@@ -5,8 +5,8 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import { createHash } from "node:crypto";
 import {
@@ -19,20 +19,21 @@ import {
   requiredString,
 } from "../../core/cast.ts";
 import { assertPublicHttpUrl, isPrivateNetworkAccessAllowed } from "../../core/request.ts";
+import { requireApiKeyCredential } from "../provider-credentials.ts";
+import { defineProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
   createProviderFetch,
   createProviderTimeout,
-  defineProviderExecutors,
-  defineProviderProxy,
   isAbortLikeError,
   providerUserAgent,
   ProviderRequestError,
   readProviderJsonBody,
-  requireApiKeyCredential,
+  providerInputError,
+  defaultProviderRequestTimeoutMs,
 } from "../provider-runtime.ts";
 
 const service = "gotify";
-const gotifyRequestTimeoutMs = 30_000;
 
 interface GotifyContext {
   applicationToken: string;
@@ -118,11 +119,7 @@ export const proxy: ProviderProxyExecutor = defineProviderProxy({
     return normalizeGotifyBaseUrl(baseUrl);
   },
   auth: { type: "api_key_header", name: "X-Gotify-Key" },
-  customizeRequest({ headers }) {
-    if (!headers.has("accept")) {
-      headers.set("accept", "application/json");
-    }
-  },
+  defaultHeaders: { accept: "application/json" },
   allowPrivateNetwork: isPrivateNetworkAccessAllowed,
 });
 
@@ -153,7 +150,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: `gotify:${host}:${tokenHash.slice(0, 16)}`,
         displayName: `Gotify ${host}`,
       },
-      grantedScopes: [],
       metadata: compactObject({
         baseUrl,
         tokenHash,
@@ -168,11 +164,11 @@ function normalizeGotifyBaseUrl(
   value: unknown,
   allowPrivateNetwork: boolean = isPrivateNetworkAccessAllowed(),
 ): string {
-  const rawValue = requiredString(value, "baseUrl", (message) => new ProviderRequestError(400, message));
+  const rawValue = requiredString(value, "baseUrl", providerInputError);
   const url = assertPublicHttpUrl(rawValue, {
     fieldName: "baseUrl",
     allowPrivateNetwork,
-    createError: (message) => new ProviderRequestError(400, message),
+    createError: providerInputError,
   });
   if (url.username || url.password) {
     throw new ProviderRequestError(400, "baseUrl must not include username or password");
@@ -183,10 +179,10 @@ function normalizeGotifyBaseUrl(
 }
 
 async function requestGotifyJson(input: GotifyJsonRequestOptions): Promise<unknown> {
-  const timeout = createProviderTimeout(input.context.signal, gotifyRequestTimeoutMs);
+  const timeout = createProviderTimeout(input.context.signal);
   try {
     const headers: Record<string, string> = {
-      accept: "application/json",
+      "accept": "application/json",
       "user-agent": providerUserAgent,
     };
     if (input.body) {
@@ -218,7 +214,7 @@ async function requestGotifyJson(input: GotifyJsonRequestOptions): Promise<unkno
     if (timeout.didTimeout() || isAbortLikeError(error)) {
       throw new ProviderRequestError(
         504,
-        `Gotify ${input.path} request timed out after ${Math.ceil(gotifyRequestTimeoutMs / 1000)} seconds`,
+        `Gotify ${input.path} request timed out after ${Math.ceil(defaultProviderRequestTimeoutMs / 1000)} seconds`,
       );
     }
     throw new ProviderRequestError(
@@ -291,10 +287,10 @@ function readGotifyErrorMessage(payload: unknown): string {
 
 function mapGotifyHttpError(status: number, message: string, phase: GotifyRequestPhase): ProviderRequestError {
   if (phase === "validate" && (status === 401 || status === 403)) {
-    return new ProviderRequestError(400, message);
+    return providerInputError(message);
   }
   if (status === 400 || status === 404 || status === 422) {
-    return new ProviderRequestError(400, message);
+    return providerInputError(message);
   }
   if (status === 429) {
     return new ProviderRequestError(429, message);

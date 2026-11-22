@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext, ProviderFetch } from "../provider-runtime.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderFetch } from "../provider-runtime.ts";
 
 import {
   compactObject,
@@ -270,7 +270,6 @@ export async function validateTapfiliateCredential(
       accountId: "tapfiliate",
       displayName: "Tapfiliate API Key",
     },
-    grantedScopes: [],
     metadata: compactObject({
       apiBaseUrl: tapfiliateApiBaseUrl,
       validationEndpoint: "/programs/",
@@ -286,14 +285,14 @@ async function requestTapfiliateJson(input: {
   method: "GET" | "POST";
   query: Record<string, string>;
   body?: Record<string, unknown>;
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   phase: TapfiliatePhase;
 }): Promise<TapfiliateJsonResponse> {
   const timeout = createProviderTimeout(input.context.signal);
 
   try {
     const headers: Record<string, string> = {
-      accept: "application/json",
+      "accept": "application/json",
       "user-agent": providerUserAgent,
       "X-Api-Key": requiredString(input.context.apiKey, "apiKey", providerInputError),
     };

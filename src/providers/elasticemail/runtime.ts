@@ -1,5 +1,5 @@
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -285,7 +285,7 @@ async function elasticemailFetch(input: ElasticemailRequestOptions) {
 
 function elasticemailHeaders(apiKey: string, hasBody: boolean) {
   return {
-    accept: "application/json",
+    "accept": "application/json",
     "X-ElasticEmail-ApiKey": apiKey,
     ...(hasBody ? { "content-type": "application/json" } : {}),
     "user-agent": providerUserAgent,

@@ -1,23 +1,17 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
-import {
-  defineApiKeyProviderExecutors,
-  defineProviderProxy,
-  providerUserAgent,
-  ProviderRequestError,
-  requiredInputString,
-} from "../provider-runtime.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { providerUserAgent, ProviderRequestError, requiredInputString } from "../provider-runtime.ts";
 
 const service = "conductor";
 const conductorApiBaseUrl = "https://api.cm.conductor.com";
 const conductorWebsitesPath = "/v2/entities/websites";
 
 type ConductorRequestPhase = "validate" | "execute";
-type ConductorContext = Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
-type ConductorActionHandler = (input: Record<string, unknown>, context: ConductorContext) => Promise<unknown>;
+type ConductorActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
 export const conductorActionHandlers: ProviderActionHandlers<"conductor", ConductorActionHandler> = {
   list_websites(_input, context) {
@@ -146,7 +140,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: firstWebsiteId ?? "api_key",
         displayName: labelDetail ? `Conductor ${labelDetail}` : "Conductor API Token",
       },
-      grantedScopes: [],
       metadata: compactObject({
         apiBaseUrl: conductorApiBaseUrl,
         validationEndpoint: conductorWebsitesPath,
@@ -161,7 +154,7 @@ export const credentialValidators: CredentialValidators = {
 
 async function requestWrappedConductorJson(input: {
   path: string;
-  context: ConductorContext;
+  context: ApiKeyProviderContext;
   phase: ConductorRequestPhase;
   query?: Record<string, unknown>;
   wrapper: "array" | "object";
@@ -188,7 +181,7 @@ async function requestWrappedConductorJson(input: {
 
 async function requestConductorJson(input: {
   path: string;
-  context: ConductorContext;
+  context: ApiKeyProviderContext;
   phase: ConductorRequestPhase;
   query?: Record<string, unknown>;
 }): Promise<unknown> {
@@ -205,8 +198,8 @@ async function requestConductorJson(input: {
     response = await input.context.fetcher(url, {
       method: "GET",
       headers: {
-        Authorization: `token ${input.context.apiKey}`,
-        accept: "application/json",
+        "Authorization": `token ${input.context.apiKey}`,
+        "accept": "application/json",
         "content-type": "application/json",
         "user-agent": providerUserAgent,
       },

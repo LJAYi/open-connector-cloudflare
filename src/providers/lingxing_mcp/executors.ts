@@ -1,9 +1,18 @@
-import type { CredentialValidators, ExecutionContext, ProviderExecutors } from "../../core/types.ts";
+import type {
+  CredentialValidators,
+  ExecutionContext,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
 
-import { createProviderFetch, defineProviderExecutors, requireCustomCredential } from "../provider-runtime.ts";
+import { requireCustomCredential } from "../provider-credentials.ts";
+import { defineProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { createProviderFetch } from "../provider-runtime.ts";
 import {
   createLingxingContext,
   lingxingMcpActionHandlers,
+  normalizeLingxingMcpEndpoint,
   toLingxingExecutionError,
   validateLingxingCredential,
 } from "./runtime.ts";
@@ -19,6 +28,16 @@ export const executors: ProviderExecutors = defineProviderExecutors({
     return createLingxingContext(credential.values, fetcher, context.signal);
   },
   fallbackMessage: "Lingxing MCP request failed",
+});
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  async baseUrl(context) {
+    const credential = await requireCustomCredential(context, service);
+    return normalizeLingxingMcpEndpoint(credential.values.serverUrl).toString();
+  },
+  auth: { type: "custom_credential_header", field: "mcpKey", name: "x-mcp-key" },
+  defaultHeaders: { accept: "application/json, text/event-stream" },
 });
 
 export const credentialValidators: CredentialValidators = {

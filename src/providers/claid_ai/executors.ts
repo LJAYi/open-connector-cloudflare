@@ -1,14 +1,10 @@
-import type { ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
-import {
-  defineApiKeyProviderExecutors,
-  ProviderRequestError,
-  providerUserAgent,
-  requiredResponseRecord,
-} from "../provider-runtime.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { ProviderRequestError, providerUserAgent, requiredResponseRecord } from "../provider-runtime.ts";
 
 const service = "claid_ai";
 const claidAiApiBaseUrl = "https://api.claid.ai";
@@ -47,6 +43,16 @@ export const claidAiActionHandlers: ProviderActionHandlers<"claid_ai", ClaidAiAc
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, claidAiActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: `${claidAiApiBaseUrl}/${claidAiApiVersion}`,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
+
 function buildEditRequestBody(input: Record<string, unknown>): Record<string, unknown> {
   return compactObject({
     input: requireInputString(input.input, "input"),
@@ -58,7 +64,7 @@ function buildEditRequestBody(input: Record<string, unknown>): Record<string, un
 async function requestClaidAi(
   path: string,
   init: { method: "GET" | "POST"; body?: Record<string, unknown> },
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
+  context: ApiKeyProviderContext,
   phase: ClaidAiRequestPhase,
 ): Promise<unknown> {
   const url = new URL(`/${claidAiApiVersion}${path}`, claidAiApiBaseUrl);
@@ -90,8 +96,8 @@ async function requestClaidAi(
 
 function claidAiHeaders(apiKey: string, hasBody: boolean): Headers {
   const headers = new Headers({
-    accept: "application/json",
-    authorization: `Bearer ${apiKey}`,
+    "accept": "application/json",
+    "authorization": `Bearer ${apiKey}`,
     "user-agent": providerUserAgent,
   });
   if (hasBody) {

@@ -1,6 +1,7 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext, ProviderFetch } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderFetch } from "../provider-runtime.ts";
 
 import {
   compactObject,
@@ -161,7 +162,6 @@ export async function validateSevenShiftsCredential(
     profile: {
       accountId: `7_shifts:identity:${identity.identityId}`,
       displayName: buildAccountLabel(firstUser),
-      grantedScopes: [],
     },
     metadata: compactObject({
       identityId: identity.identityId,
@@ -203,10 +203,10 @@ function buildSevenShiftsUrl(path: string, query?: Record<string, string | undef
   return url;
 }
 
-function buildSevenShiftsHeaders(options: Pick<SevenShiftsRequestOptions, "actionInput" | "apiKey" | "companyGuid">) {
+function buildSevenShiftsHeaders(options: SevenShiftsRequestOptions) {
   const headers = new Headers({
-    accept: "application/json",
-    authorization: `Bearer ${options.apiKey}`,
+    "accept": "application/json",
+    "authorization": `Bearer ${options.apiKey}`,
     "user-agent": providerUserAgent,
   });
 

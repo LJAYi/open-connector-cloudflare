@@ -1,5 +1,5 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers, OAuthProviderContext } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers, OAuthProviderContext } from "../provider-executors.ts";
 
 import {
   optionalBoolean,
@@ -9,17 +9,19 @@ import {
   requiredRecord,
   requiredString,
 } from "../../core/cast.ts";
-import { readBoundedResponseBytes } from "../../core/request.ts";
+import { storeResponseInTransit } from "../../core/request.ts";
+import { defineOAuthProviderExecutors } from "../provider-executors.ts";
+import { readTransitFileInput } from "../provider-files.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
-  defineOAuthProviderExecutors,
   providerInputError,
   ProviderRequestError,
   providerResponseError,
   readProviderJsonBody,
-  readTransitFileInput,
   requiredInputString,
 } from "../provider-runtime.ts";
 
+const service = "box";
 const boxApiBaseUrl = "https://api.box.com/2.0";
 const boxUploadBaseUrl = "https://upload.box.com/api/2.0";
 const boxSimpleUploadMaxBytes = 50 * 1024 * 1024;
@@ -82,7 +84,17 @@ export const boxActionHandlers: ProviderActionHandlers<"box", ActionHandler> = {
   },
 };
 
-export const executors: ProviderExecutors = defineOAuthProviderExecutors("box", boxActionHandlers);
+export const executors: ProviderExecutors = defineOAuthProviderExecutors(service, boxActionHandlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: boxApiBaseUrl,
+  auth: { type: "oauth_bearer" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
 
 export const credentialValidators: CredentialValidators = {
   async oauth2(input, { fetcher }) {
@@ -218,12 +230,13 @@ async function downloadFile(
     throw await boxResponseError(response, "Box file download failed");
   }
   const mimeType = response.headers.get("content-type") ?? "application/octet-stream";
-  const bytes = await readBoundedResponseBytes(response, {
-    maxBytes: context.transitFiles.maxBytes,
+  const file = await storeResponseInTransit(response, context.transitFiles, {
+    name,
+    mimeType,
     fieldName: "Box download",
     createError: (message) => new ProviderRequestError(413, message),
+    signal: context.signal,
   });
-  const file = await context.transitFiles.create(new File([Uint8Array.from(bytes)], name, { type: mimeType }));
   return { item, file };
 }
 

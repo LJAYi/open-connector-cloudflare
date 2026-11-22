@@ -1,11 +1,12 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext, ProviderFetch, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
+import type { ProviderFetch } from "../provider-runtime.ts";
 
 import { compactObject, optionalBoolean, optionalRecord, optionalString } from "../../core/cast.ts";
 import { ProviderRequestError, providerUserAgent, requiredInputString } from "../provider-runtime.ts";
 
-const bitlyApiBaseUrl = "https://api-ssl.bitly.com/v4";
+export const bitlyApiBaseUrl = "https://api-ssl.bitly.com/v4";
 const bitlyValidationPath = "/user";
 
 type BitlyRequestPhase = "validate" | "execute";
@@ -74,7 +75,6 @@ export async function validateBitlyCredential(
       accountId: login ?? defaultGroupGuid,
       displayName: name ?? login ?? "Bitly API Token",
     },
-    grantedScopes: [],
     metadata: compactObject({
       validationEndpoint: bitlyValidationPath,
       apiBaseUrl: bitlyApiBaseUrl,
@@ -245,9 +245,9 @@ async function requestBitlyJson(context: BitlyRequestContext, input: BitlyReques
 
 function bitlyHeaders(apiKey: string, hasBody: boolean): Record<string, string> {
   const headers: Record<string, string> = {
-    authorization: `Bearer ${apiKey}`,
+    "authorization": `Bearer ${apiKey}`,
     "user-agent": providerUserAgent,
-    accept: "application/json",
+    "accept": "application/json",
   };
   if (hasBody) {
     headers["content-type"] = "application/json";

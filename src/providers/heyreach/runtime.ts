@@ -1,6 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import { compactObject, optionalInteger, optionalRecord, optionalString, requiredRecord } from "../../core/cast.ts";
 import {
@@ -11,14 +10,14 @@ import {
   ProviderRequestError,
 } from "../provider-runtime.ts";
 
-const heyreachApiBaseUrl = "https://api.heyreach.io/api/public";
+export const heyreachApiBaseUrl = "https://api.heyreach.io/api/public";
 
 type HeyreachPhase = "validate" | "execute";
 
 interface HeyreachRequestInput {
   path: string;
   method: "GET" | "POST";
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   phase: HeyreachPhase;
   query?: Record<string, string | undefined>;
   body?: Record<string, unknown>;
@@ -199,7 +198,6 @@ export async function validateHeyreachCredential(
       accountId: "heyreach_api_key",
       displayName: "HeyReach API Key",
     },
-    grantedScopes: [],
     metadata: {
       apiBaseUrl: heyreachApiBaseUrl,
       validationEndpoint: "/auth/CheckApiKey",
@@ -213,7 +211,7 @@ async function requestHeyreachJson(input: HeyreachRequestInput): Promise<unknown
     const response = await input.context.fetcher(buildHeyreachUrl(input.path, input.query), {
       method: input.method,
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "content-type": "application/json",
         "user-agent": providerUserAgent,
         "x-api-key": input.context.apiKey,

@@ -1,18 +1,18 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalBooleanOrNull, optionalRecord, optionalString } from "../../core/cast.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
-  defineApiKeyProviderExecutors,
   isAbortLikeError,
   ProviderRequestError,
   providerUserAgent,
+  defaultProviderRequestTimeoutMs,
 } from "../provider-runtime.ts";
 
 const service = "apiverve";
 const apiverveApiBaseUrl = "https://api.apiverve.com";
-const apiverveDefaultRequestTimeoutMs = 30_000;
 
 type ApivervePhase = "validate" | "execute";
 type ApiverveQueryValue = number | string | undefined;
@@ -183,6 +183,16 @@ export const apiverveActionHandlers: ProviderActionHandlers<"apiverve", Apiverve
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, apiverveActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: apiverveApiBaseUrl,
+  auth: { type: "api_key_header", name: "X-API-Key" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     await requestApiverveData({
@@ -200,7 +210,6 @@ export const credentialValidators: CredentialValidators = {
       profile: {
         displayName: "APIVerve API Key",
       },
-      grantedScopes: [],
       metadata: {
         validationEndpoint: "/v1/advice",
         apiBaseUrl: apiverveApiBaseUrl,
@@ -212,17 +221,17 @@ export const credentialValidators: CredentialValidators = {
 async function requestApiverveData(input: {
   path: string;
   params: Record<string, ApiverveQueryValue>;
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   phase: ApivervePhase;
 }): Promise<unknown> {
-  const timeoutSignal = AbortSignal.timeout(apiverveDefaultRequestTimeoutMs);
+  const timeoutSignal = AbortSignal.timeout(defaultProviderRequestTimeoutMs);
   const signal = input.context.signal ? AbortSignal.any([input.context.signal, timeoutSignal]) : timeoutSignal;
 
   try {
     const response = await input.context.fetcher(buildApiverveUrl(input.path, input.params), {
       method: "GET",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "user-agent": providerUserAgent,
         "X-API-Key": input.context.apiKey,
       },

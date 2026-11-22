@@ -1,11 +1,11 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { optionalBoolean, optionalIntegerLike, optionalRawString, requiredString } from "../../core/cast.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
   createProviderTimeout,
-  defineApiKeyProviderExecutors,
   isAbortLikeError,
   providerInputError,
   providerUserAgent,
@@ -15,8 +15,7 @@ import {
 const service = "paperform";
 const paperformApiBaseUrl = "https://api.paperform.co/v1/";
 
-type PaperformContext = Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
-type PaperformActionHandler = (input: Record<string, unknown>, context: PaperformContext) => Promise<unknown>;
+type PaperformActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 type PaperformRequestPhase = "validate" | "execute";
 
 interface PaperformCollectionPage<T> {
@@ -48,6 +47,17 @@ export const paperformActionHandlers: ProviderActionHandlers<"paperform", Paperf
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, paperformActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: paperformApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+    headers.set("content-type", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     await requestJson(buildPath("forms", { limit: 1 }), { apiKey: input.apiKey, fetcher, signal }, "validate");
@@ -57,7 +67,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: "paperform:api-key",
         displayName: "Paperform API Key",
       },
-      grantedScopes: [],
       metadata: {
         apiBaseUrl: paperformApiBaseUrl,
       },
@@ -65,7 +74,7 @@ export const credentialValidators: CredentialValidators = {
   },
 };
 
-async function listForms(input: Record<string, unknown>, context: PaperformContext): Promise<unknown> {
+async function listForms(input: Record<string, unknown>, context: ApiKeyProviderContext): Promise<unknown> {
   const payload = await requestJson(
     buildPath("forms", {
       search: optionalRawString(input.search),
@@ -82,7 +91,7 @@ async function listForms(input: Record<string, unknown>, context: PaperformConte
   };
 }
 
-async function getForm(input: Record<string, unknown>, context: PaperformContext): Promise<unknown> {
+async function getForm(input: Record<string, unknown>, context: ApiKeyProviderContext): Promise<unknown> {
   const slugOrId = requiredString(input.slug_or_id, "slug_or_id", providerInputError);
   const payload = await requestJson(`forms/${encodeURIComponent(slugOrId)}`, context, "execute");
   return {
@@ -90,7 +99,7 @@ async function getForm(input: Record<string, unknown>, context: PaperformContext
   };
 }
 
-async function listFormFields(input: Record<string, unknown>, context: PaperformContext): Promise<unknown> {
+async function listFormFields(input: Record<string, unknown>, context: ApiKeyProviderContext): Promise<unknown> {
   const slugOrId = requiredString(input.slug_or_id, "slug_or_id", providerInputError);
   const payload = await requestJson(
     buildPath(`forms/${encodeURIComponent(slugOrId)}/fields`, {
@@ -105,7 +114,7 @@ async function listFormFields(input: Record<string, unknown>, context: Paperform
   };
 }
 
-async function getFormField(input: Record<string, unknown>, context: PaperformContext): Promise<unknown> {
+async function getFormField(input: Record<string, unknown>, context: ApiKeyProviderContext): Promise<unknown> {
   const slugOrId = requiredString(input.slug_or_id, "slug_or_id", providerInputError);
   const fieldKey = requiredString(input.field_key, "field_key", providerInputError);
   const payload = await requestJson(
@@ -118,7 +127,7 @@ async function getFormField(input: Record<string, unknown>, context: PaperformCo
   };
 }
 
-async function listFormSubmissions(input: Record<string, unknown>, context: PaperformContext): Promise<unknown> {
+async function listFormSubmissions(input: Record<string, unknown>, context: ApiKeyProviderContext): Promise<unknown> {
   const slugOrId = requiredString(input.slug_or_id, "slug_or_id", providerInputError);
   const payload = await requestJson(
     buildPath(`forms/${encodeURIComponent(slugOrId)}/submissions`, buildPaginationQuery(input)),
@@ -133,7 +142,7 @@ async function listFormSubmissions(input: Record<string, unknown>, context: Pape
   };
 }
 
-async function getFormSubmission(input: Record<string, unknown>, context: PaperformContext): Promise<unknown> {
+async function getFormSubmission(input: Record<string, unknown>, context: ApiKeyProviderContext): Promise<unknown> {
   const slugOrId = requiredString(input.slug_or_id, "slug_or_id", providerInputError);
   const id = requiredString(input.id, "id", providerInputError);
   const payload = await requestJson(
@@ -146,7 +155,7 @@ async function getFormSubmission(input: Record<string, unknown>, context: Paperf
   };
 }
 
-async function getSubmission(input: Record<string, unknown>, context: PaperformContext): Promise<unknown> {
+async function getSubmission(input: Record<string, unknown>, context: ApiKeyProviderContext): Promise<unknown> {
   const id = requiredString(input.id, "id", providerInputError);
   const payload = await requestJson(`submissions/${encodeURIComponent(id)}`, context, "execute");
   return {
@@ -154,7 +163,10 @@ async function getSubmission(input: Record<string, unknown>, context: PaperformC
   };
 }
 
-async function listFormPartialSubmissions(input: Record<string, unknown>, context: PaperformContext): Promise<unknown> {
+async function listFormPartialSubmissions(
+  input: Record<string, unknown>,
+  context: ApiKeyProviderContext,
+): Promise<unknown> {
   const slugOrId = requiredString(input.slug_or_id, "slug_or_id", providerInputError);
   const payload = await requestJson(
     buildPath(`forms/${encodeURIComponent(slugOrId)}/partial-submissions`, buildPaginationQuery(input)),
@@ -174,7 +186,10 @@ async function listFormPartialSubmissions(input: Record<string, unknown>, contex
   };
 }
 
-async function getFormPartialSubmission(input: Record<string, unknown>, context: PaperformContext): Promise<unknown> {
+async function getFormPartialSubmission(
+  input: Record<string, unknown>,
+  context: ApiKeyProviderContext,
+): Promise<unknown> {
   const slugOrId = requiredString(input.slug_or_id, "slug_or_id", providerInputError);
   const id = requiredString(input.id, "id", providerInputError);
   const payload = await requestJson(
@@ -189,7 +204,7 @@ async function getFormPartialSubmission(input: Record<string, unknown>, context:
   };
 }
 
-async function getPartialSubmission(input: Record<string, unknown>, context: PaperformContext): Promise<unknown> {
+async function getPartialSubmission(input: Record<string, unknown>, context: ApiKeyProviderContext): Promise<unknown> {
   const id = requiredString(input.id, "id", providerInputError);
   const payload = await requestJson(`partial-submissions/${encodeURIComponent(id)}`, context, "execute");
   return {
@@ -199,7 +214,7 @@ async function getPartialSubmission(input: Record<string, unknown>, context: Pap
   };
 }
 
-async function listFormProducts(input: Record<string, unknown>, context: PaperformContext): Promise<unknown> {
+async function listFormProducts(input: Record<string, unknown>, context: ApiKeyProviderContext): Promise<unknown> {
   const slugOrId = requiredString(input.slug_or_id, "slug_or_id", providerInputError);
   const payload = await requestJson(
     buildPath(`forms/${encodeURIComponent(slugOrId)}/products`, {
@@ -214,7 +229,7 @@ async function listFormProducts(input: Record<string, unknown>, context: Paperfo
   };
 }
 
-async function getFormProduct(input: Record<string, unknown>, context: PaperformContext): Promise<unknown> {
+async function getFormProduct(input: Record<string, unknown>, context: ApiKeyProviderContext): Promise<unknown> {
   const slugOrId = requiredString(input.slug_or_id, "slug_or_id", providerInputError);
   const productSku = requiredString(input.product_sku, "product_sku", providerInputError);
   const payload = await requestJson(
@@ -227,7 +242,7 @@ async function getFormProduct(input: Record<string, unknown>, context: Paperform
   };
 }
 
-async function listFormCoupons(input: Record<string, unknown>, context: PaperformContext): Promise<unknown> {
+async function listFormCoupons(input: Record<string, unknown>, context: ApiKeyProviderContext): Promise<unknown> {
   const slugOrId = requiredString(input.slug_or_id, "slug_or_id", providerInputError);
   const payload = await requestJson(`forms/${encodeURIComponent(slugOrId)}/coupons`, context, "execute");
   return {
@@ -236,7 +251,7 @@ async function listFormCoupons(input: Record<string, unknown>, context: Paperfor
   };
 }
 
-async function getFormCoupon(input: Record<string, unknown>, context: PaperformContext): Promise<unknown> {
+async function getFormCoupon(input: Record<string, unknown>, context: ApiKeyProviderContext): Promise<unknown> {
   const slugOrId = requiredString(input.slug_or_id, "slug_or_id", providerInputError);
   const code = requiredString(input.code, "code", providerInputError);
   const payload = await requestJson(
@@ -249,7 +264,11 @@ async function getFormCoupon(input: Record<string, unknown>, context: PaperformC
   };
 }
 
-async function requestJson(path: string, context: PaperformContext, phase: PaperformRequestPhase): Promise<unknown> {
+async function requestJson(
+  path: string,
+  context: ApiKeyProviderContext,
+  phase: PaperformRequestPhase,
+): Promise<unknown> {
   const response = await paperformFetch(path, context);
   const payload = await readPaperformPayload(response);
   if (!response.ok) {
@@ -258,14 +277,14 @@ async function requestJson(path: string, context: PaperformContext, phase: Paper
   return payload;
 }
 
-async function paperformFetch(path: string, context: PaperformContext): Promise<Response> {
+async function paperformFetch(path: string, context: ApiKeyProviderContext): Promise<Response> {
   const url = new URL(path, paperformApiBaseUrl);
   const timeout = createProviderTimeout(context.signal);
   try {
     return await context.fetcher(url, {
       headers: {
-        accept: "application/json",
-        authorization: `Bearer ${context.apiKey}`,
+        "accept": "application/json",
+        "authorization": `Bearer ${context.apiKey}`,
         "user-agent": providerUserAgent,
       },
       signal: timeout.signal,

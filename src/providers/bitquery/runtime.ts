@@ -1,5 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 
 import { optionalString } from "../../core/cast.ts";
 import { providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
@@ -64,7 +64,6 @@ export async function validateBitqueryCredential(
       accountId: "bitquery",
       displayName: "Bitquery API Token",
     },
-    grantedScopes: [],
     metadata: {
       graphqlEndpoint: bitqueryGraphqlEndpoint,
       validationEndpoint: bitqueryGraphqlEndpoint,
@@ -134,8 +133,8 @@ async function requestBitqueryJson(input: BitqueryGraphqlRequestInput) {
 
 function buildBitqueryHeaders(apiKey: string) {
   return {
-    accept: "application/json",
-    authorization: `Bearer ${apiKey}`,
+    "accept": "application/json",
+    "authorization": `Bearer ${apiKey}`,
     "content-type": "application/json",
     "user-agent": providerUserAgent,
   };

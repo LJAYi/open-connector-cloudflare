@@ -1,4 +1,5 @@
-import type { ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { CredentialValidationResult } from "../../core/types.ts";
+import type { ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import { createHash } from "node:crypto";
 import { objectArray, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
@@ -45,7 +46,7 @@ export async function validateMoxieCredential(
   input: { apiKey: string; values?: Record<string, string> },
   fetcher: typeof fetch,
   signal?: AbortSignal,
-): Promise<import("../../core/types.ts").CredentialValidationResult> {
+): Promise<CredentialValidationResult> {
   const apiKey = requiredString(input.apiKey, "apiKey", providerInputError).trim();
   const baseUrl = normalizeMoxieBaseUrl(input.values?.baseUrl);
   const payload = await requestMoxieJson({ apiKey, baseUrl, path: validationPath, fetcher, signal, validation: true });
@@ -103,7 +104,7 @@ async function requestMoxieJson(input: {
   const timeout = createProviderTimeout(input.signal);
   try {
     const response = await input.fetcher(url, {
-      headers: { accept: "application/json", "user-agent": providerUserAgent, "x-api-key": input.apiKey },
+      headers: { "accept": "application/json", "user-agent": providerUserAgent, "x-api-key": input.apiKey },
       signal: timeout.signal,
     });
     const text = await readBoundedText(response);
@@ -162,9 +163,9 @@ function mapMoxieError(status: number, payload: unknown, validation: boolean): P
     optionalString(record?.message) ||
     optionalString(record?.error) ||
     `Moxie request failed with status ${status}`;
-  if (validation && [400, 401, 403].includes(status)) return new ProviderRequestError(400, message);
+  if (validation && [400, 401, 403].includes(status)) return providerInputError(message);
   if (status === 401 || status === 403) return new ProviderRequestError(401, message);
-  if ([400, 404, 422].includes(status)) return new ProviderRequestError(400, message);
+  if ([400, 404, 422].includes(status)) return providerInputError(message);
   if (status === 429) return new ProviderRequestError(429, message);
   return new ProviderRequestError(status || 502, message);
 }

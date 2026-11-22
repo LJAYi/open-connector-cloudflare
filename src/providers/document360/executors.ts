@@ -1,4 +1,9 @@
-import type { CredentialValidators, ExecutionContext, ProviderExecutors } from "../../core/types.ts";
+import type {
+  CredentialValidators,
+  ExecutionContext,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
 import type { Document360ActionName } from "./actions.ts";
 
 import {
@@ -13,12 +18,13 @@ import {
   requiredString,
 } from "../../core/cast.ts";
 import { encodePathSegment } from "../../core/request.ts";
+import { requireApiKeyCredential } from "../provider-credentials.ts";
+import { defineProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
-  defineProviderExecutors,
   providerInputError,
   providerUserAgent,
   ProviderRequestError,
-  requireApiKeyCredential,
   runProviderRequest,
 } from "../provider-runtime.ts";
 
@@ -119,6 +125,17 @@ export const executors: ProviderExecutors = defineProviderExecutors<Document360C
   },
 });
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: apiBaseUrl,
+  auth: { type: "api_key_header", name: "api_token" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+    headers.set("content-type", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const payload = await requestJson({
@@ -136,7 +153,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: optionalString(mainWorkspace?.id) ?? "api_key",
         displayName: optionalString(mainWorkspace?.versionCodeName) ?? "Document360 API Token",
       },
-      grantedScopes: [],
       metadata: compactObject({
         validationEndpoint: "/v2/ProjectVersions",
         workspaceCount: workspaces.length,
@@ -159,9 +175,9 @@ async function requestJson(input: {
     const response = await input.fetcher(buildUrl(input.path, input.query), {
       method: "GET",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "content-type": "application/json",
-        api_token: input.apiKey,
+        "api_token": input.apiKey,
         "user-agent": providerUserAgent,
       },
       signal,

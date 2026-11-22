@@ -1,4 +1,4 @@
-const dataciteApiBaseUrl = "https://api.datacite.org";
+export const dataciteApiBaseUrl = "https://api.datacite.org";
 
 type DatacitePhase = "validate" | "execute";
 
@@ -13,7 +13,7 @@ interface DataciteRequestInput {
 export async function validateDataciteCredential(
   input: Record<string, string>,
   fetcher: typeof fetch,
-): Promise<{ profile: { displayName: string }; grantedScopes: string[]; metadata: Record<string, unknown> }> {
+): Promise<{ profile: { displayName: string }; metadata: Record<string, unknown> }> {
   await requestDataciteJson({
     path: "/dois",
     params: { "page[size]": "0" },
@@ -24,7 +24,6 @@ export async function validateDataciteCredential(
 
   return {
     profile: { displayName: "DataCite API Key" },
-    grantedScopes: [],
     metadata: {
       apiBaseUrl: dataciteApiBaseUrl,
       validationEndpoint: "/dois?page[size]=0",
@@ -67,26 +66,26 @@ export async function executeDataciteAction(
 
 function buildListParams(input: Record<string, unknown>): Record<string, string | undefined> {
   return compactObject({
-    query: readOptionalString(input.query),
-    prefix: readOptionalString(input.prefix),
+    "query": readOptionalString(input.query),
+    "prefix": readOptionalString(input.prefix),
     "client-id": readOptionalString(input.clientId),
     "provider-id": readOptionalString(input.providerId),
     "consortium-id": readOptionalString(input.consortiumId),
     "resource-type-id": readStringArray(input.resourceTypeIds),
-    subject: readOptionalString(input.subject),
+    "subject": readOptionalString(input.subject),
     "user-id": readOptionalString(input.userId),
     "affiliation-id": readOptionalString(input.affiliationId),
     "funder-id": readOptionalString(input.funderId),
-    published: readOptionalString(input.published),
-    created: readOptionalString(input.created),
-    registered: readOptionalString(input.registered),
-    state: readStringArray(input.states),
+    "published": readOptionalString(input.published),
+    "created": readOptionalString(input.created),
+    "registered": readOptionalString(input.registered),
+    "state": readStringArray(input.states),
     "has-citations": readOptionalIntegerString(input.hasCitations),
     "has-references": readOptionalIntegerString(input.hasReferences),
-    sort: readOptionalString(input.sort),
-    detail: booleanString(input.detail),
-    affiliation: booleanString(input.affiliation),
-    publisher: booleanString(input.publisher),
+    "sort": readOptionalString(input.sort),
+    "detail": booleanString(input.detail),
+    "affiliation": booleanString(input.affiliation),
+    "publisher": booleanString(input.publisher),
     "page[number]": readOptionalIntegerString(input.pageNumber),
     "page[size]": readOptionalIntegerString(input.pageSize),
     "page[cursor]": readOptionalString(input.pageCursor),
@@ -103,7 +102,7 @@ async function requestDataciteJson(input: DataciteRequestInput) {
   }
 
   const headers: Record<string, string> = {
-    accept: "application/vnd.api+json",
+    "accept": "application/vnd.api+json",
     "user-agent": providerUserAgent,
   };
   if (input.apiKey) {
@@ -159,7 +158,7 @@ function createDataciteError(status: number, payload: unknown, phase: DatacitePh
     return new ProviderRequestError(429, message);
   }
   if (phase === "validate" && (status === 401 || status === 403)) {
-    return new ProviderRequestError(400, message);
+    return providerInputError(message);
   }
   if (status === 401 || status === 403) {
     return new ProviderRequestError(400, message, status);

@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import { compactObject, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import {
@@ -159,9 +159,7 @@ export async function validateLifxCredential(
   return {
     profile: {
       displayName: label ? `LIFX: ${label}` : "LIFX Access Token",
-      grantedScopes: [],
     },
-    grantedScopes: [],
     metadata: {
       apiBaseUrl: lifxApiBaseUrl,
       validationEndpoint: "/lights/all",
@@ -233,8 +231,8 @@ async function requestLifxUrl(input: Omit<LifxRequestInput, "path"> & { url: URL
 
 function lifxHeaders(apiKey: string, extraHeaders: Record<string, string> = {}): Record<string, string> {
   return {
-    accept: "application/json",
-    authorization: `Bearer ${apiKey}`,
+    "accept": "application/json",
+    "authorization": `Bearer ${apiKey}`,
     "user-agent": providerUserAgent,
     ...extraHeaders,
   };

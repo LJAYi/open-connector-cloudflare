@@ -1,10 +1,11 @@
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 
 import { compactObject, optionalBoolean, optionalNumber } from "../../core/cast.ts";
-import { getProviderActionHandler, ProviderRequestError } from "../provider-runtime.ts";
+import { getProviderActionHandler } from "../provider-executors.ts";
+import { ProviderRequestError, providerInputError, providerResponseError } from "../provider-runtime.ts";
 import { emptyWorkbookBytes, excelWorkbookMimeType } from "./workbook-template.ts";
 
-const graphBaseUrl = "https://graph.microsoft.com/v1.0";
+export const graphBaseUrl = "https://graph.microsoft.com/v1.0";
 const graphHost = "graph.microsoft.com";
 const defaultWorkbookExtensions = [".xlsx", ".xlsm", ".xlsb"] as const;
 const excelUploadChunkSizeBytes = 10 * 1024 * 1024;
@@ -47,7 +48,7 @@ type ExcelRequestInput = {
 };
 
 type ExcelGraphCollection<T> = {
-  value?: T;
+  "value"?: T;
   "@odata.nextLink"?: unknown;
 } & Record<string, unknown>;
 
@@ -251,7 +252,7 @@ export async function assertExcelResponse(response: Response): Promise<void> {
   const { code, message } = await extractExcelError(response);
 
   if (response.status === 400) {
-    throw new ProviderRequestError(400, message);
+    throw providerInputError(message);
   }
   if (response.status === 401) {
     throw new ProviderRequestError(401, message);
@@ -263,7 +264,7 @@ export async function assertExcelResponse(response: Response): Promise<void> {
     throw new ProviderRequestError(403, message);
   }
   if (response.status === 404) {
-    throw new ProviderRequestError(400, message);
+    throw providerInputError(message);
   }
   if (response.status === 429) {
     throw new ProviderRequestError(429, message);
@@ -556,7 +557,7 @@ async function createWorkbookFile(
       body: {
         item: {
           "@microsoft.graph.conflictBehavior": "fail",
-          name: input.fileName,
+          "name": input.fileName,
         },
       },
       allowStatuses: [409],
@@ -674,8 +675,8 @@ async function ensureFolderPathExists(folderSegments: string[], driveId: string 
         fetcher: deps.fetcher,
         method: "POST",
         body: {
-          name: segment,
-          folder: {},
+          "name": segment,
+          "folder": {},
           "@microsoft.graph.conflictBehavior": "fail",
         },
         allowStatuses: [409],
@@ -718,7 +719,7 @@ function asUploadSession(value: Record<string, unknown>) {
 async function buildUploadSessionError(response: Response) {
   const { message } = await extractExcelError(response);
   if (response.status === 400 || response.status === 409 || response.status === 412) {
-    return new ProviderRequestError(400, message);
+    return providerInputError(message);
   }
   if (response.status === 404) {
     return new ProviderRequestError(404, "excel upload session expired");
@@ -1461,7 +1462,7 @@ async function readJsonResponse<T>(response: Response, label: string) {
 function buildExcelOperationError(payload: Record<string, unknown>, fallbackMessage: string) {
   const errorPayload = asObjectSafe(payload.error);
   const message = readOptionalString(errorPayload?.message) ?? readOptionalString(payload.message) ?? fallbackMessage;
-  return new ProviderRequestError(502, message);
+  return providerResponseError(message);
 }
 
 function normalizeExtensions(value: unknown) {
@@ -1786,7 +1787,7 @@ function readAliasedStringArray(input: Record<string, unknown>, keys: string[]) 
 function requireNonEmptyMutationBody(input: Record<string, unknown>, message: string): Record<string, unknown> {
   const body = compactObject(input);
   if (Object.keys(body).length === 0) {
-    throw new ProviderRequestError(400, message);
+    throw providerInputError(message);
   }
   return body;
 }

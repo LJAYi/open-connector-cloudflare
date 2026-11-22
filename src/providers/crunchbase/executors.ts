@@ -1,10 +1,11 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalString, requiredRecord, requiredString } from "../../core/cast.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
-  defineApiKeyProviderExecutors,
   providerInputError,
   providerUserAgent,
   ProviderRequestError,
@@ -119,6 +120,16 @@ export const crunchbaseActionHandlers: ProviderActionHandlers<"crunchbase", Crun
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, crunchbaseActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: crunchbaseApiBaseUrl,
+  auth: { type: "api_key_header", name: "X-cb-user-key" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     await requestCrunchbaseJson({
@@ -132,7 +143,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: "crunchbase",
         displayName: "Crunchbase API Key",
       },
-      grantedScopes: [],
       metadata: {
         apiBaseUrl: crunchbaseApiBaseUrl,
         validationEndpoint: "/data/autocompletes",
@@ -159,7 +169,7 @@ async function requestCrunchbaseJson(input: {
       method: input.method ?? "GET",
       headers: {
         "X-cb-user-key": input.context.apiKey,
-        accept: "application/json",
+        "accept": "application/json",
         "user-agent": providerUserAgent,
         ...(input.body ? { "content-type": "application/json" } : {}),
       },

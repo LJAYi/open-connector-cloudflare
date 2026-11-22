@@ -1,14 +1,10 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, objectArray, optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
-import {
-  defineApiKeyProviderExecutors,
-  ProviderRequestError,
-  providerResponseError,
-  providerUserAgent,
-} from "../provider-runtime.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { ProviderRequestError, providerResponseError, providerUserAgent } from "../provider-runtime.ts";
 
 const service = "stormglass_io";
 const stormglassApiBaseUrl = "https://api.stormglass.io";
@@ -29,6 +25,16 @@ export const stormglassIoActionHandlers: ProviderActionHandlers<"stormglass_io",
 };
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, stormglassIoActionHandlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: stormglassApiBaseUrl,
+  auth: { type: "api_key_header", name: "Authorization" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
 
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
@@ -51,7 +57,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: "stormglass_io",
         displayName: "Stormglass API Key",
       },
-      grantedScopes: [],
       metadata: {
         validationEndpoint: "/v2/weather/point",
         apiBaseUrl: stormglassApiBaseUrl,
@@ -68,7 +73,7 @@ export const credentialValidators: CredentialValidators = {
 
 async function executeWeatherPoint(
   input: Record<string, unknown>,
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
+  context: ApiKeyProviderContext,
   phase: StormglassPhase,
 ): Promise<Record<string, unknown>> {
   const payload = await stormglassJsonRequest("/v2/weather/point", buildWeatherPointQuery(input), context, phase);
@@ -80,7 +85,7 @@ async function executeWeatherPoint(
 
 async function executeTideExtremes(
   input: Record<string, unknown>,
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
+  context: ApiKeyProviderContext,
 ): Promise<Record<string, unknown>> {
   const payload = await stormglassJsonRequest(
     "/v2/tide/extremes/point",
@@ -96,7 +101,7 @@ async function executeTideExtremes(
 
 async function executeTideSeaLevel(
   input: Record<string, unknown>,
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
+  context: ApiKeyProviderContext,
 ): Promise<Record<string, unknown>> {
   const payload = await stormglassJsonRequest(
     "/v2/tide/sea-level/point",
@@ -113,7 +118,7 @@ async function executeTideSeaLevel(
 async function stormglassJsonRequest(
   path: string,
   query: Record<string, string | number | undefined>,
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
+  context: ApiKeyProviderContext,
   phase: StormglassPhase,
 ): Promise<Record<string, unknown>> {
   const url = new URL(path, stormglassApiBaseUrl);
@@ -127,8 +132,8 @@ async function stormglassJsonRequest(
     response = await context.fetcher(url, {
       method: "GET",
       headers: {
-        accept: "application/json",
-        authorization: context.apiKey,
+        "accept": "application/json",
+        "authorization": context.apiKey,
         "user-agent": providerUserAgent,
       },
       signal: context.signal,

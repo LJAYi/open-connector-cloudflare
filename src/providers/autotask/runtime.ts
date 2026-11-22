@@ -1,5 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 import type { ProviderFetch } from "../provider-runtime.ts";
 
 import {
@@ -85,7 +85,6 @@ export async function validateAutotaskCredential(
       accountId: credentials.username,
       displayName: `Autotask ${credentials.username}`,
     },
-    grantedScopes: [],
     metadata: compactObject({
       apiBaseUrl: zone.apiBaseUrl,
       zoneName: zone.zoneName,
@@ -206,7 +205,7 @@ async function requestAutotaskZoneInformation(
     response = await fetcher(url.toString(), {
       method: "GET",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "user-agent": providerUserAgent,
       },
       signal,
@@ -243,11 +242,11 @@ async function requestAutotaskJson(input: {
     response = await input.fetcher(url.toString(), {
       method: input.method,
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "content-type": "application/json",
-        Username: input.credentials.username,
-        Secret: input.credentials.secret,
-        APIIntegrationcode: input.credentials.integrationCode,
+        "Username": input.credentials.username,
+        "Secret": input.credentials.secret,
+        "APIIntegrationcode": input.credentials.integrationCode,
         "user-agent": providerUserAgent,
       },
       body: input.body ? JSON.stringify(input.body) : undefined,

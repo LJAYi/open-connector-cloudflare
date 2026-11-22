@@ -1,6 +1,6 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -12,13 +12,14 @@ import {
   optionalString,
   stringArray,
 } from "../../core/cast.ts";
-import { defineApiKeyProviderExecutors, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { providerUserAgent, ProviderRequestError, defaultProviderRequestTimeoutMs } from "../provider-runtime.ts";
 import { folkCompanyMutableKeys, folkPersonMutableKeys } from "./actions.ts";
 
 const service = "folk";
 const folkApiBaseUrl = "https://api.folk.app";
 const folkCurrentUserPath = "/v1/users/me";
-const folkDefaultRequestTimeoutMs = 30_000;
 
 type FolkPhase = "validate" | "execute";
 type FolkActionContext = ApiKeyProviderContext;
@@ -228,6 +229,16 @@ export const folkActionHandlers: ProviderActionHandlers<"folk", FolkActionHandle
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, folkActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: folkApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const payload = await requestFolkJson(
@@ -249,7 +260,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: user.id,
         displayName: user.email || user.fullName || "Folk API Key",
       },
-      grantedScopes: [],
       metadata: compactObject({
         apiBaseUrl: folkApiBaseUrl,
         validationEndpoint: folkCurrentUserPath,
@@ -261,13 +271,13 @@ export const credentialValidators: CredentialValidators = {
 };
 
 async function requestFolkJson(context: FolkActionContext, input: FolkRequestInput): Promise<Record<string, unknown>> {
-  const timeoutSignal = AbortSignal.timeout(folkDefaultRequestTimeoutMs);
+  const timeoutSignal = AbortSignal.timeout(defaultProviderRequestTimeoutMs);
   const signal = context.signal ? AbortSignal.any([context.signal, timeoutSignal]) : timeoutSignal;
 
   try {
     const headers: Record<string, string> = {
-      accept: "application/json",
-      authorization: `Bearer ${context.apiKey}`,
+      "accept": "application/json",
+      "authorization": `Bearer ${context.apiKey}`,
       "user-agent": providerUserAgent,
     };
     if (input.body) {

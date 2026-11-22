@@ -1,5 +1,5 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -10,9 +10,9 @@ import {
   requiredString,
   stringArray,
 } from "../../core/cast.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
-  defineApiKeyProviderExecutors,
-  defineProviderProxy,
   ProviderRequestError,
   providerResponseError,
   providerUserAgent,
@@ -109,7 +109,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: "api_key",
         displayName: "fal.ai API Key",
       },
-      grantedScopes: [],
       metadata: {
         validationEndpoint: "/v1/models",
         availableModels: (payload.models ?? [])
@@ -448,7 +447,7 @@ async function falAiFetch(input: FalAiRequestInput, fetcher: typeof fetch): Prom
   return fetcher(url.toString(), {
     method: input.method ?? (input.body ? "POST" : "GET"),
     headers: {
-      authorization: `Key ${input.apiKey}`,
+      "authorization": `Key ${input.apiKey}`,
       "content-type": "application/json",
       "user-agent": providerUserAgent,
       ...input.headers,

@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -12,7 +12,7 @@ import {
 } from "../../core/cast.ts";
 import { providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
 
-const giphyApiBaseUrl = "https://api.giphy.com/v1";
+export const giphyApiBaseUrl = "https://api.giphy.com/v1";
 const giphyValidationPath = "/gifs/trending";
 
 type QueryValue = string | number | boolean | undefined;
@@ -186,7 +186,6 @@ export async function validateGiphyCredential(
       accountId: "giphy",
       displayName: "GIPHY API Key",
     },
-    grantedScopes: [],
     metadata: compactObject({
       validationEndpoint: "/v1/gifs/trending",
       sampleGifId: typeof sampleGifId === "string" ? sampleGifId : undefined,
@@ -326,7 +325,7 @@ function buildGiphyUrl(path: string, query: Record<string, QueryValue>): string 
 
 function giphyHeaders(): Record<string, string> {
   return {
-    accept: "application/json",
+    "accept": "application/json",
     "user-agent": providerUserAgent,
   };
 }

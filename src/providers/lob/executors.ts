@@ -1,16 +1,17 @@
-import type { CredentialValidationResult, CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type {
+  CredentialValidationResult,
+  CredentialValidators,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { Buffer } from "node:buffer";
 import { optionalBoolean, optionalRecord, optionalString } from "../../core/cast.ts";
 import { compactJson, queryParams } from "../../core/request.ts";
-import {
-  defineApiKeyProviderExecutors,
-  providerUserAgent,
-  ProviderRequestError,
-  runProviderRequest,
-} from "../provider-runtime.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { providerUserAgent, ProviderRequestError, runProviderRequest } from "../provider-runtime.ts";
 
 const service = "lob";
 const lobApiBaseUrl = "https://api.lob.com/v1";
@@ -37,6 +38,14 @@ export const lobActionHandlers: ProviderActionHandlers<"lob", LobActionHandler> 
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, lobActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: lobApiBaseUrl,
+  auth: { type: "api_key_basic", suffix: ":" },
+  skipDnsValidation: true,
+  defaultHeaders: { accept: "application/json" },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }): Promise<CredentialValidationResult> {
     const payload = await requestLobJson({
@@ -53,7 +62,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: `lob:${suffix}`,
         displayName: "Lob API Key",
       },
-      grantedScopes: [],
       metadata: {
         apiBaseUrl: lobApiBaseUrl,
         validationEndpoint: "/addresses?limit=1",
@@ -155,7 +163,7 @@ async function bulkVerifyInternationalAddresses(
 }
 
 async function requestLobJson(input: {
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   path: string;
   method: "GET" | "POST";
   phase: "validate" | "execute";
@@ -184,8 +192,8 @@ async function requestLobJson(input: {
 
 function lobHeaders(apiKey: string, hasBody: boolean): Record<string, string> {
   return {
-    accept: "application/json",
-    authorization: `Basic ${Buffer.from(`${apiKey}:`).toString("base64")}`,
+    "accept": "application/json",
+    "authorization": `Basic ${Buffer.from(`${apiKey}:`).toString("base64")}`,
     "user-agent": providerUserAgent,
     ...(hasBody ? { "content-type": "application/json" } : {}),
   };

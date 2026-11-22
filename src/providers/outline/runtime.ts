@@ -1,5 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 import type { ProviderFetch } from "../provider-runtime.ts";
 
 import {
@@ -11,7 +11,7 @@ import {
   optionalString,
   requiredString,
 } from "../../core/cast.ts";
-import { assertPublicHttpUrl } from "../../core/request.ts";
+import { assertPublicHttpUrl, isPrivateNetworkAccessAllowed } from "../../core/request.ts";
 import { providerUserAgent, ProviderRequestError, requiredInputString } from "../provider-runtime.ts";
 
 export const outlineCloudApiBaseUrl = "https://app.getoutline.com/api";
@@ -95,7 +95,6 @@ export async function validateOutlineCredential(
       accountId: userId,
       displayName: userName ?? userEmail ?? "Outline API Key",
     },
-    grantedScopes: [],
     metadata: compactObject({
       baseUrl: apiBaseUrl,
       validationEndpoint: "/auth.info",
@@ -278,8 +277,8 @@ async function requestOutlineJson(options: OutlineRequestOptions): Promise<unkno
 
 function buildOutlineHeaders(apiKey: string) {
   return {
-    accept: "application/json",
-    authorization: `Bearer ${apiKey}`,
+    "accept": "application/json",
+    "authorization": `Bearer ${apiKey}`,
     "content-type": "application/json",
     "user-agent": providerUserAgent,
   };
@@ -466,11 +465,15 @@ function readData(payload: unknown) {
   return record.data;
 }
 
-export function normalizeOutlineBaseUrl(value: unknown): string {
+export function normalizeOutlineBaseUrl(
+  value: unknown,
+  allowPrivateNetwork: boolean = isPrivateNetworkAccessAllowed(),
+): string {
   const candidate = optionalString(value) ?? outlineCloudApiBaseUrl;
   const parsed = assertPublicHttpUrl(candidate, {
     fieldName: "baseUrl",
     createError: (message) => new ProviderRequestError(400, message),
+    allowPrivateNetwork,
   });
   if (parsed.protocol !== "https:") {
     throw new ProviderRequestError(400, "baseUrl must use https");

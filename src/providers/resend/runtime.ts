@@ -1,6 +1,7 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext, ProviderFetch } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderFetch } from "../provider-runtime.ts";
 
 import {
   objectArray,
@@ -24,7 +25,7 @@ import {
   setSearchParams,
 } from "../provider-runtime.ts";
 
-const resendApiBaseUrl = "https://api.resend.com";
+export const resendApiBaseUrl = "https://api.resend.com";
 const resendCredentialValidationErrors = new Set(["validation_error", "missing_required_field"]);
 
 type ResendActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
@@ -89,20 +90,18 @@ export async function validateResendCredential(
     signal,
   });
   if (scopesResponse.ok) {
-    metadata.accessLevel = "full_access";
     return {
       profile: {
         accountId: "resend-api-key",
         displayName: "Resend API Key",
-        grantedScopes: ["full_access"],
       },
-      grantedScopes: ["full_access"],
+      grantedScopes: [],
       metadata,
     };
   }
 
   const scopesError = await readResendError(scopesResponse);
-  if (scopesError.name === "restricted_api_key") {
+  if (scopesResponse.status === 401 && scopesError.name === "restricted_api_key") {
     metadata.accessLevel = "sending_access";
     return {
       profile: {
@@ -303,8 +302,8 @@ async function resendRequestJson(
 
 function resendHeaders(apiKey: string): Record<string, string> {
   return {
-    accept: "application/json",
-    authorization: `Bearer ${apiKey}`,
+    "accept": "application/json",
+    "authorization": `Bearer ${apiKey}`,
     "content-type": "application/json",
     "user-agent": providerUserAgent,
   };

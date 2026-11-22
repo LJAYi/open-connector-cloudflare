@@ -9,12 +9,10 @@ import type { KarakeepExecutionContext } from "./runtime-helpers.ts";
 
 import { optionalString } from "../../core/cast.ts";
 import { isPrivateNetworkAccessAllowed } from "../../core/request.ts";
-import {
-  createProviderFetch,
-  defineProviderExecutors,
-  defineProviderProxy,
-  requireApiKeyCredential,
-} from "../provider-runtime.ts";
+import { requireApiKeyCredential } from "../provider-credentials.ts";
+import { defineProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { createProviderFetch } from "../provider-runtime.ts";
 import { createKarakeepContext, normalizeKarakeepApiBaseUrl, validateKarakeepCredential } from "./runtime-helpers.ts";
 import { karakeepActionHandlers } from "./runtime.ts";
 
@@ -39,9 +37,7 @@ export const proxy: ProviderProxyExecutor = defineProviderProxy({
     return normalizeKarakeepApiBaseUrl(value);
   },
   auth: { type: "api_key_authorization", prefix: "Bearer " },
-  customizeRequest({ headers }) {
-    if (!headers.has("accept")) headers.set("accept", "application/json");
-  },
+  defaultHeaders: { accept: "application/json" },
   allowPrivateNetwork: isPrivateNetworkAccessAllowed,
 });
 

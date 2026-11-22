@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import { Buffer } from "node:buffer";
 import { optionalRecord, optionalString } from "../../core/cast.ts";
@@ -71,9 +71,7 @@ export async function validateLapostaCredential(
   return {
     profile: {
       displayName: "Laposta API Key",
-      grantedScopes: [],
     },
-    grantedScopes: [],
     metadata: {
       apiBaseUrl: lapostaApiBaseUrl,
       validationEndpoint: "/v2/list",
@@ -209,8 +207,8 @@ async function requestLapostaJson(
     }
   }
   const headers = new Headers({
-    accept: "application/json",
-    authorization: `Basic ${Buffer.from(`${input.apiKey}:`, "utf8").toString("base64")}`,
+    "accept": "application/json",
+    "authorization": `Basic ${Buffer.from(`${input.apiKey}:`, "utf8").toString("base64")}`,
     "user-agent": providerUserAgent,
   });
   if (input.body) {

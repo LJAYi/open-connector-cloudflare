@@ -1,5 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 import type { ProviderFetch } from "../provider-runtime.ts";
 
 import { compactObject, optionalRecord, optionalString, positiveInteger, requiredString } from "../../core/cast.ts";
@@ -59,7 +59,6 @@ export async function validateVtexCredential(input: {
       accountId: `vtex:${accountName}.${environment}`,
       displayName: `VTEX ${accountName}`,
     },
-    grantedScopes: [],
     metadata: {
       accountName,
       environment,
@@ -137,7 +136,7 @@ async function requestVtexJson(context: VtexContext, request: VtexRequestInput):
     response = await context.fetcher(url.toString(), {
       method: "GET",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "content-type": "application/json",
         "user-agent": providerUserAgent,
         "x-vtex-api-appkey": context.appKey,

@@ -1,14 +1,10 @@
-import type { ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalBoolean, optionalRecord, optionalString } from "../../core/cast.ts";
-import {
-  defineApiKeyProviderExecutors,
-  ProviderRequestError,
-  providerUserAgent,
-  requiredInputString,
-} from "../provider-runtime.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { ProviderRequestError, providerUserAgent, requiredInputString } from "../provider-runtime.ts";
 
 const service = "productboard";
 const productboardApiBaseUrl = "https://api.productboard.com/v2";
@@ -35,15 +31,15 @@ export const productboardActionHandlers: ProviderActionHandlers<"productboard", 
       {
         path: "/entities",
         query: compactObject({
-          pageCursor: optionalString(input.pageCursor),
+          "pageCursor": optionalString(input.pageCursor),
           "type[]": readOptionalStringArray(input.types),
           "fields[]": readOptionalStringArray(input.fields),
-          name: optionalString(input.name),
+          "name": optionalString(input.name),
           "owner[id]": optionalString(input.ownerId),
           "owner[email]": optionalString(input.ownerEmail),
           "status[id]": optionalString(input.statusId),
           "status[name]": optionalString(input.statusName),
-          archived: optionalBoolean(input.archived),
+          "archived": optionalBoolean(input.archived),
           "parent[id]": optionalString(input.parentId),
           "metadata[source][system]": optionalString(input.metadataSourceSystem),
           "metadata[source][recordId]": optionalString(input.metadataSourceRecordId),
@@ -78,9 +74,9 @@ export const productboardActionHandlers: ProviderActionHandlers<"productboard", 
       {
         path: "/notes",
         query: compactObject({
-          pageCursor: optionalString(input.pageCursor),
-          archived: optionalBoolean(input.archived),
-          processed: optionalBoolean(input.processed),
+          "pageCursor": optionalString(input.pageCursor),
+          "archived": optionalBoolean(input.archived),
+          "processed": optionalBoolean(input.processed),
           "type[]": readOptionalStringArray(input.types),
           "owner[id]": optionalString(input.ownerId),
           "owner[email]": optionalString(input.ownerEmail),
@@ -88,10 +84,10 @@ export const productboardActionHandlers: ProviderActionHandlers<"productboard", 
           "creator[email]": optionalString(input.creatorEmail),
           "metadata[source][system]": optionalString(input.metadataSourceSystem),
           "metadata[source][recordId]": optionalString(input.metadataSourceRecordId),
-          createdFrom: optionalString(input.createdFrom),
-          createdTo: optionalString(input.createdTo),
-          updatedFrom: optionalString(input.updatedFrom),
-          updatedTo: optionalString(input.updatedTo),
+          "createdFrom": optionalString(input.createdFrom),
+          "createdTo": optionalString(input.createdTo),
+          "updatedFrom": optionalString(input.updatedFrom),
+          "updatedTo": optionalString(input.updatedTo),
           "fields[]": readOptionalStringArray(input.fields),
         }),
       },
@@ -112,11 +108,11 @@ export const productboardActionHandlers: ProviderActionHandlers<"productboard", 
       {
         path: "/members",
         query: compactObject({
-          pageCursor: optionalString(input.pageCursor),
-          query: optionalString(input.query),
+          "pageCursor": optionalString(input.pageCursor),
+          "query": optionalString(input.query),
           "roles[]": readOptionalStringArray(input.roles),
-          includeDisabled: optionalBoolean(input.includeDisabled),
-          includeInvitationPending: optionalBoolean(input.includeInvitationPending),
+          "includeDisabled": optionalBoolean(input.includeDisabled),
+          "includeInvitationPending": optionalBoolean(input.includeInvitationPending),
         }),
       },
       context,
@@ -153,6 +149,16 @@ export const productboardActionHandlers: ProviderActionHandlers<"productboard", 
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, productboardActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: productboardApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
+
 async function listPayload(
   input: { path: string; query?: Record<string, ProductboardQueryValue> },
   context: ApiKeyProviderContext,
@@ -184,7 +190,7 @@ async function singlePayload(
 
 async function productboardRequest(
   input: { path: string; query?: Record<string, ProductboardQueryValue> },
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
+  context: ApiKeyProviderContext,
   phase: "validate" | "execute",
 ): Promise<unknown> {
   let response: Response;
@@ -192,8 +198,8 @@ async function productboardRequest(
     response = await context.fetcher(buildProductboardUrl(input), {
       method: "GET",
       headers: {
-        accept: "application/json",
-        authorization: `Bearer ${context.apiKey}`,
+        "accept": "application/json",
+        "authorization": `Bearer ${context.apiKey}`,
         "user-agent": providerUserAgent,
       },
       signal: context.signal,

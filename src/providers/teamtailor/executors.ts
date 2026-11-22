@@ -4,21 +4,22 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext, ProviderFetch } from "../provider-runtime.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderRequestContext, ProviderFetch } from "../provider-runtime.ts";
 
 import { compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
+import { requireApiKeyCredential } from "../provider-credentials.ts";
+import { defineProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
   createProviderTimeout,
-  defineProviderExecutors,
-  defineProviderProxy,
   isAbortLikeError,
   providerUserAgent,
   ProviderRequestError,
-  requireApiKeyCredential,
   requiredInputString,
   requiredResponseRecord,
   setSearchParams,
+  providerInputError,
 } from "../provider-runtime.ts";
 
 const service = "teamtailor";
@@ -40,7 +41,7 @@ export const teamtailorActionHandlers: ProviderActionHandlers<"teamtailor", Team
       "filter[department]": optionalString(input.departmentId),
       "filter[location]": optionalString(input.locationId),
       "filter[status]": optionalString(input.status),
-      sort: optionalString(input.sort),
+      "sort": optionalString(input.sort),
     });
   },
   async retrieve_job(input, context): Promise<unknown> {
@@ -120,7 +121,6 @@ export const credentialValidators: CredentialValidators = {
       profile: {
         displayName: `Teamtailor ${stack.toUpperCase()} API Key`,
       },
-      grantedScopes: [],
       metadata: {
         apiBaseUrl: getTeamtailorBaseUrl(stack),
         apiVersion: teamtailorApiVersion,
@@ -146,7 +146,7 @@ async function listResources(
       "page[size]": readOptionalPositiveIntegerString(input.pageSize, "pageSize"),
       "page[after]": optionalString(input.pageAfter),
       "page[before]": optionalString(input.pageBefore),
-      include: readOptionalInclude(input.include),
+      "include": readOptionalInclude(input.include),
       ...extraQuery,
     }),
     context,
@@ -159,7 +159,7 @@ async function requestTeamtailorJson(input: {
   apiKey: string;
   stack: TeamtailorStack;
   path: string;
-  context: Pick<ApiKeyProviderContext, "fetcher" | "signal">;
+  context: ProviderRequestContext;
   phase: TeamtailorPhase;
   query?: Record<string, string | undefined>;
   notFoundAsInvalidInput?: boolean;
@@ -171,8 +171,8 @@ async function requestTeamtailorJson(input: {
     const response = await input.context.fetcher(url.toString(), {
       method: "GET",
       headers: {
-        accept: "application/vnd.api+json",
-        authorization: `Token token=${input.apiKey}`,
+        "accept": "application/vnd.api+json",
+        "authorization": `Token token=${input.apiKey}`,
         "user-agent": providerUserAgent,
         "x-api-version": teamtailorApiVersion,
       },
@@ -283,7 +283,7 @@ function mapTeamtailorError(
     return new ProviderRequestError(phase === "validate" ? 400 : response.status, message);
   }
   if (response.status === 404 && notFoundAsInvalidInput) {
-    return new ProviderRequestError(400, message);
+    return providerInputError(message);
   }
   if (response.status === 429) {
     return new ProviderRequestError(429, message);

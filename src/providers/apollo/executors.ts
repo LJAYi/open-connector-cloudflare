@@ -1,18 +1,19 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
-  defineApiKeyProviderExecutors,
   isAbortLikeError,
   ProviderRequestError,
   providerUserAgent,
+  defaultProviderRequestTimeoutMs,
 } from "../provider-runtime.ts";
 
 const service = "apollo";
 const apolloApiBaseUrl = "https://api.apollo.io";
-const apolloDefaultRequestTimeoutMs = 30_000;
 
 type ApolloQueryValue = boolean | number | string | string[] | undefined;
 type ApolloRequestPhase = "validate" | "execute";
@@ -38,6 +39,16 @@ export const apolloActionHandlers: ProviderActionHandlers<"apollo", ApolloAction
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, apolloActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: apolloApiBaseUrl,
+  auth: { type: "api_key_header", name: "x-api-key" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const payload = await requestApolloJson({
@@ -55,7 +66,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: usage.teamId,
         displayName: "Apollo Master API Key",
       },
-      grantedScopes: [],
       metadata: compactObject({
         apiBaseUrl: apolloApiBaseUrl,
         validationEndpoint: "/api/v1/usage_stats/api_usage_stats",
@@ -166,7 +176,7 @@ async function requestApolloJson(input: {
   signal?: AbortSignal;
   phase: ApolloRequestPhase;
 }): Promise<unknown> {
-  const timeoutSignal = AbortSignal.timeout(apolloDefaultRequestTimeoutMs);
+  const timeoutSignal = AbortSignal.timeout(defaultProviderRequestTimeoutMs);
   const signal = input.signal ? AbortSignal.any([input.signal, timeoutSignal]) : timeoutSignal;
   const url = new URL(input.path, apolloApiBaseUrl);
   for (const [key, value] of Object.entries(input.query ?? {})) {
@@ -177,7 +187,7 @@ async function requestApolloJson(input: {
   let payload: unknown;
   try {
     const headers: Record<string, string> = {
-      accept: "application/json",
+      "accept": "application/json",
       "x-api-key": input.apiKey,
       "user-agent": providerUserAgent,
     };
@@ -221,9 +231,9 @@ async function readApolloPayload(response: Response): Promise<unknown> {
 
 function buildOrganizationSearchQuery(input: Record<string, unknown>): Record<string, ApolloQueryValue> {
   return compactObject({
-    page: optionalNumber(input.page),
-    per_page: optionalNumber(input.perPage),
-    q_organization_name: optionalString(input.organizationName),
+    "page": optionalNumber(input.page),
+    "per_page": optionalNumber(input.perPage),
+    "q_organization_name": optionalString(input.organizationName),
     "organization_ids[]": asStringList(input.organizationIds),
     "organization_locations[]": asStringList(input.organizationLocations),
     "organization_not_locations[]": asStringList(input.excludedOrganizationLocations),
@@ -237,11 +247,11 @@ function buildOrganizationSearchQuery(input: Record<string, unknown>): Record<st
 
 function buildPeopleSearchQuery(input: Record<string, unknown>): Record<string, ApolloQueryValue> {
   return compactObject({
-    page: optionalNumber(input.page),
-    per_page: optionalNumber(input.perPage),
-    q_keywords: optionalString(input.keywords),
+    "page": optionalNumber(input.page),
+    "per_page": optionalNumber(input.perPage),
+    "q_keywords": optionalString(input.keywords),
     "person_titles[]": asStringList(input.personTitles),
-    include_similar_titles: typeof input.includeSimilarTitles === "boolean" ? input.includeSimilarTitles : undefined,
+    "include_similar_titles": typeof input.includeSimilarTitles === "boolean" ? input.includeSimilarTitles : undefined,
     "organization_ids[]": asStringList(input.organizationIds),
     "person_locations[]": asStringList(input.personLocations),
     "person_seniorities[]": asStringList(input.personSeniorities),

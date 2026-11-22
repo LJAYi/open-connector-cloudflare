@@ -1,6 +1,5 @@
 import type { CredentialValidationResult, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -10,14 +9,10 @@ import {
   requiredRecord,
   requiredString,
 } from "../../core/cast.ts";
-import {
-  defineApiKeyProviderExecutors,
-  providerInputError,
-  ProviderRequestError,
-  providerUserAgent,
-} from "../provider-runtime.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { providerInputError, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
 
-const pipedreamApiBaseUrl = "https://api.pipedream.com/v1";
+export const pipedreamApiBaseUrl: string = "https://api.pipedream.com/v1";
 
 type PipedreamActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 type PipedreamQueryValue = string | number | undefined;
@@ -123,7 +118,6 @@ export async function validatePipedreamCredential(
     profile: {
       accountId: user.id,
       displayName: user.email ?? user.username ?? user.id,
-      grantedScopes: [],
     },
     metadata: compactObject({
       validationEndpoint: "/users/me",
@@ -138,7 +132,7 @@ export async function validatePipedreamCredential(
 async function pipedreamGet(
   path: string,
   query: Record<string, PipedreamQueryValue>,
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
+  context: ApiKeyProviderContext,
   phase: "validate" | "execute",
 ) {
   const url = new URL(path, pipedreamApiBaseUrl);
@@ -153,8 +147,8 @@ async function pipedreamGet(
     response = await context.fetcher(url, {
       method: "GET",
       headers: {
-        accept: "application/json",
-        authorization: `Bearer ${context.apiKey}`,
+        "accept": "application/json",
+        "authorization": `Bearer ${context.apiKey}`,
         "content-type": "application/json",
         "user-agent": providerUserAgent,
       },

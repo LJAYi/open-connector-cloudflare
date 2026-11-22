@@ -1,5 +1,5 @@
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import { Buffer } from "node:buffer";
 import {
@@ -458,8 +458,8 @@ function unwrapResource(payload: unknown, key: JumpsellerResourceKey) {
 
 function jumpsellerHeaders(credential: JumpsellerCredential, hasBody: boolean) {
   return {
-    accept: "application/json",
-    authorization: buildBasicAuthorizationHeader(credential),
+    "accept": "application/json",
+    "authorization": buildBasicAuthorizationHeader(credential),
     ...(hasBody ? { "content-type": "application/json" } : {}),
     "user-agent": providerUserAgent,
   };

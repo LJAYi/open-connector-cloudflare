@@ -1,6 +1,5 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -11,8 +10,9 @@ import {
   requiredRecord,
 } from "../../core/cast.ts";
 import { queryFlag } from "../../core/request.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
-  defineApiKeyProviderExecutors,
   ProviderRequestError,
   providerResponseError,
   providerUserAgent,
@@ -39,6 +39,13 @@ export const opencageActionHandlers: ProviderActionHandlers<"opencage", Opencage
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, opencageActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: opencageApiBaseUrl,
+  auth: { type: "api_key_query", name: "key" },
+  skipDnsValidation: true,
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const payload = requiredRecord(
@@ -64,7 +71,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: "opencage",
         displayName: "OpenCage API Key",
       },
-      grantedScopes: [],
       metadata: compactObject({
         validationEndpoint: "/geocode/v1/json",
         apiBaseUrl: opencageApiBaseUrl,
@@ -79,7 +85,7 @@ export const credentialValidators: CredentialValidators = {
 async function opencageRequest(
   format: "json" | "geojson",
   query: Record<string, string | undefined>,
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
+  context: ApiKeyProviderContext,
   phase: OpencagePhase,
 ): Promise<unknown> {
   let response: Response;
@@ -87,7 +93,7 @@ async function opencageRequest(
     response = await context.fetcher(buildOpencageUrl(format, query, context.apiKey), {
       method: "GET",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "user-agent": providerUserAgent,
       },
       signal: context.signal,

@@ -1,6 +1,6 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -12,8 +12,9 @@ import {
   requiredRecord,
   requiredString,
 } from "../../core/cast.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
-  defineApiKeyProviderExecutors,
   providerInputError,
   ProviderRequestError,
   providerResponseError,
@@ -57,6 +58,16 @@ export const bolnaActionHandlers: ProviderActionHandlers<"bolna", BolnaActionHan
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, bolnaActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: bolnaApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const user = await getBolnaUserInfo(
@@ -73,7 +84,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: user.id,
         displayName: user.email ?? user.name ?? "Bolna API Key",
       },
-      grantedScopes: [],
       metadata: compactObject({
         apiBaseUrl: bolnaApiBaseUrl,
         validationEndpoint: "/user/me",
@@ -233,8 +243,8 @@ async function bolnaJsonRequest(options: BolnaRequestOptions, context: ApiKeyPro
     response = await context.fetcher(url, {
       method: "GET",
       headers: {
-        accept: "application/json",
-        authorization: `Bearer ${context.apiKey}`,
+        "accept": "application/json",
+        "authorization": `Bearer ${context.apiKey}`,
         "user-agent": providerUserAgent,
       },
       signal: context.signal,

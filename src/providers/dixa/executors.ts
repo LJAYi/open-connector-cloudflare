@@ -1,15 +1,11 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
 import { encodePathSegment, queryParams } from "../../core/request.ts";
-import {
-  defineApiKeyProviderExecutors,
-  providerUserAgent,
-  ProviderRequestError,
-  requiredInputString,
-} from "../provider-runtime.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { providerUserAgent, ProviderRequestError, requiredInputString } from "../provider-runtime.ts";
 
 const service = "dixa";
 const dixaApiBaseUrl = "https://dev.dixa.io";
@@ -49,6 +45,17 @@ export const dixaActionHandlers: ProviderActionHandlers<"dixa", DixaActionHandle
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, dixaActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: dixaApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+    headers.set("content-type", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const payload = await dixaGetJson(
@@ -68,7 +75,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: agentId ? `dixa:${agentId}` : "dixa:api-key",
         displayName,
       },
-      grantedScopes: [],
       metadata: {
         apiBaseUrl: dixaApiBaseUrl,
         validationEndpoint: "/v1/agents",
@@ -126,7 +132,7 @@ async function dixaGetWrappedSingle(path: string, context: ApiKeyProviderContext
 async function dixaGetJson(
   path: string,
   query: Record<string, string>,
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
+  context: ApiKeyProviderContext,
   phase: "validate" | "execute",
 ): Promise<unknown> {
   const url = new URL(path, dixaApiBaseUrl);
@@ -163,8 +169,8 @@ async function dixaGetJson(
 
 function dixaHeaders(apiKey: string): Record<string, string> {
   return {
-    accept: "application/json",
-    authorization: `Bearer ${apiKey}`,
+    "accept": "application/json",
+    "authorization": `Bearer ${apiKey}`,
     "content-type": "application/json",
     "user-agent": providerUserAgent,
   };

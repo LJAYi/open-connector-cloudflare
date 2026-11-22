@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalRecord, optionalString, requiredRecord, requiredString } from "../../core/cast.ts";
 import {
@@ -10,7 +10,7 @@ import {
   runProviderRequest,
 } from "../provider-runtime.ts";
 
-const lexofficeApiBaseUrl = "https://api.lexware.io";
+export const lexofficeApiBaseUrl = "https://api.lexware.io";
 const lexofficeValidationPath = "/v1/profile";
 
 type LexofficeRequestPhase = "validate" | "execute";
@@ -191,9 +191,7 @@ export async function validateLexofficeCredential(
     profile: {
       accountId: organizationId,
       displayName: companyName,
-      grantedScopes: [],
     },
-    grantedScopes: [],
     metadata: compactObject({
       organizationId,
       companyName,
@@ -236,8 +234,8 @@ function buildLexofficeUrl(path: string, query?: Record<string, string | undefin
 
 function buildLexofficeHeaders(apiKey: string, hasJsonBody: boolean): Record<string, string> {
   return {
-    authorization: `Bearer ${apiKey}`,
-    accept: "application/json",
+    "authorization": `Bearer ${apiKey}`,
+    "accept": "application/json",
     ...(hasJsonBody ? { "content-type": "application/json" } : {}),
     "user-agent": providerUserAgent,
   };

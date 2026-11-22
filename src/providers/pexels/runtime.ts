@@ -1,6 +1,5 @@
 import type { CredentialValidationResult, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import {
   optionalBoolean,
@@ -11,10 +10,11 @@ import {
   requiredRecord,
   requiredString,
 } from "../../core/cast.ts";
-import { defineApiKeyProviderExecutors, ProviderRequestError, requiredInputString } from "../provider-runtime.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { ProviderRequestError, requiredInputString } from "../provider-runtime.ts";
 
 const service = "pexels";
-const pexelsApiBaseUrl = "https://api.pexels.com";
+export const pexelsApiBaseUrl = "https://api.pexels.com";
 
 type PexelsQueryValue = string | number | undefined;
 type PexelsPhase = "validate" | "execute";
@@ -119,7 +119,6 @@ export async function validatePexelsCredential(
     profile: {
       accountId: "pexels-api-key",
       displayName: "Pexels API Key",
-      grantedScopes: [],
     },
     metadata: {
       apiBaseUrl: pexelsApiBaseUrl,
@@ -160,7 +159,7 @@ async function getVideoList(
 }
 
 async function requestPexelsJson(
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
+  context: ApiKeyProviderContext,
   path: string,
   query: Record<string, PexelsQueryValue> = {},
   phase: PexelsPhase = "execute",

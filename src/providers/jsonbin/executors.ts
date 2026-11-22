@@ -1,14 +1,10 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 
 import { optionalRecord, optionalString, requiredRecord, requiredString } from "../../core/cast.ts";
-import {
-  defineApiKeyProviderExecutors,
-  defineProviderProxy,
-  providerInputError,
-  providerUserAgent,
-  ProviderRequestError,
-} from "../provider-runtime.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { providerInputError, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
 
 const service = "jsonbin";
 const jsonbinApiBaseUrl = "https://api.jsonbin.io/v3";
@@ -70,7 +66,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: "api_key",
         displayName: "JSONBin.io Master Key",
       },
-      grantedScopes: [],
       metadata: {
         apiBaseUrl: jsonbinApiBaseUrl,
         validationEndpoint: jsonbinValidationPath,
@@ -159,7 +154,7 @@ async function deleteBin(input: Record<string, unknown>, context: JsonbinActionC
 function jsonbinHeaders(apiKey: string, extraHeaders: Record<string, string | undefined> = {}): Record<string, string> {
   return pruneHeaders({
     "X-Master-Key": apiKey,
-    accept: "application/json",
+    "accept": "application/json",
     "user-agent": providerUserAgent,
     ...extraHeaders,
   });

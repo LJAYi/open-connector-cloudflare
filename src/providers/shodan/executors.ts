@@ -1,11 +1,11 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalBoolean, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
   createProviderTimeout,
-  defineApiKeyProviderExecutors,
   isAbortLikeError,
   providerUserAgent,
   ProviderRequestError,
@@ -104,6 +104,16 @@ export const shodanActionHandlers: ProviderActionHandlers<"shodan", ShodanAction
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, shodanActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: shodanApiBaseUrl,
+  auth: { type: "api_key_query", name: "key" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const apiInfo = normalizeApiInfoPayload(
@@ -115,7 +125,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: "shodan-api-key",
         displayName: "Shodan API Key",
       },
-      grantedScopes: [],
       metadata: {
         apiBaseUrl: shodanApiBaseUrl,
         validationEndpoint,
@@ -130,7 +139,7 @@ export const credentialValidators: CredentialValidators = {
 
 async function requestShodanJson(
   input: ShodanRequestInput,
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
+  context: ApiKeyProviderContext,
   phase: ShodanPhase,
 ): Promise<Record<string, unknown>> {
   const timeout = createProviderTimeout(context.signal);
@@ -138,7 +147,7 @@ async function requestShodanJson(
     const response = await context.fetcher(buildShodanUrl(input, context.apiKey), {
       method: "GET",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "user-agent": providerUserAgent,
       },
       signal: timeout.signal,

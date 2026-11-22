@@ -1,6 +1,10 @@
-import type { CredentialValidationResult, CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type {
+  CredentialValidationResult,
+  CredentialValidators,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -12,19 +16,15 @@ import {
   recordOrEmpty,
   requiredString,
 } from "../../core/cast.ts";
-import {
-  defineApiKeyProviderExecutors,
-  providerInputError,
-  providerUserAgent,
-  ProviderRequestError,
-} from "../provider-runtime.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { providerInputError, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
 
 const service = "customgpt";
 const customgptApiBaseUrl = "https://app.customgpt.ai";
 
 type CustomgptRequestPhase = "validate" | "execute";
-type CustomgptActionContext = Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
-type CustomgptActionHandler = (input: Record<string, unknown>, context: CustomgptActionContext) => Promise<unknown>;
+type CustomgptActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
 export const customgptActionHandlers: ProviderActionHandlers<"customgpt", CustomgptActionHandler> = {
   list_agents(input, context) {
@@ -52,9 +52,17 @@ export const customgptActionHandlers: ProviderActionHandlers<"customgpt", Custom
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, customgptActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: customgptApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  defaultHeaders: { accept: "application/json" },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
-    const context: CustomgptActionContext = {
+    const context: ApiKeyProviderContext = {
       apiKey: input.apiKey,
       fetcher,
       signal,
@@ -70,7 +78,6 @@ export const credentialValidators: CredentialValidators = {
       profile: {
         accountId: String(optionalInteger(user.id) ?? optionalString(user.id) ?? "customgpt-api-key"),
         displayName: optionalString(user.email) ?? optionalString(user.name) ?? "CustomGPT API Key",
-        grantedScopes: [],
       },
       metadata: compactObject({
         apiBaseUrl: customgptApiBaseUrl,
@@ -83,7 +90,7 @@ export const credentialValidators: CredentialValidators = {
   },
 };
 
-async function executeListAgents(input: Record<string, unknown>, context: CustomgptActionContext): Promise<unknown> {
+async function executeListAgents(input: Record<string, unknown>, context: ApiKeyProviderContext): Promise<unknown> {
   const payload = await customgptRequest({
     path: "/api/v1/projects",
     query: pickQuery(input, ["page", "duration", "order", "orderBy", "width", "height", "name"]),
@@ -99,7 +106,7 @@ async function executeListAgents(input: Record<string, unknown>, context: Custom
   };
 }
 
-async function executeGetAgent(input: Record<string, unknown>, context: CustomgptActionContext): Promise<unknown> {
+async function executeGetAgent(input: Record<string, unknown>, context: ApiKeyProviderContext): Promise<unknown> {
   const projectId = positiveInteger(input.projectId, "projectId", providerInputError);
   const payload = await customgptRequest({
     path: `/api/v1/projects/${projectId}`,
@@ -117,7 +124,7 @@ async function executeGetAgent(input: Record<string, unknown>, context: Customgp
 
 async function executeListConversations(
   input: Record<string, unknown>,
-  context: CustomgptActionContext,
+  context: ApiKeyProviderContext,
 ): Promise<unknown> {
   const projectId = positiveInteger(input.projectId, "projectId", providerInputError);
   const payload = await customgptRequest({
@@ -137,7 +144,7 @@ async function executeListConversations(
 
 async function executeCreateConversation(
   input: Record<string, unknown>,
-  context: CustomgptActionContext,
+  context: ApiKeyProviderContext,
 ): Promise<unknown> {
   const projectId = positiveInteger(input.projectId, "projectId", providerInputError);
   const payload = await customgptRequest({
@@ -158,7 +165,7 @@ async function executeCreateConversation(
   };
 }
 
-async function executeSendMessage(input: Record<string, unknown>, context: CustomgptActionContext): Promise<unknown> {
+async function executeSendMessage(input: Record<string, unknown>, context: ApiKeyProviderContext): Promise<unknown> {
   const projectId = positiveInteger(input.projectId, "projectId", providerInputError);
   const sessionId = requiredString(input.sessionId, "sessionId", providerInputError);
   const payload = await customgptRequest({
@@ -183,7 +190,7 @@ async function executeSendMessage(input: Record<string, unknown>, context: Custo
   };
 }
 
-async function executeListMessages(input: Record<string, unknown>, context: CustomgptActionContext): Promise<unknown> {
+async function executeListMessages(input: Record<string, unknown>, context: ApiKeyProviderContext): Promise<unknown> {
   const projectId = positiveInteger(input.projectId, "projectId", providerInputError);
   const sessionId = requiredString(input.sessionId, "sessionId", providerInputError);
   const payload = await customgptRequest({
@@ -204,7 +211,7 @@ async function executeListMessages(input: Record<string, unknown>, context: Cust
   };
 }
 
-async function executeListDocuments(input: Record<string, unknown>, context: CustomgptActionContext): Promise<unknown> {
+async function executeListDocuments(input: Record<string, unknown>, context: ApiKeyProviderContext): Promise<unknown> {
   const projectId = positiveInteger(input.projectId, "projectId", providerInputError);
   const payload = await customgptRequest({
     path: `/api/v1/projects/${projectId}/pages`,
@@ -232,7 +239,7 @@ async function executeListDocuments(input: Record<string, unknown>, context: Cus
 
 async function customgptRequest(input: {
   path: string;
-  context: CustomgptActionContext;
+  context: ApiKeyProviderContext;
   phase: CustomgptRequestPhase;
   method?: "GET" | "POST";
   query?: Record<string, unknown>;
@@ -267,8 +274,8 @@ async function customgptRequest(input: {
 
 function customgptHeaders(apiKey: string, body?: Record<string, unknown> | FormData): Record<string, string> {
   const headers: Record<string, string> = {
-    authorization: `Bearer ${apiKey}`,
-    accept: "application/json",
+    "authorization": `Bearer ${apiKey}`,
+    "accept": "application/json",
     "user-agent": providerUserAgent,
   };
 

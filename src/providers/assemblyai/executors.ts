@@ -1,6 +1,5 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -11,14 +10,10 @@ import {
   optionalString,
   requiredString,
 } from "../../core/cast.ts";
-import {
-  defineProviderExecutors,
-  providerInputError,
-  ProviderRequestError,
-  providerUserAgent,
-  requireApiKeyCredential,
-  setSearchParams,
-} from "../provider-runtime.ts";
+import { requireApiKeyCredential } from "../provider-credentials.ts";
+import { defineProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { providerInputError, ProviderRequestError, providerUserAgent, setSearchParams } from "../provider-runtime.ts";
 
 const service = "assemblyai";
 const assemblyaiApiBaseUrl = "https://api.assemblyai.com/v2";
@@ -122,6 +117,16 @@ export const executors: ProviderExecutors = defineProviderExecutors<ApiKeyProvid
   },
 });
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: assemblyaiApiBaseUrl,
+  auth: { type: "api_key_header", name: "Authorization" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     await requestAssemblyaiJson({
@@ -140,7 +145,6 @@ export const credentialValidators: CredentialValidators = {
       profile: {
         displayName: "AssemblyAI API Key",
       },
-      grantedScopes: [],
       metadata: {
         validationEndpoint: "/transcript",
       },
@@ -151,7 +155,7 @@ export const credentialValidators: CredentialValidators = {
 async function requestAssemblyaiJson(input: {
   path: string;
   method: "DELETE" | "GET" | "POST";
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   params?: Record<string, string | undefined>;
   body?: Record<string, unknown>;
   phase: AssemblyaiPhase;
@@ -181,8 +185,8 @@ async function requestAssemblyaiJson(input: {
 
 function buildAssemblyaiHeaders(apiKey: string, hasBody: boolean): Record<string, string> {
   return compactObject({
-    accept: "application/json",
-    authorization: apiKey,
+    "accept": "application/json",
+    "authorization": apiKey,
     "content-type": hasBody ? "application/json" : undefined,
     "user-agent": providerUserAgent,
   }) as Record<string, string>;

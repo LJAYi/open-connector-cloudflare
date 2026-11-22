@@ -1,12 +1,21 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
 
-import { defineApiKeyProviderExecutors } from "../provider-runtime.ts";
-import { validateDoubaoSeedreamCredential, doubaoSeedreamActionHandlers } from "./runtime.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { validateDoubaoSeedreamCredential, doubaoSeedreamActionHandlers, doubaoSeedreamApiBaseUrl } from "./runtime.ts";
 
 const service = "doubao_seedream";
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, doubaoSeedreamActionHandlers, {
   skipDnsValidation: true,
+});
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: doubaoSeedreamApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  defaultHeaders: { accept: "application/json" },
 });
 
 export const credentialValidators: CredentialValidators = {

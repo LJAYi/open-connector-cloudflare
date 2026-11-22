@@ -1,6 +1,11 @@
 import { optionalNumber as asOptionalNumber, optionalString as asOptionalString } from "../../core/cast.ts";
 import { randomUUIDv7 } from "../../core/uuid-v7.ts";
-import { ProviderRequestError, providerUserAgent as connectorUserAgent } from "../provider-runtime.ts";
+import {
+  ProviderRequestError,
+  providerUserAgent as connectorUserAgent,
+  providerInputError,
+  providerResponseError,
+} from "../provider-runtime.ts";
 
 export const walmartMarketplaceApiBaseUrl = "https://marketplace.walmartapis.com";
 const tokenPath = "/v3/token";
@@ -159,8 +164,8 @@ export async function exchangeAccessToken(
     response = await fetcher(`${walmartMarketplaceApiBaseUrl}${tokenPath}`, {
       method: "POST",
       headers: {
-        accept: "application/json",
-        authorization: `Basic ${Buffer.from(`${credential.clientId}:${credential.clientSecret}`).toString("base64")}`,
+        "accept": "application/json",
+        "authorization": `Basic ${Buffer.from(`${credential.clientId}:${credential.clientSecret}`).toString("base64")}`,
         "content-type": "application/x-www-form-urlencoded",
         "user-agent": connectorUserAgent,
         "WM_QOS.CORRELATION_ID": randomUUIDv7(),
@@ -193,7 +198,7 @@ async function requestWalmartJson(input: WalmartRequestInput) {
     if (value != null) url.searchParams.set(name, String(value));
   }
   const headers = new Headers({
-    accept: "application/json",
+    "accept": "application/json",
     "content-type": "application/json",
     "user-agent": connectorUserAgent,
   });
@@ -242,16 +247,16 @@ function mapWalmartError(status: number, payload: unknown, phase: "validate" | "
     structuredError ??
     `walmart marketplace request failed with HTTP ${status}`;
   if (status === 401) {
-    return phase === "validate" ? new ProviderRequestError(400, message) : new ProviderRequestError(401, message);
+    return phase === "validate" ? providerInputError(message) : new ProviderRequestError(401, message);
   }
   if (status === 403) {
-    return phase === "validate" ? new ProviderRequestError(400, message) : new ProviderRequestError(403, message);
+    return phase === "validate" ? providerInputError(message) : new ProviderRequestError(403, message);
   }
   if (status === 429) return new ProviderRequestError(429, message);
   if (status === 400 || status === 404 || status === 409) {
-    return new ProviderRequestError(400, message);
+    return providerInputError(message);
   }
-  return new ProviderRequestError(502, message);
+  return providerResponseError(message);
 }
 
 function normalizeItemList(payload: unknown) {

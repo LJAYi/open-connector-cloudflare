@@ -1,11 +1,17 @@
-import type { CredentialValidationResult, CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type {
+  CredentialValidationResult,
+  CredentialValidators,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { createHash } from "node:crypto";
 import { optionalInteger, optionalRecord, optionalString, rawStringOrNull } from "../../core/cast.ts";
 import { queryParams } from "../../core/request.ts";
-import { defineApiKeyProviderExecutors, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
 
 const service = "livesession";
 const livesessionApiBaseUrl = "https://api.livesession.io/v1";
@@ -21,6 +27,14 @@ export const livesessionActionHandlers: ProviderActionHandlers<"livesession", Li
 };
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, livesessionActionHandlers);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: livesessionApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  defaultHeaders: { accept: "application/json" },
+});
 
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }): Promise<CredentialValidationResult> {
@@ -38,7 +52,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: `livesession:api_token:${hashApiKey(input.apiKey)}`,
         displayName: "LiveSession API Token",
       },
-      grantedScopes: [],
       metadata: {
         apiBaseUrl: livesessionApiBaseUrl,
         validationEndpoint: `${livesessionValidationPath}?size=1`,
@@ -82,7 +95,7 @@ async function listSessions(input: Record<string, unknown>, context: ApiKeyProvi
 async function requestLivesessionJson(input: {
   path: string;
   query: Record<string, string>;
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   mode: "validate" | "execute";
 }): Promise<unknown> {
   const url = new URL(`${livesessionApiBaseUrl}${input.path}`);
@@ -94,8 +107,8 @@ async function requestLivesessionJson(input: {
   try {
     response = await input.context.fetcher(url, {
       headers: {
-        accept: "application/json",
-        authorization: `Bearer ${input.context.apiKey}`,
+        "accept": "application/json",
+        "authorization": `Bearer ${input.context.apiKey}`,
         "user-agent": providerUserAgent,
       },
       signal: input.context.signal,

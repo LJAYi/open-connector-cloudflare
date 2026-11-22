@@ -1,10 +1,10 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 
 import { compactObject, optionalBoolean, optionalRecord, optionalString } from "../../core/cast.ts";
 import { ProviderRequestError, providerUserAgent, runProviderRequest } from "../provider-runtime.ts";
 
-const u301ApiBaseUrl = "https://api.u301.com";
+export const u301ApiBaseUrl = "https://api.u301.com";
 const u301DomainsPath = "/v3/shorten/domains";
 const u301ShortenBulkPath = "/v3/shorten/bulk";
 
@@ -110,7 +110,6 @@ export async function validateU301Credential(
       accountId: workspaceId,
       displayName: "U301 API Key",
     },
-    grantedScopes: [],
     metadata: compactObject({
       workspaceId,
       validationEndpoint: u301DomainsPath,
@@ -130,8 +129,8 @@ async function u301Request(input: U301RequestInput): Promise<unknown> {
     const response = await input.fetcher(url, {
       method: input.method,
       headers: compactObject({
-        Authorization: `Bearer ${input.apiKey}`,
-        accept: "application/json",
+        "Authorization": `Bearer ${input.apiKey}`,
+        "accept": "application/json",
         "user-agent": providerUserAgent,
         "content-type": input.body === undefined ? undefined : "application/json",
       }) as HeadersInit,

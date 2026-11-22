@@ -1,6 +1,6 @@
 import type { CredentialValidationResult, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -11,12 +11,8 @@ import {
   optionalString,
   requiredString,
 } from "../../core/cast.ts";
-import {
-  defineApiKeyProviderExecutors,
-  ProviderRequestError,
-  providerUserAgent,
-  requiredInputString,
-} from "../provider-runtime.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { ProviderRequestError, providerUserAgent, requiredInputString } from "../provider-runtime.ts";
 
 type PlisioActionContext = ApiKeyProviderContext;
 type PlisioActionHandler = (input: Record<string, unknown>, context: PlisioActionContext) => Promise<unknown>;
@@ -60,9 +56,7 @@ export async function validatePlisioCredential(
     profile: {
       accountId: "plisio-api-key",
       displayName: "Plisio API Key",
-      grantedScopes: [],
     },
-    grantedScopes: [],
     metadata: {
       apiBaseUrl: plisioApiBaseUrl,
       validationEndpoint: "/api/v1/balances/BTC",
@@ -193,7 +187,7 @@ async function fetchPlisio(
     return await fetcher(url, {
       method: "GET",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "user-agent": providerUserAgent,
       },
     });

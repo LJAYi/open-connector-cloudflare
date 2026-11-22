@@ -1,20 +1,17 @@
 import type { CredentialValidationResult, ExecutionContext, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ProviderFetch, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ProviderRuntimeHandler } from "../provider-executors.ts";
+import type { ProviderFetch } from "../provider-runtime.ts";
 
 import { createHash } from "node:crypto";
 import { compactObject, optionalRecord, optionalString, requiredRecord, requiredString } from "../../core/cast.ts";
 import { encodePathSegment } from "../../core/request.ts";
-import {
-  defineProviderExecutors,
-  providerInputError,
-  providerUserAgent,
-  ProviderRequestError,
-  requireApiKeyCredential,
-} from "../provider-runtime.ts";
+import { requireApiKeyCredential } from "../provider-credentials.ts";
+import { defineProviderExecutors } from "../provider-executors.ts";
+import { providerInputError, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
 
 const service = "elorus";
-const elorusApiBaseUrl = "https://api.elorus.com";
+export const elorusApiBaseUrl = "https://api.elorus.com";
 const elorusValidationPath = "/v1.2/contacts/";
 
 interface ElorusActionContext {
@@ -228,7 +225,6 @@ export async function validateElorusCredential(
       accountId: buildElorusProviderAccountId(apiKey, organizationId),
       displayName: `Elorus organization ${organizationId}`,
     },
-    grantedScopes: [],
     metadata: {
       organizationId,
       validationEndpoint: elorusValidationPath,
@@ -315,9 +311,9 @@ async function requestElorusJson(input: {
 
 function buildElorusHeaders(apiKey: string, organizationId: string, hasBody: boolean): Record<string, string> {
   return compactObject({
-    accept: "application/json",
+    "accept": "application/json",
     "content-type": hasBody ? "application/json" : undefined,
-    authorization: `Token ${apiKey}`,
+    "authorization": `Token ${apiKey}`,
     "x-elorus-organization": organizationId,
     "user-agent": providerUserAgent,
   }) as Record<string, string>;

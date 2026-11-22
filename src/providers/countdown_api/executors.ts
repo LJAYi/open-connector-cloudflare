@@ -1,8 +1,10 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 
 import { booleanString, compactObject, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
-import { defineApiKeyProviderExecutors, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
 
 const service = "countdown_api";
 const countdownApiBaseUrl = "https://api.countdownapi.com";
@@ -34,6 +36,16 @@ const countdownApiActionHandlers: ProviderActionHandlers<"countdown_api", Countd
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, countdownApiActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: countdownApiBaseUrl,
+  auth: { type: "api_key_query", name: "api key" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const payload = await requestCountdownApiJson({
@@ -57,7 +69,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: optionalString(accountInfo?.email) ?? "api_key",
         displayName: optionalString(accountInfo?.email) ?? optionalString(accountInfo?.name) ?? "Countdown API Key",
       },
-      grantedScopes: [],
       metadata: compactObject({
         apiBaseUrl: countdownApiBaseUrl,
         validationEndpoint: "/account",
@@ -82,7 +93,7 @@ async function autocomplete(input: Record<string, unknown>, context: CountdownAp
     path: "/request",
     ...context,
     params: compactObject({
-      type: "autocomplete",
+      "type": "autocomplete",
       "ebay domain": readRequiredString(input.ebay_domain, "ebay_domain"),
       "search term": readRequiredString(input.search_term, "search_term"),
     }),
@@ -104,18 +115,18 @@ async function searchProducts(input: Record<string, unknown>, context: Countdown
     path: "/request",
     ...context,
     params: compactObject({
-      type: "search",
+      "type": "search",
       "ebay domain": optionalString(input.ebay_domain),
       "search term": optionalString(input.search_term),
-      url: optionalString(input.ebay_url),
-      page: optionalIntegerString(input.page),
+      "url": optionalString(input.ebay_url),
+      "page": optionalIntegerString(input.page),
       "max page": optionalIntegerString(input.max_page),
       "category id": optionalString(input.category_id),
       "listing type": optionalString(input.listing_type),
-      condition: optionalString(input.condition),
+      "condition": optionalString(input.condition),
       "sort by": optionalString(input.sort_by),
-      num: optionalIntegerString(input.num),
-      facets: optionalString(input.facets),
+      "num": optionalIntegerString(input.num),
+      "facets": optionalString(input.facets),
       "sold items": booleanString(input.sold_items),
       "completed items": booleanString(input.completed_items),
       "authorized sellers": booleanString(input.authorized_sellers),
@@ -144,11 +155,11 @@ async function getProduct(input: Record<string, unknown>, context: CountdownApiC
     path: "/request",
     ...context,
     params: compactObject({
-      type: "product",
+      "type": "product",
       "ebay domain": optionalString(input.ebay_domain),
-      epid: optionalString(input.epid),
-      gtin: optionalString(input.gtin),
-      url: optionalString(input.ebay_url),
+      "epid": optionalString(input.epid),
+      "gtin": optionalString(input.gtin),
+      "url": optionalString(input.ebay_url),
       "skip gtin cache": booleanString(input.skip_gtin_cache),
       "include parts compatibility": booleanString(input.include_parts_compatibility),
       "customer location": optionalString(input.customer_location),
@@ -175,7 +186,7 @@ async function requestCountdownApiJson(input: {
     response = await input.fetcher(buildCountdownApiUrl(input.path, input.apiKey, input.params), {
       method: "GET",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "user-agent": providerUserAgent,
       },
       signal: input.signal,

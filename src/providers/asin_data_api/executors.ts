@@ -1,6 +1,5 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -10,14 +9,10 @@ import {
   requiredString,
   stringArray,
 } from "../../core/cast.ts";
-import {
-  defineProviderExecutors,
-  providerInputError,
-  ProviderRequestError,
-  providerUserAgent,
-  requireApiKeyCredential,
-  setSearchParams,
-} from "../provider-runtime.ts";
+import { requireApiKeyCredential } from "../provider-credentials.ts";
+import { defineProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { providerInputError, ProviderRequestError, providerUserAgent, setSearchParams } from "../provider-runtime.ts";
 
 const service = "asin_data_api";
 const asinDataApiBaseUrl = "https://api.asindataapi.com";
@@ -163,6 +158,16 @@ export const executors: ProviderExecutors = defineProviderExecutors<ApiKeyProvid
   },
 });
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: asinDataApiBaseUrl,
+  auth: { type: "api_key_query", name: "api_key" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const payload = await requestAsinDataApiJson({
@@ -187,7 +192,6 @@ export const credentialValidators: CredentialValidators = {
       profile: {
         displayName: optionalString(accountInfo?.email) ?? optionalString(accountInfo?.name) ?? "ASIN Data API Key",
       },
-      grantedScopes: [],
       metadata: compactObject({
         apiBaseUrl: asinDataApiBaseUrl,
         validationEndpoint: "/account",
@@ -208,7 +212,7 @@ export const credentialValidators: CredentialValidators = {
 async function requestAsinDataApiJson(input: {
   path: string;
   method: AsinDataApiRequestMethod;
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   phase: AsinDataApiRequestPhase;
   params?: Record<string, string | undefined>;
   body?: Record<string, unknown>;
@@ -220,7 +224,7 @@ async function requestAsinDataApiJson(input: {
     response = await input.context.fetcher(buildAsinDataApiUrl(input.path, input.context.apiKey, input.params), {
       method: input.method,
       headers: compactHeaders({
-        accept: "application/json",
+        "accept": "application/json",
         "content-type": input.body ? "application/json" : undefined,
         "user-agent": providerUserAgent,
       }),

@@ -1,6 +1,5 @@
 import type { CredentialValidationResult, ExecutionResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalInteger, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import { providerUserAgent, ProviderRequestError, toProviderExecutionError } from "../provider-runtime.ts";
@@ -18,7 +17,7 @@ type RoamScimActionHandler = (input: Record<string, unknown>, context: ApiKeyPro
 
 interface RoamScimRequestInput {
   path: string;
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   phase: RoamScimRequestPhase;
   authenticated?: boolean;
   method?: string;
@@ -219,9 +218,7 @@ export const roamScimActionHandlers: ProviderActionHandlers<"roam_scim", RoamSci
   },
 };
 
-export async function validateRoamScimCredential(
-  input: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
-): Promise<CredentialValidationResult> {
+export async function validateRoamScimCredential(input: ApiKeyProviderContext): Promise<CredentialValidationResult> {
   const payload = await requestRoamScimJson({
     path: "/Users",
     context: input,
@@ -236,7 +233,6 @@ export async function validateRoamScimCredential(
     profile: {
       displayName: "Roam SCIM Bearer Token",
     },
-    grantedScopes: [],
     metadata: compactObject({
       apiBaseUrl: roamScimApiBaseUrl,
       validationEndpoint: "/Users",
@@ -289,7 +285,7 @@ async function requestRoamScimJson(input: RoamScimRequestInput): Promise<unknown
 
 function buildRoamScimHeaders(apiKey: string, hasBody: boolean, authenticated: boolean): Record<string, string> {
   const headers: Record<string, string> = {
-    accept: "application/scim+json, application/json",
+    "accept": "application/scim+json, application/json",
     "user-agent": providerUserAgent,
   };
   if (authenticated) {

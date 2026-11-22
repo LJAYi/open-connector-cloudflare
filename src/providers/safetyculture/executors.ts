@@ -1,6 +1,11 @@
-import type { CredentialValidationResult, CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type {
+  CredentialValidationResult,
+  CredentialValidators,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { createHash } from "node:crypto";
 import {
@@ -12,17 +17,22 @@ import {
   optionalString,
   requiredString,
 } from "../../core/cast.ts";
-import {
-  defineApiKeyProviderExecutors,
-  ProviderRequestError,
-  providerUserAgent,
-  requiredInputString,
-} from "../provider-runtime.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { ProviderRequestError, providerUserAgent, requiredInputString } from "../provider-runtime.ts";
 
 const service = "safetyculture";
 const safetycultureApiBaseUrl = "https://api.safetyculture.io";
 const safetycultureCredentialHelpUrl = "https://developer.safetyculture.com/reference/authentication";
 const validationPath = "/audits/search";
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: safetycultureApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  defaultHeaders: { accept: "application/json" },
+});
 
 type SafetycultureRequestPhase = "validate" | "execute";
 type SafetycultureQueryValue = string | number | boolean | readonly string[] | undefined;
@@ -68,7 +78,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: `safetyculture:${hashToken(apiKey)}`,
         displayName: "SafetyCulture API Token",
       },
-      grantedScopes: [],
       metadata: compactObject({
         apiBaseUrl: safetycultureApiBaseUrl,
         validationEndpoint: validationPath,
@@ -257,8 +266,8 @@ function safetycultureUrl(path: string, query?: Record<string, SafetycultureQuer
 
 function safetycultureHeaders(apiKey: string, hasBody: boolean): Record<string, string> {
   return {
-    authorization: `Bearer ${apiKey}`,
-    accept: "application/json",
+    "authorization": `Bearer ${apiKey}`,
+    "accept": "application/json",
     ...(hasBody ? { "content-type": "application/json" } : {}),
     "user-agent": providerUserAgent,
   };

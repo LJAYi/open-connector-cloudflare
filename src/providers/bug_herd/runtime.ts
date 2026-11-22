@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext, ProviderFetch } from "../provider-runtime.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderFetch } from "../provider-runtime.ts";
 
 import { Buffer } from "node:buffer";
 import { compactObject, optionalBoolean, optionalRecord, optionalString } from "../../core/cast.ts";
@@ -12,12 +12,11 @@ import {
   ProviderRequestError,
 } from "../provider-runtime.ts";
 
-const bugHerdApiBaseUrl = "https://www.bugherd.com";
+export const bugHerdApiBaseUrl = "https://www.bugherd.com";
 
 type BugHerdPhase = "validate" | "execute";
 type BugHerdQuery = Record<string, string | number | boolean | undefined>;
-type BugHerdActionContext = Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
-type BugHerdActionHandler = (input: Record<string, unknown>, context: BugHerdActionContext) => Promise<unknown>;
+type BugHerdActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
 export const bugHerdActionHandlers: ProviderActionHandlers<"bug_herd", BugHerdActionHandler> = {
   show_organization(_input, context) {
@@ -263,7 +262,6 @@ export async function validateBugHerdCredential(
       accountId: organizationId,
       displayName: organizationName ?? "BugHerd Organization",
     },
-    grantedScopes: [],
     metadata: compactObject({
       apiBaseUrl: bugHerdApiBaseUrl,
       validationEndpoint: "/api_v2/organization.json",
@@ -332,8 +330,8 @@ function buildBugHerdUrl(path: string, query: BugHerdQuery = {}): string {
 
 function buildBugHerdHeaders(apiKey: string, hasBody: boolean): Record<string, string> {
   const headers: Record<string, string> = {
-    Accept: "application/json",
-    Authorization: `Basic ${Buffer.from(`${apiKey}:x`).toString("base64")}`,
+    "Accept": "application/json",
+    "Authorization": `Basic ${Buffer.from(`${apiKey}:x`).toString("base64")}`,
     "User-Agent": providerUserAgent,
   };
   if (hasBody) {

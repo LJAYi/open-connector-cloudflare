@@ -1,10 +1,11 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { createHash } from "node:crypto";
 import { looseArray, compactObject, optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
-import { defineApiKeyProviderExecutors, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
 
 const service = "opensea";
 const openseaApiBaseUrl = "https://api.opensea.io";
@@ -61,9 +62,9 @@ export const openseaActionHandlers: ProviderActionHandlers<"opensea", OpenseaAct
     const payload = await requestOpensea({
       path: `/api/v2/collection/${encodeURIComponent(slug)}/nfts`,
       query: compactObject({
-        traits: input.traits === undefined ? undefined : JSON.stringify(input.traits),
-        has_agent_binding: input.hasAgentBinding,
-        limit: optionalNumber(input.limit),
+        "traits": input.traits === undefined ? undefined : JSON.stringify(input.traits),
+        "has_agent_binding": input.hasAgentBinding,
+        "limit": optionalNumber(input.limit),
         "next.value": optionalString(input.next),
       }),
       context,
@@ -94,7 +95,7 @@ export const openseaActionHandlers: ProviderActionHandlers<"opensea", OpenseaAct
     const payload = await requestOpensea({
       path: `/api/v2/offers/collection/${encodeURIComponent(slug)}`,
       query: compactObject({
-        limit: optionalNumber(input.limit),
+        "limit": optionalNumber(input.limit),
         "next.value": optionalString(input.next),
       }),
       context,
@@ -156,6 +157,16 @@ export const openseaActionHandlers: ProviderActionHandlers<"opensea", OpenseaAct
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, openseaActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: openseaApiBaseUrl,
+  auth: { type: "api_key_header", name: "x-api-key" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const payload = await requestOpensea({
@@ -175,9 +186,7 @@ export const credentialValidators: CredentialValidators = {
       profile: {
         accountId: createHash("sha256").update(input.apiKey).digest("hex").slice(0, 16),
         displayName: "OpenSea API Key",
-        grantedScopes: [],
       },
-      grantedScopes: [],
       metadata: compactObject({
         apiBaseUrl: openseaApiBaseUrl,
         validationEndpoint: "/api/v2/collections",
@@ -190,7 +199,7 @@ export const credentialValidators: CredentialValidators = {
 
 async function requestOpensea(input: {
   path: string;
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   phase: OpenseaRequestPhase;
   query?: Record<string, unknown>;
 }): Promise<unknown> {
@@ -213,7 +222,7 @@ async function requestOpensea(input: {
   try {
     response = await input.context.fetcher(url, {
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "user-agent": providerUserAgent,
         "x-api-key": input.context.apiKey,
       },

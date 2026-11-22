@@ -6,19 +6,14 @@ import type {
   ProviderProxyExecutor,
   ResolvedCredential,
 } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 import type { ProviderFetch } from "../provider-runtime.ts";
 
 import { compactObject, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
-import {
-  defineProviderExecutors,
-  defineProviderProxy,
-  ProviderRequestError,
-  providerUserAgent,
-  requireApiKeyCredential,
-  runProviderRequest,
-  setSearchParams,
-} from "../provider-runtime.ts";
+import { requireApiKeyCredential } from "../provider-credentials.ts";
+import { defineProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { ProviderRequestError, providerUserAgent, runProviderRequest, setSearchParams } from "../provider-runtime.ts";
 
 const service = "gosquared";
 const gosquaredApiBaseUrl = "https://api.gosquared.com";
@@ -182,7 +177,7 @@ async function requestGosquaredJson(options: GosquaredRequestOptions): Promise<R
     const response = await options.fetcher(buildGosquaredUrl(options), {
       method: "GET",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "user-agent": providerUserAgent,
       },
       signal,
@@ -202,7 +197,7 @@ async function requestGosquaredJson(options: GosquaredRequestOptions): Promise<R
   });
 }
 
-function buildGosquaredUrl(options: Pick<GosquaredRequestOptions, "path" | "apiKey" | "siteToken" | "query">): URL {
+function buildGosquaredUrl(options: GosquaredRequestOptions): URL {
   const normalizedPath = options.path.startsWith("/") ? options.path.slice(1) : options.path;
   const url = new URL(normalizedPath, `${gosquaredApiBaseUrl}/`);
   url.searchParams.set("api_key", options.apiKey);

@@ -1,11 +1,12 @@
 import type { CredentialValidationResult, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { looseArray, nullableString, optionalRecord, optionalString, stringArray } from "../../core/cast.ts";
-import { defineApiKeyProviderExecutors, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
 
-const personaApiBaseUrl = "https://api.withpersona.com/api/v1";
+export const personaApiBaseUrl = "https://api.withpersona.com/api/v1";
 
 const personaFilterParams: Record<string, string> = {
   inquiryId: "inquiry-id",
@@ -63,7 +64,6 @@ export async function validatePersonaCredential(
     profile: {
       accountId: "persona-api-key",
       displayName: "Persona API Key",
-      grantedScopes: [],
     },
     metadata: {
       apiBaseUrl: personaApiBaseUrl,
@@ -141,8 +141,8 @@ async function personaRequest(url: URL, context: ApiKeyProviderContext, init: Re
 
 function personaHeaders(apiKey: string, extraHeaders?: HeadersInit): Record<string, string> {
   return {
-    accept: "application/json",
-    authorization: `Bearer ${apiKey}`,
+    "accept": "application/json",
+    "authorization": `Bearer ${apiKey}`,
     "content-type": "application/json",
     "user-agent": providerUserAgent,
     ...(extraHeaders as Record<string, string> | undefined),

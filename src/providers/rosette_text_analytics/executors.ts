@@ -1,6 +1,6 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -10,9 +10,9 @@ import {
   optionalRawString,
   optionalString,
 } from "../../core/cast.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
-  defineApiKeyProviderExecutors,
-  defineProviderProxy,
   ProviderRequestError,
   providerResponseError,
   providerUserAgent,
@@ -75,7 +75,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: "api_key",
         displayName: "Rosette Text Analytics API Key",
       },
-      grantedScopes: [],
       metadata: compactObject({
         apiBaseUrl: rosetteTextAnalyticsApiBaseUrl,
         validationEndpoint: "/ping",
@@ -122,7 +121,7 @@ interface RosetteRequestInput {
 async function requestRosette(input: RosetteRequestInput): Promise<unknown> {
   const url = new URL(`${rosetteTextAnalyticsApiBaseUrl}${input.path}`);
   const headers: Record<string, string> = {
-    accept: "application/json",
+    "accept": "application/json",
     [rosetteTextAnalyticsApiKeyHeader]: input.apiKey,
     "user-agent": providerUserAgent,
   };

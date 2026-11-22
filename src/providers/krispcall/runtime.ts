@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -222,7 +222,6 @@ export async function validateKrispCallCredential(
       accountId: workspace.id ? `krispcall:${workspace.id}` : `krispcall:${credential.clientId}`,
       displayName: accountLabel,
     },
-    grantedScopes: [],
     metadata: {
       apiBaseUrl: krispcallApiBaseUrl,
       tokenEndpoint: krispcallTokenUrl,
@@ -249,7 +248,7 @@ export async function exchangeKrispCallAccessToken(
     init: {
       method: "POST",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "content-type": "application/x-www-form-urlencoded",
         "user-agent": providerUserAgent,
       },
@@ -286,8 +285,8 @@ async function requestKrispCallJson(input: KrispCallRequestInput) {
   }
 
   const headers = new Headers({
-    accept: "application/json",
-    authorization: `JWT ${input.accessToken}`,
+    "accept": "application/json",
+    "authorization": `JWT ${input.accessToken}`,
     "user-agent": providerUserAgent,
   });
   if (input.body != null) {

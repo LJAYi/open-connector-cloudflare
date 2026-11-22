@@ -1,12 +1,12 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalBoolean, optionalNumber, optionalString, recordOrEmpty } from "../../core/cast.ts";
 import { encodePathSegment } from "../../core/request.ts";
 import { ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
 
-const databarAiApiBaseUrl = "https://api.databar.ai";
+export const databarAiApiBaseUrl = "https://api.databar.ai";
 
 type DatabarAiHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 
@@ -118,7 +118,6 @@ export async function validateDatabarAiCredential(
   const user = normalizeUser(recordOrEmpty(await requestDatabarAi({ path: "/v1/user/me", context })));
   return {
     profile: { accountId: user.email || "databar_ai:token", displayName: user.email || "Databar API Key" },
-    grantedScopes: [],
     metadata: compactObject({ apiBaseUrl: databarAiApiBaseUrl, workspace: user.workspace, plan: user.plan }),
   };
 }
@@ -137,7 +136,7 @@ async function requestDatabarAi(input: {
   const response = await input.context.fetcher(url, {
     method: input.method ?? "GET",
     headers: {
-      accept: "application/json",
+      "accept": "application/json",
       "user-agent": providerUserAgent,
       "x-apikey": input.context.apiKey,
       ...(input.body === undefined ? {} : { "content-type": "application/json" }),

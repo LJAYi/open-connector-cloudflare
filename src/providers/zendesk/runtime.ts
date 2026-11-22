@@ -1,6 +1,7 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ProviderFetch, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ProviderRuntimeHandler } from "../provider-executors.ts";
+import type { ProviderFetch } from "../provider-runtime.ts";
 
 import { Buffer } from "node:buffer";
 import {
@@ -68,14 +69,14 @@ export const zendeskActionHandlers: ProviderActionHandlers<"zendesk", ZendeskAct
       path: "/api/v2/tickets.json",
       phase: "execute",
       query: compactObject({
-        page: optionalInteger(input.page),
-        per_page: optionalInteger(input.perPage),
+        "page": optionalInteger(input.page),
+        "per_page": optionalInteger(input.perPage),
         "page[size]": optionalInteger(input.pageSize),
         "page[after]": optionalString(input.pageAfter),
         "page[before]": optionalString(input.pageBefore),
-        external_id: optionalString(input.externalId),
-        sort_by: optionalString(input.sortBy),
-        sort_order: optionalString(input.sortOrder),
+        "external_id": optionalString(input.externalId),
+        "sort_by": optionalString(input.sortBy),
+        "sort_order": optionalString(input.sortOrder),
       }),
     });
     return { tickets: normalizeZendeskTicketArray(payload.tickets), pagination: normalizeZendeskPagination(payload) };
@@ -148,14 +149,14 @@ export const zendeskActionHandlers: ProviderActionHandlers<"zendesk", ZendeskAct
       path: "/api/v2/users.json",
       phase: "execute",
       query: compactObject({
-        page: optionalInteger(input.page),
-        per_page: optionalInteger(input.perPage),
+        "page": optionalInteger(input.page),
+        "per_page": optionalInteger(input.perPage),
         "page[size]": optionalInteger(input.pageSize),
         "page[after]": optionalString(input.pageAfter),
-        role: optionalString(input.role),
+        "role": optionalString(input.role),
         "role[]": stringifyArrayQuery(input.roleList),
-        external_id: optionalString(input.externalId),
-        permission_set: optionalInteger(input.permissionSet),
+        "external_id": optionalString(input.externalId),
+        "permission_set": optionalInteger(input.permissionSet),
       }),
     });
     return { users: normalizeZendeskUserArray(payload.users), pagination: normalizeZendeskPagination(payload) };
@@ -363,11 +364,11 @@ function buildZendeskUrl(
 
 function buildZendeskHeaders(context: ZendeskActionContext, hasJsonBody: boolean): Record<string, string> {
   return compactObject({
-    authorization:
+    "authorization":
       context.authType === "oauth2"
         ? `Bearer ${context.accessToken}`
         : `Basic ${Buffer.from(`${context.email}/token:${context.apiKey}`).toString("base64")}`,
-    accept: "application/json",
+    "accept": "application/json",
     "user-agent": providerUserAgent,
     "content-type": hasJsonBody ? "application/json" : undefined,
   }) as Record<string, string>;

@@ -4,19 +4,19 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 
 import { compactObject, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import { assertPublicHttpUrl } from "../../core/request.ts";
+import { requireApiKeyCredential } from "../provider-credentials.ts";
+import { defineProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
   createProviderTimeout,
-  defineProviderExecutors,
-  defineProviderProxy,
   providerInputError,
   providerUserAgent,
   ProviderRequestError,
   readProviderTextBody,
-  requireApiKeyCredential,
 } from "../provider-runtime.ts";
 
 const service = "quriiri";
@@ -140,7 +140,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: accountKey,
         displayName: `Quriiri ${accountKey}`,
       },
-      grantedScopes: [],
       metadata: {
         apiBaseUrl,
         validationEndpoint: "/v2/senderlist/",
@@ -178,8 +177,8 @@ async function quriiriRequest(context: QuriiriContext, options: QuriiriRequestOp
   const timeout = createProviderTimeout(context.signal, quriiriRequestTimeoutMs);
   try {
     const headers: Record<string, string> = {
-      accept: "application/json",
-      authorization: `Bearer ${context.apiKey}`,
+      "accept": "application/json",
+      "authorization": `Bearer ${context.apiKey}`,
       "user-agent": providerUserAgent,
     };
     const body = options.body === undefined ? undefined : JSON.stringify(options.body);

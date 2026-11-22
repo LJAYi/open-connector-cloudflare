@@ -1,6 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -18,7 +17,7 @@ import {
   providerUserAgent,
 } from "../provider-runtime.ts";
 
-const tpscheckApiBaseUrl = "https://api.tpscheck.uk";
+export const tpscheckApiBaseUrl: string = "https://api.tpscheck.uk";
 
 type TpscheckRequestPhase = "validate" | "execute";
 type TpscheckActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
@@ -70,7 +69,6 @@ export async function validateTpscheckCredential(
       accountId: "tpscheck-api-key",
       displayName: "TPSCheck API Key",
     },
-    grantedScopes: [],
     metadata: compactObject({
       apiBaseUrl: tpscheckApiBaseUrl,
       validationEndpoint: "/credits",
@@ -84,7 +82,7 @@ export async function validateTpscheckCredential(
 }
 
 async function requestTpscheckJson(
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
+  context: ApiKeyProviderContext,
   input: {
     method: "GET" | "POST";
     path: string;
@@ -105,8 +103,8 @@ async function requestTpscheckJson(
     response = await context.fetcher(url.toString(), {
       method: input.method,
       headers: {
-        accept: "application/json",
-        authorization: `Token ${context.apiKey}`,
+        "accept": "application/json",
+        "authorization": `Token ${context.apiKey}`,
         "user-agent": providerUserAgent,
         ...(input.body ? { "content-type": "application/json" } : {}),
       },

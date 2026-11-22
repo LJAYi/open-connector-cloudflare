@@ -1,3 +1,5 @@
+import type { CredentialValidationResult } from "../../core/types.ts";
+
 import {
   compactObject,
   optionalInteger,
@@ -153,7 +155,7 @@ export async function validateBoldSignCredential(
   input: { apiKey: string; values: Record<string, string> },
   fetcher: typeof fetch,
   signal?: AbortSignal,
-): Promise<import("../../core/types.ts").CredentialValidationResult> {
+): Promise<CredentialValidationResult> {
   const region = normalizeBoldSignRegion(input.values.region);
   const apiBaseUrl = buildBoldSignApiBaseUrl(region);
   const payload = await requestBoldSignJson({
@@ -223,7 +225,7 @@ async function requestBoldSignJson(input: BoldSignRequestInput) {
     const url = new URL(input.path, `${input.apiBaseUrl}/`);
     appendQuery(url, input.query);
     const headers: Record<string, string> = {
-      accept: "application/json",
+      "accept": "application/json",
       "user-agent": providerUserAgent,
       "X-API-KEY": input.apiKey,
     };

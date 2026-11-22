@@ -1,15 +1,10 @@
 import type { CredentialValidationResult, ExecutionContext, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 
 import { compactObject, looseArray, optionalNumber, optionalRecord, optionalString } from "../../core/cast.ts";
-import {
-  defineProviderExecutors,
-  isAbortLikeError,
-  providerFetch,
-  ProviderRequestError,
-  providerUserAgent,
-  requireApiKeyCredential,
-} from "../provider-runtime.ts";
+import { requireApiKeyCredential } from "../provider-credentials.ts";
+import { defineProviderExecutors } from "../provider-executors.ts";
+import { isAbortLikeError, providerFetch, ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
 
 export const productiveApiBaseUrl = "https://api.productive.io/api/v2/";
 const productiveRequestTimeoutMs = 15_000;
@@ -65,9 +60,7 @@ export async function validateProductiveCredential(
         optionalString(organization.attributes.name) ??
         optionalString(organization.attributes.company_name) ??
         `Organization ${organization.id}`,
-      grantedScopes: [],
     },
-    grantedScopes: [],
     metadata: compactObject({
       apiBaseUrl: productiveApiBaseUrl.replace(/\/$/, ""),
       validationEndpoint: "/organization",
@@ -271,8 +264,8 @@ function buildListPath(resource: string, input: Record<string, unknown>) {
   const query: Record<string, string | number | boolean | undefined> = {
     "page[number]": input.pageNumber as number | undefined,
     "page[size]": input.pageSize as number | undefined,
-    sort: optionalString(input.sort),
-    include: optionalString(input.include),
+    "sort": optionalString(input.sort),
+    "include": optionalString(input.include),
   };
   const filter = optionalRecord(input.filter);
   if (filter) {
@@ -322,7 +315,7 @@ async function productiveRequestJson(
       method: init.method,
       headers: new Headers(
         compactObject<Record<string, string | undefined>>({
-          accept: "application/vnd.api+json",
+          "accept": "application/vnd.api+json",
           "content-type": init.body ? "application/vnd.api+json" : undefined,
           "user-agent": providerUserAgent,
           "x-auth-token": context.apiKey,

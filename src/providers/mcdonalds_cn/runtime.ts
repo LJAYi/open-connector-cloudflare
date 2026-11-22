@@ -1,5 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 
 import { createHash } from "node:crypto";
 import { integer, optionalIntegerLike, optionalScalarString, optionalString, requiredString } from "../../core/cast.ts";
@@ -198,12 +198,12 @@ async function requestMcdonaldsCnJson<T = unknown>(
   const signBody = input.method === "POST" ? (body ?? "{}") : buildGetSignBody(input.path, query);
   const timestamp = String(Date.now());
   const headers = new Headers({
-    accept: "application/json",
-    AppId: context.appId,
-    MerchantId: context.merchantId,
-    Timestamp: timestamp,
-    Sign: createMcdonaldsCnSign(context, signBody, timestamp),
-    Version: apiVersion,
+    "accept": "application/json",
+    "AppId": context.appId,
+    "MerchantId": context.merchantId,
+    "Timestamp": timestamp,
+    "Sign": createMcdonaldsCnSign(context, signBody, timestamp),
+    "Version": apiVersion,
     "user-agent": providerUserAgent,
   });
   if (body !== undefined) {

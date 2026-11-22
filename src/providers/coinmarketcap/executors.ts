@@ -1,15 +1,12 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { optionalBoolean, optionalNumber, optionalRecord, optionalString, requiredRecord } from "../../core/cast.ts";
 import { queryParams } from "../../core/request.ts";
-import {
-  defineApiKeyProviderExecutors,
-  ProviderRequestError,
-  providerResponseError,
-  providerUserAgent,
-} from "../provider-runtime.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { ProviderRequestError, providerResponseError, providerUserAgent } from "../provider-runtime.ts";
 
 const service = "coinmarketcap";
 const coinmarketcapApiBaseUrl = "https://pro-api.coinmarketcap.com";
@@ -123,6 +120,16 @@ export const coinmarketcapActionHandlers: ProviderActionHandlers<"coinmarketcap"
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, coinmarketcapActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: coinmarketcapApiBaseUrl,
+  auth: { type: "api_key_header", name: "X-CMC_PRO_API_KEY" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const context: ApiKeyProviderContext = { apiKey: input.apiKey, fetcher, signal };
@@ -137,7 +144,6 @@ export const credentialValidators: CredentialValidators = {
       profile: {
         displayName: "CoinMarketCap API Key",
       },
-      grantedScopes: [],
       metadata: {
         validationEndpoint: "/v1/key/info",
         apiBaseUrl: coinmarketcapApiBaseUrl,
@@ -179,7 +185,7 @@ async function coinmarketcapFetch(
     return await context.fetcher(url, {
       method: "GET",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "user-agent": providerUserAgent,
         "X-CMC_PRO_API_KEY": context.apiKey,
       },

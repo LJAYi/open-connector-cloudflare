@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -182,9 +182,7 @@ export async function validatePromptLayerCredential(
   return {
     profile: {
       displayName: "PromptLayer API Key",
-      grantedScopes: [],
     },
-    grantedScopes: [],
     metadata: compactObject({
       validationEndpoint: "/prompt-templates",
       totalPromptTemplates: optionalInteger(payload.total),
@@ -196,7 +194,7 @@ export async function validatePromptLayerCredential(
 async function requestPromptLayerJson(input: PromptLayerRequestInput): Promise<Record<string, unknown>> {
   return runProviderRequest({ signal: input.context.signal, label: "PromptLayer" }, async (signal) => {
     const headers: Record<string, string> = {
-      accept: "application/json",
+      "accept": "application/json",
       "user-agent": providerUserAgent,
       "X-API-KEY": input.context.apiKey,
     };

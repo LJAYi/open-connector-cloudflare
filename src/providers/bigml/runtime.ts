@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -123,7 +123,6 @@ export async function validateBigmlCredential(
   await request("/model", "GET", { limit: 1 }, undefined, { apiKey, username, fetcher, signal }, "validate");
   return {
     profile: { accountId: `bigml:${username}`, displayName: `BigML ${username}` },
-    grantedScopes: [],
     metadata: { username, apiBaseUrl: bigmlApiBaseUrl, validationEndpoint: "/model" },
   };
 }
@@ -144,7 +143,7 @@ async function request(
     const response = await context.fetcher(url, {
       method,
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "user-agent": providerUserAgent,
         ...(body === undefined ? {} : { "content-type": "application/json" }),
       },

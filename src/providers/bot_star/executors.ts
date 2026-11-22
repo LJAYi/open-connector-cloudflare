@@ -1,6 +1,6 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -10,9 +10,10 @@ import {
   requiredRecord,
   requiredString,
 } from "../../core/cast.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
   createProviderTimeout,
-  defineApiKeyProviderExecutors,
   isAbortLikeError,
   providerInputError,
   ProviderRequestError,
@@ -242,6 +243,14 @@ export const botStarActionHandlers: ProviderActionHandlers<"bot_star", BotStarAc
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, botStarActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: botStarApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  defaultHeaders: { "accept": "application/json", "content-type": "application/json" },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const apiKey = input.apiKey.trim();
@@ -266,7 +275,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: firstBotId ?? "bot_star",
         displayName: firstTeamName ?? firstBotName ?? firstBotId ?? "BotStar API Token",
       },
-      grantedScopes: [],
       metadata: compactObject({
         apiBaseUrl: botStarApiBaseUrl,
         validationEndpoint: botStarValidationPath,
@@ -322,8 +330,8 @@ async function botStarRequest(input: BotStarRequestInput): Promise<unknown> {
 
 function botStarHeaders(apiKey: string): Record<string, string> {
   return {
-    accept: "application/json",
-    authorization: `Bearer ${apiKey}`,
+    "accept": "application/json",
+    "authorization": `Bearer ${apiKey}`,
     "content-type": "application/json",
     "user-agent": providerUserAgent,
   };

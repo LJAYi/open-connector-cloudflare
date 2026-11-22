@@ -1,5 +1,5 @@
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -17,7 +17,7 @@ import {
   ProviderRequestError,
 } from "../provider-runtime.ts";
 
-const tinyurlApiBaseUrl = "https://api.tinyurl.com";
+export const tinyurlApiBaseUrl = "https://api.tinyurl.com";
 const tinyurlValidationPath = "/urls/available?page=1&limit=1";
 
 type TinyurlRequestPhase = "validate" | "execute";
@@ -37,7 +37,6 @@ export async function validateTinyurlCredential(
   signal?: AbortSignal,
 ): Promise<{
   profile: { accountId: string; displayName: string };
-  grantedScopes: string[];
   metadata: Record<string, unknown>;
 }> {
   await requestTinyurl(new URL(tinyurlValidationPath, tinyurlApiBaseUrl), {
@@ -53,7 +52,6 @@ export async function validateTinyurlCredential(
       accountId: "tinyurl:api_token",
       displayName: "TinyURL API Token",
     },
-    grantedScopes: [],
     metadata: {
       apiBaseUrl: tinyurlApiBaseUrl,
       validationEndpoint: tinyurlValidationPath,
@@ -146,8 +144,8 @@ async function requestTinyurl(
     response = await input.fetcher(url, {
       method: input.method,
       headers: {
-        authorization: `Bearer ${input.apiKey}`,
-        accept: "application/json",
+        "authorization": `Bearer ${input.apiKey}`,
+        "accept": "application/json",
         "user-agent": providerUserAgent,
         ...(input.body ? { "content-type": "application/json" } : {}),
       },

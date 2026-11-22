@@ -1,7 +1,9 @@
-import type { IConnectionStore, StoredConnection } from "./connection-service.ts";
+import type { CatalogStore } from "./catalog-store.ts";
+import type { IConnectionStore, StoredConnection } from "./connection-store.ts";
 import type { ActionPolicySnapshot } from "./core/action-policy.ts";
 import type { ActionDefinition, ActionExecutor, ProviderDefinition, ResolvedCredential } from "./core/types.ts";
 import type { IProviderLoader } from "./providers/provider-loader.ts";
+import type { McpOutputMode } from "./server/mcp-settings.ts";
 import type { IRunLogStore, RunLog, RunLogPage } from "./server/storage/runtime-store.ts";
 import type { RuntimeGrant } from "./server/storage/runtime-token-service.ts";
 
@@ -19,6 +21,7 @@ const echoAction: ActionDefinition = {
   service: "example",
   name: "echo",
   description: "Echo input.",
+  operationType: "write",
   requiredScopes: [],
   providerPermissions: [],
   inputSchema: {
@@ -46,6 +49,7 @@ const getAccountAction: ActionDefinition = {
   service: "example_auth",
   name: "get_account",
   description: "Return the connected account.",
+  operationType: "read",
   requiredScopes: ["records:read"],
   providerPermissions: [],
   inputSchema: {
@@ -90,6 +94,200 @@ const secondaryCredential: ResolvedCredential = {
 };
 
 describe("MCP server", () => {
+  it.each<McpOutputMode>(["compatible", "compact"])("returns all tool payloads in %s mode", async (outputMode) => {
+    await withMcpClient(
+      async (client) => {
+        const requests = [
+          { name: "list_apps", arguments: {} },
+          { name: "list_connections", arguments: { service: "example" } },
+          { name: "search_actions", arguments: { query: "echo" } },
+          { name: "get_action_guide", arguments: { actionId: "example.echo" } },
+          { name: "execute_action", arguments: { actionId: "example.echo", input: { message: "hello" } } },
+        ];
+        for (const request of requests) {
+          const result = await client.callTool(request);
+          expect(result.structuredContent).toMatchObject({ ok: true, data: expect.anything() });
+          expect(result.isError).not.toBe(true);
+          expect(result.content).toEqual([
+            {
+              type: "text",
+              text:
+                outputMode === "compatible"
+                  ? JSON.stringify(result.structuredContent)
+                  : "The complete result is available in structuredContent.",
+            },
+          ]);
+        }
+      },
+      { outputMode },
+    );
+  });
+
+  it.each([
+    {
+      name: "get_action_guide",
+      arguments: { actionId: "missing.action" },
+      code: "unknown_action",
+      message: "Unknown action: missing.action",
+    },
+    {
+      name: "execute_action",
+      arguments: { actionId: "missing.action" },
+      code: "unknown_action",
+      message: "Unknown action: missing.action",
+    },
+    {
+      name: "execute_action",
+      arguments: { actionId: "example.echo", input: {} },
+      code: "invalid_input",
+      message: "Action input does not match the action schema.",
+    },
+  ])("keeps actionable compact errors for $name ($code)", async ({ name, arguments: input, code, message }) => {
+    await withMcpClient(
+      async (client) => {
+        const result = await client.callTool({ name, arguments: input });
+        expect(result).toMatchObject({
+          isError: true,
+          content: [{ type: "text", text: `${code}: ${message}` }],
+          structuredContent: { ok: false, error: { code, message } },
+        });
+      },
+      { outputMode: "compact" },
+    );
+  });
+
+  it("searches without loading schemas and filters denied hits before limiting", async () => {
+    const other: ActionDefinition = { ...echoAction, id: "example.echo_other", name: "echo_other" };
+    const catalog = createCatalogStore([{ ...exampleProvider, actions: [echoAction, other] }]);
+    const getAction = vi.spyOn(catalog, "getAction").mockRejectedValue(new Error("schema must stay lazy"));
+    const policy = new ActionPolicyService().createSnapshot(emptyPolicyRules(), {
+      allowedActions: [],
+      blockedActions: ["example.echo"],
+      allowedProxies: [],
+    });
+    await withMcpClient(
+      async (client) => {
+        const result = await client.callTool({ name: "search_actions", arguments: { query: "echo", limit: 1 } });
+        expect(result.structuredContent).toEqual({
+          ok: true,
+          data: [{ id: other.id, description: other.description, available: false }],
+        });
+        expect(getAction).not.toHaveBeenCalled();
+      },
+      { catalog, getPolicySnapshot: async () => policy },
+    );
+  });
+
+  it("loads connections in one batch for selected services without reading schemas", async () => {
+    const actions = [
+      getAccountAction,
+      { ...getAccountAction, id: "example_auth.get_other_account", name: "get_other_account" },
+    ];
+    const catalog = createCatalogStore([{ ...authenticatedProvider, actions }], {
+      executableActionIds: actions.map((action) => action.id),
+    });
+    const getAction = vi.spyOn(catalog, "getAction").mockRejectedValue(new Error("schema must remain lazy"));
+    const list = vi.spyOn(ConnectionService.prototype, "listConnections");
+    try {
+      await withMcpClient(
+        async (client) => {
+          const result = await client.callTool({ name: "search_actions", arguments: { query: "account" } });
+          expect(result.structuredContent).toMatchObject({ data: [expect.anything(), expect.anything()] });
+          expect(list).toHaveBeenCalledExactlyOnceWith(new Set(["example_auth"]));
+          expect(getAction).not.toHaveBeenCalled();
+        },
+        { catalog },
+      );
+    } finally {
+      list.mockRestore();
+    }
+  });
+
+  it("paginates provider names after policy filtering without reading schemas", async () => {
+    const providers = ["alpha", "beta", "gamma"].map((service) => ({
+      ...exampleProvider,
+      service,
+      displayName: service,
+      actions: [{ ...echoAction, id: `${service}.echo`, service }],
+    }));
+    const catalog = createCatalogStore(providers);
+    const getAction = vi.spyOn(catalog, "getAction").mockRejectedValue(new Error("schema must stay lazy"));
+    const policy = new ActionPolicyService().createSnapshot(emptyPolicyRules(), {
+      allowedActions: [],
+      blockedActions: ["alpha.*"],
+      allowedProxies: [],
+    });
+    await withMcpClient(
+      async (client) => {
+        const first = await client.callTool({ name: "list_apps", arguments: { limit: 1 } });
+        expect(first.structuredContent).toEqual({
+          ok: true,
+          data: [{ service: "beta", displayName: "beta" }],
+          nextCursor: "1",
+        });
+        const second = await client.callTool({ name: "list_apps", arguments: { limit: 1, cursor: "1" } });
+        expect(second.structuredContent).toEqual({
+          ok: true,
+          data: [{ service: "gamma", displayName: "gamma" }],
+          nextCursor: null,
+        });
+        expect(second.content).toEqual([{ type: "text", text: JSON.stringify(second.structuredContent) }]);
+        expect(getAction).not.toHaveBeenCalled();
+      },
+      { catalog, getPolicySnapshot: async () => policy },
+    );
+  });
+
+  it("paginates connection summaries without profiles", async () => {
+    await withAuthenticatedMcpClient(async (client) => {
+      const first = await client.callTool({
+        name: "list_connections",
+        arguments: { service: "example_auth", limit: 1 },
+      });
+      expect(first.structuredContent).toMatchObject({ data: [{ connectionName: "default" }], nextCursor: "1" });
+      const second = await client.callTool({
+        name: "list_connections",
+        arguments: { service: "example_auth", limit: 1, cursor: "1" },
+      });
+      expect(second.structuredContent).toMatchObject({ data: [{ connectionName: "secondary" }], nextCursor: null });
+      expect(JSON.stringify(second.structuredContent)).not.toContain("profile");
+    });
+  });
+
+  it.each([
+    { name: "search_actions", arguments: { query: " " } },
+    { name: "search_actions", arguments: { query: "echo", limit: 21 } },
+    { name: "list_connections", arguments: {} },
+    { name: "list_apps", arguments: { cursor: "-1" } },
+    { name: "list_apps", arguments: { limit: 51 } },
+  ])("rejects invalid discovery inputs: %j", async (request) => {
+    await withMcpClient(async (client) => {
+      const result = await client.callTool(request);
+      expect(result.isError).toBe(true);
+    });
+  });
+
+  it.each(["missing", "unreadable"])("returns structured discovery errors for %s action definitions", async (state) => {
+    const catalog = createCatalogStore([exampleProvider]);
+    vi.spyOn(catalog, "getAction").mockImplementation(async () => {
+      if (state === "unreadable") throw new Error("private catalog file path");
+      return undefined;
+    });
+    await withMcpClient(
+      async (client) => {
+        for (const request of [{ name: "get_action_guide", arguments: { actionId: "example.echo" } }]) {
+          const response = await client.callTool(request);
+          expect(response.structuredContent).toMatchObject({
+            ok: false,
+            error: { code: state === "missing" ? "unknown_action" : "internal_error" },
+          });
+          expect(JSON.stringify(response)).not.toContain("private catalog file path");
+        }
+      },
+      { catalog },
+    );
+  });
+
   it("lists the discovery tools through the MCP protocol", async () => {
     await withMcpClient(async (client) => {
       const result = await client.listTools();
@@ -100,6 +298,13 @@ describe("MCP server", () => {
         "search_actions",
         "get_action_guide",
         "execute_action",
+      ]);
+      expect(result.tools.map((tool) => tool.annotations)).toEqual([
+        { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+        { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+        { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+        { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+        { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
       ]);
     });
   });
@@ -141,7 +346,7 @@ describe("MCP server", () => {
         data: [
           {
             id: "example.echo",
-            service: "example",
+            available: true,
           },
         ],
       });
@@ -163,6 +368,26 @@ describe("MCP server", () => {
     });
   });
 
+  it("renders an execute_action example in action guides instead of HTTP requests", async () => {
+    await withMcpClient(async (client) => {
+      const guide = await client.callTool({ name: "get_action_guide", arguments: { actionId: "example.echo" } });
+
+      expect(guide.structuredContent).toMatchObject({
+        ok: true,
+        data: {
+          capability: {
+            operationType: "write",
+          },
+          markdown: expect.stringContaining("Call the `execute_action` tool with these arguments:"),
+        },
+      });
+      const markdown = (guide.structuredContent as { data: { markdown: string } }).data.markdown;
+      expect(markdown).toContain('"actionId": "example.echo"');
+      expect(markdown).not.toContain("curl");
+      expect(markdown).not.toContain("localhost");
+    });
+  });
+
   it("lists safe connection profiles without exposing credentials", async () => {
     await withAuthenticatedMcpClient(async (client) => {
       const result = await client.callTool({
@@ -174,29 +399,16 @@ describe("MCP server", () => {
       expect(result.structuredContent).toEqual({
         ok: true,
         data: [
-          {
-            id: "connection-default",
-            service: "example_auth",
-            connectionName: "default",
-            authType: "api_key",
-            default: true,
-            profile: defaultCredential.profile,
-          },
-          {
-            id: "connection-secondary",
-            service: "example_auth",
-            connectionName: "secondary",
-            authType: "api_key",
-            default: false,
-            profile: secondaryCredential.profile,
-          },
+          { connectionName: "default", accountLabel: "Default Account", default: true, available: true },
+          { connectionName: "secondary", accountLabel: "Secondary Account", default: false, available: true },
         ],
+        nextCursor: null,
       });
       expect(JSON.stringify(result.structuredContent)).not.toContain("test-token");
     });
   });
 
-  it("keeps virtual no-auth connections discoverable without a connection grant", async () => {
+  it("omits virtual no-auth accounts without preventing action discovery", async () => {
     const policy = new ActionPolicyService().createSnapshot(emptyPolicyRules(), {
       allowedActions: [],
       blockedActions: [],
@@ -209,11 +421,39 @@ describe("MCP server", () => {
 
         expect(result.structuredContent).toMatchObject({
           ok: true,
-          data: [{ service: "example", authType: "no_auth", connectionName: "default" }],
+          data: [],
+          nextCursor: null,
         });
       },
       { getPolicySnapshot: async () => policy },
     );
+  });
+
+  it("returns compact search summaries and keeps the full capability in guides", async () => {
+    await withAuthenticatedMcpClient(async (client) => {
+      const search = await client.callTool({
+        name: "search_actions",
+        arguments: { query: "account", service: "example_auth" },
+      });
+      const guide = await client.callTool({
+        name: "get_action_guide",
+        arguments: { actionId: "example_auth.get_account" },
+      });
+
+      expect(search.structuredContent).toEqual({
+        ok: true,
+        data: [{ id: "example_auth.get_account", description: "Return the connected account.", available: true }],
+      });
+      expect(guide.structuredContent).toMatchObject({
+        ok: true,
+        data: {
+          capability: {
+            requiredScopes: ["records:read"],
+            connection: { connectionName: "default", profile: defaultCredential.profile },
+          },
+        },
+      });
+    });
   });
 
   it("uses an explicitly selected connection for guides and execution", async () => {
@@ -261,7 +501,7 @@ describe("MCP server", () => {
     }, runs);
   });
 
-  it("returns the selected connection when execution fails", async () => {
+  it("returns validation errors before resolving the selected connection", async () => {
     await withAuthenticatedMcpClient(async (client) => {
       const result = await client.callTool({
         name: "execute_action",
@@ -281,11 +521,8 @@ describe("MCP server", () => {
         },
         executionId: expect.any(String),
         auditPersisted: true,
-        connection: {
-          connectionName: "secondary",
-          profile: secondaryCredential.profile,
-        },
       });
+      expect(result.structuredContent).not.toHaveProperty("connection");
     });
   });
 
@@ -369,17 +606,12 @@ describe("MCP server", () => {
         ok: false,
         executionId: expect.any(String),
         auditPersisted: true,
-        connection: {
-          service: "example",
-          connectionName: "default",
-          authType: "no_auth",
-          default: true,
-        },
         error: {
           code: "invalid_input",
           message: "Action input does not match the action schema.",
         },
       });
+      expect(result.structuredContent).not.toHaveProperty("connection");
     });
   });
 
@@ -424,10 +656,10 @@ describe("MCP server", () => {
     await withMcpClient(
       async (client) => {
         await client.callTool({ name: "list_apps", arguments: {} });
-        await client.callTool({ name: "list_connections", arguments: {} });
+        await client.callTool({ name: "list_connections", arguments: { service: "example" } });
         expect(load).toHaveBeenCalledTimes(1);
 
-        await client.callTool({ name: "search_actions", arguments: { limit: 5 } });
+        await client.callTool({ name: "search_actions", arguments: { query: "echo", limit: 5 } });
         await client.callTool({ name: "get_action_guide", arguments: { actionId: "example.echo" } });
         expect(load).toHaveBeenCalledTimes(1);
       },
@@ -440,8 +672,8 @@ describe("MCP server", () => {
       async (client) => {
         for (const request of [
           { name: "list_apps", arguments: {} },
-          { name: "list_connections", arguments: {} },
-          { name: "search_actions", arguments: { limit: 5 } },
+          { name: "list_connections", arguments: { service: "example" } },
+          { name: "search_actions", arguments: { query: "echo", limit: 5 } },
           { name: "get_action_guide", arguments: { actionId: "example.echo" } },
           { name: "execute_action", arguments: { actionId: "example.echo", input: { message: "hello" } } },
         ]) {
@@ -631,6 +863,12 @@ interface McpPolicyOptions {
   runtimeGrant?: RuntimeGrant;
 }
 
+interface McpClientOptions extends McpPolicyOptions {
+  signal?: AbortSignal;
+  catalog?: CatalogStore;
+  outputMode?: McpOutputMode;
+}
+
 /** Default to an empty deployment policy scoped to the runtime grant, the way the server does without a store. */
 function policySnapshotFor(policy: McpPolicyOptions): () => Promise<ActionPolicySnapshot> {
   return (
@@ -639,13 +877,12 @@ function policySnapshotFor(policy: McpPolicyOptions): () => Promise<ActionPolicy
   );
 }
 
-async function withMcpClient(
-  run: (client: Client) => Promise<void>,
-  policy: McpPolicyOptions & { signal?: AbortSignal } = {},
-): Promise<void> {
-  const catalog = createCatalogStore([exampleProvider], {
-    executableActionIds: ["example.echo"],
-  });
+async function withMcpClient(run: (client: Client) => Promise<void>, policy: McpClientOptions = {}): Promise<void> {
+  const catalog =
+    policy.catalog ??
+    createCatalogStore([exampleProvider], {
+      executableActionIds: ["example.echo"],
+    });
   const providerLoader = new EchoProviderLoader();
   const connections = new ConnectionService({
     catalog,
@@ -752,6 +989,10 @@ class EchoProviderLoader implements IProviderLoader {
 class MemoryConnectionStore implements IConnectionStore {
   private readonly connections = new Map<string, StoredConnection>();
 
+  async getById(id: string): Promise<StoredConnection | undefined> {
+    return [...this.connections.values()].find((connection) => connection.id === id);
+  }
+
   constructor(connections: StoredConnection[] = []) {
     for (const connection of connections) {
       this.connections.set(this.key(connection.service, connection.connectionName), connection);
@@ -762,7 +1003,29 @@ class MemoryConnectionStore implements IConnectionStore {
     return this.connections.get(this.key(service, connectionName));
   }
 
-  async set(service: string, connectionName: string, credential: ResolvedCredential): Promise<StoredConnection> {
+  private readonly retirementGenerations = new Map<string, string>();
+
+  async getRetirementGeneration(service: string, connectionName: string): Promise<string> {
+    const key = JSON.stringify([service, connectionName]);
+    let generation = this.retirementGenerations.get(key);
+    if (!generation) {
+      generation = crypto.randomUUID();
+      this.retirementGenerations.set(key, generation);
+    }
+    return generation;
+  }
+
+  async setIfCurrentGeneration(
+    service: string,
+    connectionName: string,
+    credential: ResolvedCredential,
+    retirementGeneration: string,
+  ) {
+    if ((await this.getRetirementGeneration(service, connectionName)) !== retirementGeneration) return undefined;
+    return this.set(service, connectionName, credential);
+  }
+
+  async set(service: string, connectionName: string, credential: ResolvedCredential) {
     const key = this.key(service, connectionName);
     const connection = {
       id: this.connections.get(key)?.id ?? crypto.randomUUID(),
@@ -784,6 +1047,7 @@ class MemoryConnectionStore implements IConnectionStore {
   }
 
   async delete(service: string, connectionName: string): Promise<void> {
+    this.retirementGenerations.set(JSON.stringify([service, connectionName]), crypto.randomUUID());
     this.connections.delete(this.key(service, connectionName));
   }
 

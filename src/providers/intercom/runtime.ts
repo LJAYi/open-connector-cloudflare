@@ -1,5 +1,5 @@
 import type { CredentialValidationResult, ResolvedCredential } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 
 import { compactObject, optionalBoolean, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
 import {
@@ -8,10 +8,9 @@ import {
   providerUserAgent,
   ProviderRequestError,
 } from "../provider-runtime.ts";
-import { intercomGrantedPermissions } from "./scopes.ts";
 
 const intercomDefaultApiBaseUrl = "https://api.intercom.io";
-const intercomApiVersion = "2.13";
+export const intercomApiVersion = "2.13";
 const intercomJobsApiVersion = "2.15";
 
 const intercomRegionBaseUrlByCode: Record<string, string> = {
@@ -19,9 +18,8 @@ const intercomRegionBaseUrlByCode: Record<string, string> = {
   EU: "https://api.eu.intercom.io",
   AU: "https://api.au.intercom.io",
 };
-const allowedIntercomHosts = new Set(
-  Object.values(intercomRegionBaseUrlByCode).map((value) => new URL(value).hostname.toLowerCase()),
-);
+export const intercomAllowedApiBaseUrls: readonly string[] = Object.values(intercomRegionBaseUrlByCode);
+const allowedIntercomHosts = new Set(intercomAllowedApiBaseUrls.map((value) => new URL(value).hostname.toLowerCase()));
 
 export interface IntercomActionContext {
   accessToken: string;
@@ -531,7 +529,6 @@ export async function validateIntercomOAuthCredential(
       accountId: providerAccountId,
       displayName: accountLabel,
     },
-    grantedScopes: intercomGrantedPermissions,
     metadata: compactObject({
       adminId,
       adminEmail: email,
@@ -558,8 +555,8 @@ async function intercomRequestJson<T>(input: IntercomJsonRequestInput): Promise<
   const timeout = createProviderTimeout(input.signal);
   try {
     const headers = new Headers({
-      accept: "application/json",
-      authorization: `Bearer ${input.accessToken}`,
+      "accept": "application/json",
+      "authorization": `Bearer ${input.accessToken}`,
       "Intercom-Version": input.apiVersion ?? intercomApiVersion,
       "user-agent": providerUserAgent,
     });
@@ -650,7 +647,7 @@ function buildIntercomAccountLabel(input: {
   return input.workspaceName ? `${input.workspaceName} (${adminLabel})` : adminLabel;
 }
 
-function resolveIntercomApiBaseUrl(
+export function resolveIntercomApiBaseUrl(
   providerMetadata?: { workspaceRegion?: string; apiBaseUrl?: string } | Record<string, unknown>,
 ): string {
   const metadata = providerMetadata as Record<string, unknown> | undefined;

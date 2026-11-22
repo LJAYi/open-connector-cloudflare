@@ -62,7 +62,6 @@ export async function validateWufooCredential(
   });
   return {
     profile: { accountId: `wufoo:${context.subdomain}`, displayName: `Wufoo ${context.subdomain}` },
-    grantedScopes: [],
     metadata: {
       subdomain: context.subdomain,
       apiBaseUrl: buildWufooApiBaseUrl(context.subdomain),
@@ -207,8 +206,8 @@ async function requestWufooJson(input: WufooRequestInput): Promise<unknown> {
   const url = new URL(`${buildWufooApiBaseUrl(input.subdomain)}${input.path}`);
   for (const [key, value] of input.query ?? []) url.searchParams.append(key, value);
   const headers = new Headers({
-    accept: "application/json",
-    authorization: `Basic ${Buffer.from(`${input.apiKey}:footastic`).toString("base64")}`,
+    "accept": "application/json",
+    "authorization": `Basic ${Buffer.from(`${input.apiKey}:footastic`).toString("base64")}`,
     "user-agent": providerUserAgent,
   });
   if (input.form) headers.set("content-type", "application/x-www-form-urlencoded;charset=UTF-8");

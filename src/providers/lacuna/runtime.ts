@@ -1,4 +1,5 @@
-import type { ProviderActionHandlers, ProviderFetch, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlers, ProviderRuntimeHandler } from "../provider-executors.ts";
+import type { ProviderFetch } from "../provider-runtime.ts";
 
 import { optionalBoolean, optionalInteger, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import {
@@ -193,7 +194,7 @@ async function requestLacunaJson(
 
     for (let attempt = 0; ; attempt += 1) {
       const response = await context.fetcher(url, {
-        headers: { accept: "application/json", "user-agent": providerUserAgent },
+        headers: { "accept": "application/json", "user-agent": providerUserAgent },
         signal,
       });
       if (retryableStatuses.has(response.status) && attempt < maxRetries) {

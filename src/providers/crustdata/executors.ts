@@ -1,6 +1,6 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -13,8 +13,9 @@ import {
   requiredString,
   stringArray,
 } from "../../core/cast.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
-  defineApiKeyProviderExecutors,
   providerInputError,
   providerResponseError,
   providerUserAgent,
@@ -69,6 +70,16 @@ export const crustdataActionHandlers: ProviderActionHandlers<"crustdata", Crustd
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, crustdataActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: crustdataApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("x-api-version", crustdataApiVersion);
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const context: ApiKeyProviderContext = { apiKey: input.apiKey, fetcher, signal };
@@ -91,7 +102,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: matchedCompanyId === undefined ? "crustdata" : String(matchedCompanyId),
         displayName: optionalString(basicInfo?.name) ?? "Crustdata API Key",
       },
-      grantedScopes: [],
       metadata: compactObject({
         apiBaseUrl: crustdataApiBaseUrl,
         validationEndpoint: validatePath,
@@ -144,7 +154,7 @@ async function requestCrustdataJson(input: {
     response = await input.context.fetcher(new URL(input.path, crustdataApiBaseUrl), {
       method: "POST",
       headers: {
-        authorization: `Bearer ${input.context.apiKey}`,
+        "authorization": `Bearer ${input.context.apiKey}`,
         "content-type": "application/json",
         "user-agent": providerUserAgent,
         "x-api-version": crustdataApiVersion,

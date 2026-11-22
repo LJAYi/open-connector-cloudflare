@@ -1,10 +1,11 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { optionalRecord, optionalString, requiredRecord, requiredString } from "../../core/cast.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
-  defineApiKeyProviderExecutors,
   providerInputError,
   ProviderRequestError,
   providerResponseError,
@@ -31,6 +32,16 @@ export const bookingmoodActionHandlers: ProviderActionHandlers<"bookingmood", Bo
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, bookingmoodActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: bookingmoodApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const payload = await requestBookingmood({
@@ -48,7 +59,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: "bookingmood",
         displayName: readLabel(firstProduct) ?? "Bookingmood API Key",
       },
-      grantedScopes: [],
       metadata: {
         apiBaseUrl: bookingmoodApiBaseUrl,
         validationEndpoint: "/products",
@@ -140,8 +150,8 @@ async function requestBookingmood(input: {
     response = await input.fetcher(input.url.toString(), {
       method: "GET",
       headers: {
-        accept: "application/json",
-        authorization: `Bearer ${input.apiKey}`,
+        "accept": "application/json",
+        "authorization": `Bearer ${input.apiKey}`,
         "user-agent": providerUserAgent,
       },
       signal: input.signal,

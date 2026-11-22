@@ -1,5 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -114,7 +114,6 @@ export async function validateMapleBillingCredential(
       accountId: `maple_billing:${companyId}`,
       displayName: `Measure ${companyId}`,
     },
-    grantedScopes: [],
     metadata: compactObject({
       companyId,
       apiBaseUrl: buildMapleBillingApiBaseUrl(companyId),
@@ -126,7 +125,7 @@ export async function validateMapleBillingCredential(
   };
 }
 
-function normalizeMapleBillingCompanyId(value: unknown): string {
+export function normalizeMapleBillingCompanyId(value: unknown): string {
   const normalized = optionalString(value);
   if (!normalized) {
     throw new ProviderRequestError(400, "companyId is required");
@@ -137,7 +136,7 @@ function normalizeMapleBillingCompanyId(value: unknown): string {
   return normalized;
 }
 
-function buildMapleBillingApiBaseUrl(companyId: string): string {
+export function buildMapleBillingApiBaseUrl(companyId: string): string {
   return `${mapleBillingApiBaseUrl}/companies/${encodeURIComponent(companyId)}`;
 }
 
@@ -333,8 +332,8 @@ async function requestMapleBillingJson(input: MapleBillingRequestInput): Promise
 function mapleBillingFetch(input: MapleBillingRequestInput): Promise<Response> {
   const url = new URL(pathWithoutLeadingSlash(input.path), `${buildMapleBillingApiBaseUrl(input.companyId)}/`);
   const headers = new Headers({
-    accept: "application/json",
-    authorization: `Bearer ${input.apiKey}`,
+    "accept": "application/json",
+    "authorization": `Bearer ${input.apiKey}`,
     "content-type": "application/json",
     "user-agent": providerUserAgent,
   });

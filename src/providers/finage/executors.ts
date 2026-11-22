@@ -1,6 +1,6 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -11,8 +11,9 @@ import {
   optionalString,
   stringArray,
 } from "../../core/cast.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
-  defineApiKeyProviderExecutors,
   providerResponseError,
   providerUserAgent,
   ProviderRequestError,
@@ -51,6 +52,16 @@ export const finageActionHandlers: ProviderActionHandlers<"finage", FinageAction
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, finageActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: finageApiBaseUrl,
+  auth: { type: "api_key_query", name: "apikey" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const quote = optionalRecord(
@@ -70,7 +81,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: "finage",
         displayName: "Finage API Key",
       },
-      grantedScopes: [],
       metadata: compactObject({
         validationEndpoint: "/last/stock/AAPL",
         apiBaseUrl: finageApiBaseUrl,
@@ -182,7 +192,7 @@ async function finageGet(
     const response = await context.fetcher(url, {
       method: "GET",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "user-agent": providerUserAgent,
       },
       signal: context.signal,

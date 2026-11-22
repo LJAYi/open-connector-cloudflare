@@ -30,7 +30,7 @@ Before editing, read:
 - `CONTRIBUTING.md`.
 - `docs/catalog-format.md`.
 - Existing providers with similar auth and runtime shape under `src/providers`.
-- Shared provider helpers in `src/core/json-schema.ts`, `src/core/cast.ts`, `src/core/request.ts`, `src/core/types.ts`, and `src/providers/provider-runtime.ts`.
+- Shared provider helpers in `src/core/json-schema.ts`, `src/core/cast.ts`, `src/core/request.ts`, `src/core/types.ts`, `src/providers/provider-runtime.ts`, `src/providers/provider-executors.ts`, `src/providers/provider-credentials.ts`, `src/providers/provider-proxy.ts`, and `src/providers/provider-files.ts`.
 
 When the provider has official API documentation, use it as the source of truth for endpoints, auth, pagination, request bodies, response envelopes, limits, and error behavior. If you also have a reference implementation, compare it against the official docs instead of copying it blindly.
 
@@ -42,6 +42,7 @@ Before writing code, pick the closest current provider and follow its current im
 - `src/providers/avoma` or `src/providers/attention`: API key provider with `executors.ts` as credential wiring and provider logic in `runtime.ts`.
 - `src/providers/github`: provider supporting both OAuth and API key through one bearer-token runtime context.
 - `src/providers/gmail`: OAuth-only provider with credential validation and resource-specific runtime helpers.
+- `src/providers/sunsama_mcp` or `src/providers/clickup_mcp`: remote MCP providers using a manually registered public OAuth client and PKCE.
 - `src/providers/benchmark_email`, `src/providers/clickhouse`, or `src/providers/dataforseo`: custom credentials or user-configured API base URLs.
 - `src/providers/baselinker`, `src/providers/iqair_airvisual`, or `src/providers/autotask`: provider proxy support and endpoint guards.
 - `src/providers/http-json-runtime.ts`: shared helper for simple JSON HTTP providers when the provider does not need a richer local protocol.
@@ -103,13 +104,19 @@ Map provider auth to this repository's public credential types:
 
 Open-source users bring their own credentials and OAuth applications. Provider code should validate and use those credentials through the shared runtime interfaces instead of assuming an external credential service.
 
+Dynamic client registration endpoints do not authorize the runtime to register OAuth clients automatically. Treat registration as developer setup: describe the registration request in `clientSetup`, let the developer register the runtime's displayed callback URL, and accept the returned `client_id` through the existing OAuth client configuration. For a public client, use `tokenEndpointAuthMethod: "none"`, enable PKCE when required, and tell the developer to leave Client Secret empty. See `src/providers/clickup_mcp/definition.ts` and `src/providers/sunsama_mcp/definition.ts`.
+
+Verify RFC 8707 resource indicators independently at the authorization and token endpoints. Discovery metadata saying resource indicators are supported does not prove the token request requires one. Use `authorizationParams` for an authorization URL parameter; do not extend the shared token flow unless a real code exchange shows the token endpoint needs additional fields.
+
 Add `credentialValidators` in `executors.ts` when the provider can cheaply verify credentials and return a useful `CredentialProfile`. Use a stable account id and readable display name when the provider exposes them.
+
+If a chat channel must verify inbound events (`/v1/providers/<service>/events/verify`), do not add a route. Write one `ChannelEventVerifier`, register it in `src/server/event-verification/registry.ts`, and follow the checklist in [docs/channel-event-verification.md](../../../docs/channel-event-verification.md#adding-a-channel).
 
 ## Executors
 
 Create or update `executors.ts` with `ProviderExecutors`:
 
-- Use `defineProviderExecutors` from `src/providers/provider-runtime.ts`.
+- Use `defineProviderExecutors` from `src/providers/provider-executors.ts`.
 - Prefer `defineApiKeyProviderExecutors`, `defineOAuthProviderExecutors`, or `defineBearerProviderExecutors` when their context shape fits.
 - Resolve credentials through `ExecutionContext` or the shared credential helpers.
 - Type a complete static handler map as `ProviderActionHandlers<typeof service, Handler>` so missing, misspelled, and extra action names fail typechecking.
@@ -118,7 +125,7 @@ Create or update `executors.ts` with `ProviderExecutors`:
 - Do not type a complete provider handler map as `Record<string, Handler>` or use `as Record<...>` to claim completeness. Do not add a provider-local action-name union solely for handler exhaustiveness; keep one only when runtime business logic genuinely needs the narrower type.
 - Preserve provider request semantics: endpoint paths, methods, auth headers, request bodies, query params, pagination, status handling, error mapping, and output normalization.
 - Use `ProviderRequestError` for provider API failures that should become stable execution errors.
-- Use shared request helpers such as `setSearchParams`, `readProviderJson`, and `readProviderText` when they fit existing patterns.
+- Use shared request helpers such as `setSearchParams`, `readProviderJson`, `readProviderJsonBody`, and `readProviderTextBody` when they fit existing patterns.
 - Pass `context.signal` and transit file support through provider contexts when the provider needs cancellation or file output.
 
 Provider-local runtime files are appropriate when a provider has multiple API areas or a meaningful shared protocol. Do not add local mini-frameworks, schema facades, or action adapter layers just to reduce edit size.
@@ -134,9 +141,9 @@ Provider-local runtime files are appropriate when a provider has multiple API ar
 - The HTTP status follows the code, with two exceptions the routes read out of `details.status`: a `details.status` of 413 is answered with HTTP 413 whatever the code, and a `details.status` of 404 is answered with HTTP 404 when the code is `invalid_input`. The status a provider raises always survives in `details.status` whatever the code turns out to be.
 - The optional fourth `code` argument overrides that inference. `insufficient_credit` / HTTP 402 is the one outcome no status produces on its own, so pass it explicitly there. Use that argument only for a code a provider owns (`providerErrorCodes` in `src/server/api/runtime-api.ts`); the other codes `mapExecutionErrorStatus` knows belong to the connection and dispatch layers and answer with a status that has nothing to do with the upstream. A code the routes do not know becomes HTTP 400 whatever status the error carries, which is strictly worse than passing no code at all.
 
-## Historical Failure Modes
+## Common Pitfalls
 
-Previous provider batches needed cleanup for these issues. Check them explicitly:
+Check these explicitly:
 
 - Do not add catalog-only placeholders or empty `executors`. Add a provider when it has a runnable local executor.
 - Do not commit machine-emitted action schema modules. Hand-maintained provider source should own action schemas, including a provider-local `generated.ts` when one is justified; see the Public Boundary rule above for the two grandfathered files and the vendor-description constraint.

@@ -1,5 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 import type { ProviderFetch } from "../provider-runtime.ts";
 
 import { createHash } from "node:crypto";
@@ -81,7 +81,6 @@ export async function validateTaniumCredential(
       accountId: `tanium:${url.host}:${buildTokenFingerprint(apiKey)}`,
       displayName: `Tanium Gateway (${url.hostname})`,
     },
-    grantedScopes: [],
     metadata: {
       gatewayUrl,
       gatewayOrigin: url.origin,
@@ -145,9 +144,9 @@ async function requestTaniumGraphql(input: {
     const response = await input.fetcher(input.gatewayUrl, {
       method: "POST",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "content-type": "application/json",
-        session: input.apiKey,
+        "session": input.apiKey,
         "user-agent": providerUserAgent,
       },
       body: JSON.stringify(

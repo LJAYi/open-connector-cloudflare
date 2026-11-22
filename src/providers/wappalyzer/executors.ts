@@ -1,14 +1,11 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import { compactObject, optionalBoolean, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
-import {
-  defineApiKeyProviderExecutors,
-  providerUserAgent,
-  ProviderRequestError,
-  runProviderRequest,
-} from "../provider-runtime.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { providerUserAgent, ProviderRequestError, runProviderRequest } from "../provider-runtime.ts";
 
 const service = "wappalyzer";
 const wappalyzerApiBaseUrl = "https://api.wappalyzer.com/v2/";
@@ -41,6 +38,14 @@ export const wappalyzerActionHandlers: ProviderActionHandlers<
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, wappalyzerActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: wappalyzerApiBaseUrl,
+  auth: { type: "api_key_header", name: "x-api-key" },
+  skipDnsValidation: true,
+  defaultHeaders: { accept: "application/json" },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const response = await requestWappalyzerJson({
@@ -57,7 +62,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: "wappalyzer:api-key",
         displayName: "Wappalyzer API Key",
       },
-      grantedScopes: [],
       metadata: {
         validationEndpoint: "/credits/balance",
         credits,
@@ -158,7 +162,7 @@ async function requestWappalyzerJson(input: {
     const response = await input.fetcher(buildWappalyzerUrl(input.path, input.query), {
       method: "GET",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "user-agent": providerUserAgent,
         "x-api-key": input.apiKey,
       },

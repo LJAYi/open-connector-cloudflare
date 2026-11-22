@@ -4,7 +4,7 @@ import type {
   ProviderExecutors,
   ProviderProxyExecutor,
 } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 
 import { createHash } from "node:crypto";
 import {
@@ -16,16 +16,17 @@ import {
   recordOrEmpty,
 } from "../../core/cast.ts";
 import { assertPublicHttpUrl } from "../../core/request.ts";
+import { requireCustomCredential } from "../provider-credentials.ts";
+import { defineProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
   createProviderFetch,
   createProviderTimeout,
-  defineProviderExecutors,
-  defineProviderProxy,
   providerInputError,
   providerUserAgent,
   ProviderRequestError,
   readProviderTextBody,
-  requireCustomCredential,
+  providerResponseError,
 } from "../provider-runtime.ts";
 
 const service = "altiria";
@@ -128,7 +129,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: `altiria:${url.host}:${usernameHash}`,
         displayName: `${credential.username} (${url.hostname})`,
       },
-      grantedScopes: [],
       metadata: {
         dashboardHost: credential.dashboardHost,
         validationEndpoint: "/groups",
@@ -312,8 +312,8 @@ async function requestAltiria(input: AltiriaRequestInput) {
     const response = await fetcher(url, {
       method: input.method ?? (input.body ? "POST" : "GET"),
       headers: {
-        accept: "application/json",
-        authorization: basicAuthorization(input.username, input.apiPassword),
+        "accept": "application/json",
+        "authorization": basicAuthorization(input.username, input.apiPassword),
         "content-type": "application/json",
         "user-agent": providerUserAgent,
       },
@@ -343,7 +343,7 @@ async function requestAltiria(input: AltiriaRequestInput) {
       error instanceof Error && error.message.trim()
         ? `Altiria request failed: ${error.message}`
         : "Altiria request failed";
-    throw new ProviderRequestError(502, message);
+    throw providerResponseError(message);
   } finally {
     timeout.cleanup();
   }
@@ -369,7 +369,7 @@ function createAltiriaHttpError(status: number, payload: unknown, phase: "valida
     return new ProviderRequestError(429, message);
   }
   if (phase === "validate" && (status === 401 || status === 403)) {
-    return new ProviderRequestError(400, message);
+    return providerInputError(message);
   }
   if (phase === "execute" && (status === 401 || status === 403)) {
     return new ProviderRequestError(401, message);

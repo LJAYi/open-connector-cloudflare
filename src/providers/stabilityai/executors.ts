@@ -1,13 +1,14 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { Buffer } from "node:buffer";
 import { compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
 import { readBoundedResponseBytes } from "../../core/request.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
   createProviderTimeout,
-  defineApiKeyProviderExecutors,
   isAbortLikeError,
   ProviderRequestError,
   providerUserAgent,
@@ -40,6 +41,16 @@ export const stabilityaiActionHandlers: ProviderActionHandlers<"stabilityai", St
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, stabilityaiActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: stabilityAiApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const account = normalizeAccount(
@@ -58,7 +69,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: account.id ?? account.email ?? "stabilityai-api-key",
         displayName: account.email ?? "Stability AI API Key",
       },
-      grantedScopes: [],
       metadata: compactObject({
         validationEndpoint: stabilityAiValidationPath,
         apiBaseUrl: stabilityAiApiBaseUrl,
@@ -239,8 +249,8 @@ function buildStabilityAiHeaders(input: {
   hasJsonBody: boolean;
 }): Record<string, string> {
   return {
-    Authorization: `Bearer ${input.apiKey}`,
-    Accept: input.accept,
+    "Authorization": `Bearer ${input.apiKey}`,
+    "Accept": input.accept,
     "User-Agent": providerUserAgent,
     ...(input.hasJsonBody ? { "Content-Type": "application/json" } : {}),
   };

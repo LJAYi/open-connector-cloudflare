@@ -1,5 +1,10 @@
-import type { CredentialValidators, ExecutionContext, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type {
+  CredentialValidators,
+  ExecutionContext,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -9,17 +14,18 @@ import {
   optionalRecord,
   optionalString,
 } from "../../core/cast.ts";
+import { requireApiKeyCredential } from "../provider-credentials.ts";
+import { defineProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
-  defineProviderExecutors,
   isAbortLikeError,
   providerUserAgent,
   ProviderRequestError,
-  requireApiKeyCredential,
+  defaultProviderRequestTimeoutMs,
 } from "../provider-runtime.ts";
 
 const service = "addressfinder";
 const addressfinderApiBaseUrl = "https://api.addressfinder.io/api/";
-const addressfinderDefaultRequestTimeoutMs = 30_000;
 const addressfinderValidationEndpoint = "/nz/address/autocomplete";
 
 type AddressfinderCountry = "au" | "nz";
@@ -72,6 +78,20 @@ export const executors: ProviderExecutors = defineProviderExecutors<Addressfinde
   },
 });
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: addressfinderApiBaseUrl,
+  auth: { type: "api_key_query", name: "key" },
+  skipDnsValidation: true,
+  customizeRequest({ credential, headers }) {
+    if (credential?.authType !== "api_key") throw new ProviderRequestError(400, "api_key credential is required");
+    const apiSecret = optionalString(credential?.values.apiSecret);
+    if (!apiSecret) throw new ProviderRequestError(400, "apiSecret is required");
+    headers.set("authorization", apiSecret);
+    if (!headers.has("accept")) headers.set("accept", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const apiSecret = requireAddressfinderApiSecret(input.values);
@@ -93,7 +113,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: "addressfinder",
         displayName: "Addressfinder API Key",
       },
-      grantedScopes: [],
       metadata: compactObject({
         apiBaseUrl: addressfinderApiBaseUrl,
         validationEndpoint: addressfinderValidationEndpoint,
@@ -236,7 +255,7 @@ async function requestAddressfinderJson(input: {
   fetcher: typeof fetch;
   signal?: AbortSignal;
 }): Promise<Record<string, unknown>> {
-  const timeoutSignal = AbortSignal.timeout(addressfinderDefaultRequestTimeoutMs);
+  const timeoutSignal = AbortSignal.timeout(defaultProviderRequestTimeoutMs);
   const signal = input.signal ? AbortSignal.any([input.signal, timeoutSignal]) : timeoutSignal;
 
   try {
@@ -296,8 +315,8 @@ function buildAddressfinderUrl(path: string, apiKey: string, query: Record<strin
 
 function addressfinderHeaders(apiSecret: string): Record<string, string> {
   return {
-    Accept: "application/json",
-    Authorization: apiSecret,
+    "Accept": "application/json",
+    "Authorization": apiSecret,
     "User-Agent": providerUserAgent,
   };
 }

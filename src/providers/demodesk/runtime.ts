@@ -1,12 +1,12 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import { encodePathSegment } from "../../core/request.ts";
 import { providerInputError, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
 
-const demodeskApiBaseUrl = "https://demodesk.com/api/v2";
+export const demodeskApiBaseUrl = "https://demodesk.com/api/v2";
 
 type DemodeskMode = "validate" | "execute";
 type DemodeskHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
@@ -141,7 +141,6 @@ export async function validateDemodeskCredential(
       accountId: userId ?? email ?? "api_key",
       displayName: fullName || email || "Demodesk API Key",
     },
-    grantedScopes: [],
     metadata: compactObject({
       apiBaseUrl: demodeskApiBaseUrl,
       validationEndpoint: "/me",
@@ -216,7 +215,7 @@ async function requestDemodeskTranscript(
 async function fetchDemodesk(input: DemodeskRequestInput, accept: string): Promise<Response> {
   const headers: Record<string, string> = {
     accept,
-    authorization: `Bearer ${input.apiKey}`,
+    "authorization": `Bearer ${input.apiKey}`,
     "user-agent": providerUserAgent,
   };
   let body: string | undefined;

@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -11,9 +11,9 @@ import {
   recordOrEmpty,
 } from "../../core/cast.ts";
 import { encodePathSegment } from "../../core/request.ts";
-import { ProviderRequestError, providerUserAgent } from "../provider-runtime.ts";
+import { ProviderRequestError, providerUserAgent, providerInputError } from "../provider-runtime.ts";
 
-const cyberimpactApiBaseUrl = "https://api.cyberimpact.com";
+export const cyberimpactApiBaseUrl: string = "https://api.cyberimpact.com";
 
 type CyberimpactPhase = "validate" | "execute";
 type CyberimpactHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
@@ -101,7 +101,6 @@ export async function validateCyberimpactCredential(
       accountId: email ?? username ?? "cyberimpact:token",
       displayName: accountName ?? email ?? username ?? "Cyberimpact API Token",
     },
-    grantedScopes: [],
     metadata: compactObject({ email, username, account: accountName, validationEndpoint: "/ping" }),
   };
 }
@@ -224,8 +223,8 @@ async function requestCyberimpactJson(input: {
     if (value !== undefined && value !== null && value !== "") url.searchParams.set(key, String(value));
   }
   const headers = new Headers({
-    accept: "application/json",
-    authorization: `Bearer ${input.apiKey}`,
+    "accept": "application/json",
+    "authorization": `Bearer ${input.apiKey}`,
     "user-agent": providerUserAgent,
   });
   const init: RequestInit = { method: input.method ?? "GET", headers, signal: input.signal };
@@ -269,7 +268,7 @@ function normalizePaginatedPayload(
 
 function createCyberimpactError(status: number, payload: unknown, phase: CyberimpactPhase): ProviderRequestError {
   const message = readErrorMessage(payload) ?? `Cyberimpact request failed with status ${status}`;
-  if (phase === "validate" && (status === 401 || status === 403)) return new ProviderRequestError(400, message);
+  if (phase === "validate" && (status === 401 || status === 403)) return providerInputError(message);
   return new ProviderRequestError(status || 502, message);
 }
 
@@ -281,5 +280,5 @@ function readErrorMessage(payload: unknown): string | undefined {
 }
 
 function assertAtLeastOne(input: Record<string, unknown>, keys: string[], message: string): void {
-  if (keys.every((key) => input[key] === undefined)) throw new ProviderRequestError(400, message);
+  if (keys.every((key) => input[key] === undefined)) throw providerInputError(message);
 }

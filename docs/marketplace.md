@@ -10,6 +10,15 @@ When `OOMOL_CONNECT_ENCRYPTION_KEY` is configured, Connect encrypts the Marketpl
 
 At startup, Connect fetches discovery once, validates the API key once, intersects the remote action allowlist with its local catalog, and keeps that snapshot for action execution. Discovery or authentication failures do not prevent the rest of the server from starting.
 
+Before connecting, the browser reads the default Marketplace’s public discovery document directly, so you can browse official OOMOL applications without an API key. After a successful connection, the console shows the selected Marketplace's compatible services and enable/disable controls. Changing the discovery URL requires a new API key; removing the connection returns to the official directory. Official discounts do not apply to custom Marketplaces.
+
+## Marketplace and SaaS OAuth projects
+
+Marketplace virtual connections and SaaS OAuth accounts have separate keys and configuration.
+Use the Marketplace key here. Configure a project key under **OAuth Apps → SaaS OAuth project**
+to authorize an account and execute through its saved remote reference. That does not enable a
+Marketplace provider or change any existing connection's source. See [SaaS OAuth](saas-oauth.md).
+
 ## Public API contract
 
 Marketplace v1 consists of three HTTP endpoints:

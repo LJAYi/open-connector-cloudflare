@@ -1,14 +1,20 @@
-import type { CredentialValidationResult, CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type {
+  CredentialValidationResult,
+  CredentialValidators,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import { Buffer } from "node:buffer";
 import { compactObject, optionalString } from "../../core/cast.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
-  defineApiKeyProviderExecutors,
   providerUserAgent,
   ProviderRequestError,
   runProviderRequest,
+  providerInputError,
 } from "../provider-runtime.ts";
 
 export const worksnapsApiBaseUrl = "https://api.worksnaps.com/api";
@@ -166,6 +172,14 @@ export const worksnapsActionHandlers: ProviderActionHandlers<"worksnaps", Worksn
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, worksnapsActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: worksnapsApiBaseUrl,
+  auth: { type: "api_key_basic", suffix: ":ignored" },
+  skipDnsValidation: true,
+  defaultHeaders: { accept: "application/xml" },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }): Promise<CredentialValidationResult> {
     const root = await requestWorksnapsXml({
@@ -183,7 +197,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: user.id === undefined ? "worksnaps-api-token" : String(user.id),
         displayName: buildUserLabel(user) ?? "Worksnaps API Token",
       },
-      grantedScopes: [],
       metadata: compactObject({
         apiBaseUrl: worksnapsApiBaseUrl,
         validationEndpoint: worksnapsValidationPath,
@@ -199,7 +212,7 @@ export const credentialValidators: CredentialValidators = {
 
 async function requestWorksnapsXml(input: {
   path: string;
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   phase: "validate" | "execute";
   query?: Record<string, string | undefined>;
 }): Promise<XmlNode> {
@@ -233,8 +246,8 @@ function buildWorksnapsUrl(path: string, query?: Record<string, string | undefin
 
 function buildWorksnapsHeaders(apiKey: string): Headers {
   return new Headers({
-    accept: "application/xml",
-    authorization: `Basic ${Buffer.from(`${apiKey}:ignored`).toString("base64")}`,
+    "accept": "application/xml",
+    "authorization": `Basic ${Buffer.from(`${apiKey}:ignored`).toString("base64")}`,
     "user-agent": providerUserAgent,
   });
 }
@@ -242,7 +255,7 @@ function buildWorksnapsHeaders(apiKey: string): Headers {
 function createWorksnapsError(status: number, body: string, phase: "validate" | "execute"): ProviderRequestError {
   const message = extractWorksnapsErrorMessage(body) ?? `Worksnaps request failed with status ${status}`;
   if (phase === "validate" && status >= 400 && status < 500) {
-    return new ProviderRequestError(400, message);
+    return providerInputError(message);
   }
   return new ProviderRequestError(status || 502, message);
 }

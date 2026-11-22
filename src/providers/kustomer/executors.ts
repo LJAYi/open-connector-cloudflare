@@ -1,11 +1,11 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { optionalRecord, optionalString, requiredRecord, requiredString } from "../../core/cast.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
   createProviderTimeout,
-  defineApiKeyProviderExecutors,
   isAbortLikeError,
   providerInputError,
   providerUserAgent,
@@ -15,8 +15,7 @@ import {
 const service = "kustomer";
 const kustomerApiBaseUrl = "https://api.kustomerapp.com/v1";
 
-type KustomerActionContext = Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
-type KustomerActionHandler = (input: Record<string, unknown>, context: KustomerActionContext) => Promise<unknown>;
+type KustomerActionHandler = (input: Record<string, unknown>, context: ApiKeyProviderContext) => Promise<unknown>;
 type KustomerQueryValue = string | number | boolean | null | undefined;
 
 interface KustomerRequestInput {
@@ -108,6 +107,14 @@ export const kustomerActionHandlers: ProviderActionHandlers<"kustomer", Kustomer
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, kustomerActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: kustomerApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  defaultHeaders: { accept: "application/json" },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input) {
     requiredString(input.apiKey, "apiKey", providerInputError);
@@ -116,7 +123,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: "api_key",
         displayName: "Kustomer API Key",
       },
-      grantedScopes: [],
       metadata: {
         apiBaseUrl: kustomerApiBaseUrl,
         validationMode: "format_only",
@@ -128,8 +134,8 @@ export const credentialValidators: CredentialValidators = {
 async function requestKustomerJson(input: KustomerRequestInput): Promise<unknown> {
   const timeout = createProviderTimeout(input.signal);
   const headers: Record<string, string> = {
-    accept: "application/json",
-    authorization: `Bearer ${input.apiKey}`,
+    "accept": "application/json",
+    "authorization": `Bearer ${input.apiKey}`,
     "user-agent": providerUserAgent,
   };
   const init: RequestInit = {

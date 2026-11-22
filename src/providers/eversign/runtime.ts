@@ -1,5 +1,5 @@
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -25,7 +25,7 @@ export const eversignValidationPath = "/business";
 type EversignPhase = "validate" | "execute";
 
 interface EversignCredentialSummary {
-  primary: {
+  primary?: {
     businessId: number;
     businessName: string;
   };
@@ -222,11 +222,8 @@ export async function validateEversignCredential(
     signal,
     phase: "validate",
   });
-  const businesses = readResponseArray(payload, "business list").map(normalizeBusiness);
+  const businesses = (payload == null ? [] : readResponseArray(payload, "business list")).map(normalizeBusiness);
   const primary = businesses.find((business) => business.isPrimary) ?? businesses[0];
-  if (!primary) {
-    throw new ProviderRequestError(400, "Xodo Sign returned no businesses for this API key");
-  }
 
   return {
     primary,
@@ -257,7 +254,7 @@ async function requestEversignJson(input: {
     const response = await input.fetcher(url, {
       method: input.method ?? "GET",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "user-agent": providerUserAgent,
         ...(input.body ? { "content-type": "application/json" } : {}),
       },
@@ -265,6 +262,9 @@ async function requestEversignJson(input: {
       signal: timeout.signal,
     });
     const payload = await readEversignPayload(response);
+    if (response.ok && input.phase === "validate" && isNoBusinessesPayload(payload)) {
+      return [];
+    }
     if (!response.ok || isEversignErrorPayload(payload)) {
       throw mapEversignError(response.status, payload, input.phase);
     }
@@ -401,6 +401,12 @@ async function readEversignPayload(response: Response) {
 function isEversignErrorPayload(payload: unknown) {
   const body = optionalRecord(payload);
   return body?.success === false;
+}
+
+function isNoBusinessesPayload(payload: unknown) {
+  const body = optionalRecord(payload);
+  const error = body ? optionalRecord(body.error) : undefined;
+  return optionalString(error?.type) === "no_businesses_found_for_user";
 }
 
 function mapEversignError(status: number, payload: unknown, phase: EversignPhase) {

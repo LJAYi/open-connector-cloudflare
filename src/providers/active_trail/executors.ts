@@ -1,11 +1,11 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalBooleanOrNull, optionalRecord, rawStringOrNull } from "../../core/cast.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
   createProviderTimeout,
-  defineApiKeyProviderExecutors,
   isAbortLikeError,
   providerUserAgent,
   ProviderRequestError,
@@ -195,6 +195,17 @@ export const activeTrailActionHandlers: ProviderActionHandlers<"active_trail", A
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, activeTrailActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: activeTrailApiBaseUrl,
+  auth: { type: "api_key_header", name: "Authorization" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+    headers.set("content-type", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const payload = await requestActiveTrailJson({
@@ -214,7 +225,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: "active_trail:api_token",
         displayName: "ActiveTrail API Token",
       },
-      grantedScopes: [],
       metadata: compactObject({
         apiBaseUrl: activeTrailApiBaseUrl,
         validationEndpoint: "/account/balance",
@@ -228,7 +238,7 @@ export const credentialValidators: CredentialValidators = {
 async function requestActiveTrailJson(input: {
   method: ActiveTrailMethod;
   path: string;
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   query?: Record<string, QueryValue>;
   body?: Record<string, unknown>;
   phase: ActiveTrailPhase;
@@ -237,8 +247,8 @@ async function requestActiveTrailJson(input: {
 
   try {
     const headers: Record<string, string> = {
-      accept: "application/json",
-      authorization: input.context.apiKey,
+      "accept": "application/json",
+      "authorization": input.context.apiKey,
       "user-agent": providerUserAgent,
     };
     if (input.body) {

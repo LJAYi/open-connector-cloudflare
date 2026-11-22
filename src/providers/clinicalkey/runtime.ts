@@ -1,4 +1,4 @@
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 
 import { optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import {
@@ -6,10 +6,11 @@ import {
   providerUserAgent,
   ProviderRequestError,
   runProviderRequest,
+  providerResponseError,
 } from "../provider-runtime.ts";
 
-const clinicalKeyApiBaseUrl = "https://api.elsevier.com/sushi/r51";
-const clinicalKeyPlatformCode = "ck";
+export const clinicalKeyApiBaseUrl = "https://api.elsevier.com/sushi/r51";
+export const clinicalKeyPlatformCode = "ck";
 
 type ClinicalKeyRequestPhase = "validate" | "execute";
 type ClinicalKeyCredentials = {
@@ -90,7 +91,7 @@ export function createClinicalKeyActionContext(
 export async function validateClinicalKeyCredential(
   input: Record<string, string>,
   fetcher: typeof fetch,
-): Promise<{ profile: { displayName: string }; grantedScopes: string[]; metadata: Record<string, unknown> }> {
+): Promise<{ profile: { displayName: string }; metadata: Record<string, unknown> }> {
   const credentials = readValidationCredentials(input);
   const reports = requireObjectArray(
     await requestClinicalKeyJson({
@@ -104,7 +105,6 @@ export async function validateClinicalKeyCredential(
 
   return {
     profile: { displayName: `ClinicalKey ${credentials.customerId}` },
-    grantedScopes: [],
     metadata: {
       apiBaseUrl: clinicalKeyApiBaseUrl,
       platform: clinicalKeyPlatformCode,
@@ -144,7 +144,7 @@ async function requestClinicalKeyJson(input: {
     const response = await input.fetcher(buildClinicalKeyUrl(input.path, input.query, input.credentials), {
       method: "GET",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "user-agent": providerUserAgent,
       },
       signal,
@@ -196,7 +196,7 @@ function createClinicalKeyError(status: number, payload: unknown, phase: Clinica
   }
 
   if (phase === "validate" && status >= 400 && status < 500) {
-    return new ProviderRequestError(400, message);
+    return providerInputError(message);
   }
 
   if (status === 401 || status === 403) {
@@ -207,7 +207,7 @@ function createClinicalKeyError(status: number, payload: unknown, phase: Clinica
     return new ProviderRequestError(502, message, status);
   }
 
-  return new ProviderRequestError(502, message);
+  return providerResponseError(message);
 }
 
 function extractClinicalKeyErrorMessage(payload: unknown): string | undefined {

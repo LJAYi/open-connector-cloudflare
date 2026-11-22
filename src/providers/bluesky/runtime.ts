@@ -1,6 +1,7 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext, ProviderFetch } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
+import type { ProviderFetch } from "../provider-runtime.ts";
 
 import { compactObject, optionalInteger, optionalRecord, optionalString } from "../../core/cast.ts";
 import { createProviderTimeout, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
@@ -162,7 +163,6 @@ export async function validateBlueskyCredential(
     profile: {
       accountId: session.did,
       displayName: session.handle,
-      grantedScopes: [],
     },
     metadata: compactObject({
       apiBaseUrl: blueskyApiBaseUrl,
@@ -282,9 +282,9 @@ function buildBlueskyUrl(path: string, query?: Record<string, unknown>): URL {
 
 function blueskyHeaders(accessJwt: string | undefined, hasBody: boolean): Record<string, string> {
   return compactObject({
-    accept: "application/json",
+    "accept": "application/json",
     "content-type": hasBody ? "application/json" : undefined,
-    authorization: accessJwt ? `Bearer ${accessJwt}` : undefined,
+    "authorization": accessJwt ? `Bearer ${accessJwt}` : undefined,
     "user-agent": providerUserAgent,
   });
 }

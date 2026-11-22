@@ -1,6 +1,7 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ProviderFetch, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ProviderRuntimeHandler } from "../provider-executors.ts";
+import type { ProviderFetch } from "../provider-runtime.ts";
 
 import { compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
 import { ProviderRequestError, providerUserAgent, runProviderRequest } from "../provider-runtime.ts";
@@ -130,7 +131,6 @@ export async function validateSageSalesManagementCredential(
       accountId: userId === undefined ? "sage-sales-management-account" : String(userId),
       displayName: accountLabel ?? "Sage Sales Management Account",
     },
-    grantedScopes: [],
     metadata: compactObject({
       apiBaseUrl: sageSalesManagementApiBaseUrl,
       validationEndpoint: "/users",
@@ -352,7 +352,7 @@ async function requestSageSalesManagementJsonWithStatus(input: {
     const response = await input.fetcher(buildSageSalesManagementUrl(input.path, input.query), {
       method: input.method,
       headers: compactObject({
-        accept: "application/json",
+        "accept": "application/json",
         ...(input.body ? { "content-type": "application/json" } : {}),
         ...(input.sessionKey ? { "x-session-key": input.sessionKey } : {}),
         ...input.extraHeaders,

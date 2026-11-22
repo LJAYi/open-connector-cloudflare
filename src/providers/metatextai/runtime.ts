@@ -1,5 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 import type { ProviderFetch } from "../provider-runtime.ts";
 
 import { compactObject, optionalBoolean, optionalRecord, optionalString } from "../../core/cast.ts";
@@ -10,7 +10,7 @@ import {
   runProviderRequest,
 } from "../provider-runtime.ts";
 
-const metatextaiApiBaseUrl = "https://guard-api.metatext.ai";
+export const metatextaiApiBaseUrl = "https://guard-api.metatext.ai";
 
 type MetatextaiPhase = "validate" | "execute";
 type MetatextaiActionHandler = (input: Record<string, unknown>, context: MetatextaiActionContext) => Promise<unknown>;
@@ -116,7 +116,6 @@ export async function validateMetatextaiCredential(
       accountId: context.applicationId,
       displayName: `MetatextAI · ${context.applicationId}`,
     },
-    grantedScopes: [],
     metadata: {
       apiBaseUrl: metatextaiApiBaseUrl,
       applicationId: context.applicationId,
@@ -137,8 +136,8 @@ async function metatextaiRequestJson(input: {
     const response = await input.context.fetcher(buildUrl(input.path), {
       method: input.method,
       headers: {
-        accept: "application/json",
-        authorization: `Bearer ${input.context.apiKey}`,
+        "accept": "application/json",
+        "authorization": `Bearer ${input.context.apiKey}`,
         "content-type": "application/json",
         "user-agent": providerUserAgent,
       },

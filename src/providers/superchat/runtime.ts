@@ -1,6 +1,6 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext, ProviderRuntimeHandler } from "../provider-executors.ts";
 
 import { compactObject, optionalInteger, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
 import {
@@ -261,7 +261,6 @@ export async function validateSuperchatCredential(
       accountId: optionalString(user?.id),
       displayName: optionalString(user?.email) ?? "Superchat API Key",
     },
-    grantedScopes: [],
     metadata: {
       apiBaseUrl: superchatApiBaseUrl,
       validationEndpoint: "/me",
@@ -348,7 +347,7 @@ async function requestSuperchatJson(input: SuperchatRequestInput): Promise<unkno
 
 function buildHeaders(apiKey: string, hasBody: boolean): Record<string, string> {
   return {
-    accept: "application/json",
+    "accept": "application/json",
     ...(hasBody ? { "content-type": "application/json" } : {}),
     "user-agent": providerUserAgent,
     "x-api-key": apiKey,

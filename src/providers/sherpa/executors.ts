@@ -1,13 +1,10 @@
 import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { optionalRecord, optionalString } from "../../core/cast.ts";
-import {
-  createProviderTimeout,
-  defineApiKeyProviderExecutors,
-  defineProviderProxy,
-  ProviderRequestError,
-} from "../provider-runtime.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { createProviderTimeout, ProviderRequestError } from "../provider-runtime.ts";
 
 const service = "sherpa";
 const apiBaseUrl = "https://requirements-api.joinsherpa.com";
@@ -46,7 +43,6 @@ export const credentialValidators: CredentialValidators = {
     );
     return {
       profile: { accountId: "sherpa", displayName: "Sherpa API Key" },
-      grantedScopes: [],
       metadata: { apiBaseUrl, validationEndpoint: "/v3/trips/llm" },
     };
   },
@@ -120,7 +116,7 @@ async function request(
   try {
     const response = await fetcher(`${apiBaseUrl}${path}`, {
       method: "POST",
-      headers: { accept: "application/json", "content-type": "application/vnd.api+json", "x-api-key": apiKey },
+      headers: { "accept": "application/json", "content-type": "application/vnd.api+json", "x-api-key": apiKey },
       body: JSON.stringify(body),
       signal: timeout.signal,
     });

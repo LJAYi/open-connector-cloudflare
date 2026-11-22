@@ -1,14 +1,10 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import { compactObject, optionalInteger, optionalRecord, optionalString, requiredString } from "../../core/cast.ts";
-import {
-  defineApiKeyProviderExecutors,
-  ProviderRequestError,
-  providerUserAgent,
-  runProviderRequest,
-} from "../provider-runtime.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { ProviderRequestError, providerUserAgent, runProviderRequest } from "../provider-runtime.ts";
 
 const service = "calendarific";
 const calendarificApiBaseUrl = "https://calendarific.com/api/v2";
@@ -75,6 +71,16 @@ const calendarificActionHandlers: ProviderActionHandlers<"calendarific", Calenda
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, calendarificActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: calendarificApiBaseUrl,
+  auth: { type: "api_key_query", name: "api_key" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const payload = await requestCalendarificJson({
@@ -96,7 +102,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: "calendarific",
         displayName: "Calendarific API Key",
       },
-      grantedScopes: [],
       metadata: compactObject({
         validationEndpoint: "/countries",
         countryCount: countries.length,
@@ -110,14 +115,14 @@ export const credentialValidators: CredentialValidators = {
 async function requestCalendarificJson(input: {
   path: string;
   params: Record<string, string | undefined>;
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">;
+  context: ApiKeyProviderContext;
   phase: CalendarificPhase;
 }): Promise<Record<string, unknown>> {
   return runProviderRequest({ signal: input.context.signal, label: "Calendarific" }, async (signal) => {
     const response = await input.context.fetcher(buildCalendarificUrl(input.path, input.context.apiKey, input.params), {
       method: "GET",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "user-agent": providerUserAgent,
       },
       signal,

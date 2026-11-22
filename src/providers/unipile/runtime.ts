@@ -1,5 +1,5 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 
 import { createHash } from "node:crypto";
 import { compactObject, optionalBoolean, optionalRecord, optionalString } from "../../core/cast.ts";
@@ -130,7 +130,6 @@ export async function validateUnipileCredential(
       accountId: buildUnipileProviderAccountId(dsn, input.apiKey),
       displayName: buildUnipileAccountLabel(dsn),
     },
-    grantedScopes: [],
     metadata: {
       apiBaseUrl: buildUnipileBaseUrl(dsn),
       dsn,
@@ -146,7 +145,7 @@ async function requestUnipileJson(input: UnipileRequestInput): Promise<unknown> 
     const response = await input.fetcher(buildUnipileUrl(input.dsn, input.path, input.query), {
       method: "GET",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "user-agent": providerUserAgent,
         "X-API-KEY": input.apiKey,
       },

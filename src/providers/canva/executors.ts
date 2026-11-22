@@ -1,13 +1,10 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { OAuthProviderContext, ProviderActionHandlers } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { OAuthProviderContext, ProviderActionHandlers } from "../provider-executors.ts";
 
 import { compactObject, optionalNumber, optionalRecord, optionalString, requiredRecord } from "../../core/cast.ts";
-import {
-  defineOAuthProviderExecutors,
-  providerInputError,
-  ProviderRequestError,
-  requiredInputString,
-} from "../provider-runtime.ts";
+import { defineOAuthProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { providerInputError, ProviderRequestError, requiredInputString } from "../provider-runtime.ts";
 
 const service = "canva";
 const canvaApiBaseUrl = "https://api.canva.com/rest";
@@ -25,6 +22,13 @@ export function createCanvaExecutors(service: string, apiBaseUrl: string): Provi
 }
 
 export const executors: ProviderExecutors = createCanvaExecutors(service, canvaApiBaseUrl);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: canvaApiBaseUrl,
+  auth: { type: "oauth_bearer" },
+  skipDnsValidation: true,
+});
 
 /** Build Canva credential validators for one regional OAuth API base URL. */
 export function createCanvaCredentialValidators(apiBaseUrl: string): CredentialValidators {

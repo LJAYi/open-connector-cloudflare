@@ -1,6 +1,10 @@
-import type { CredentialValidationResult, CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type {
+  CredentialValidationResult,
+  CredentialValidators,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { ProviderActionHandlers, ApiKeyProviderContext } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -10,16 +14,21 @@ import {
   optionalString,
   requiredString,
 } from "../../core/cast.ts";
-import {
-  defineApiKeyProviderExecutors,
-  ProviderRequestError,
-  providerUserAgent,
-  requiredInputString,
-} from "../provider-runtime.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { ProviderRequestError, providerUserAgent, requiredInputString } from "../provider-runtime.ts";
 
 const service = "saas_custom_domains";
 const saasCustomDomainsApiBaseUrl = "https://app.saascustomdomains.com/api/v1";
 const saasCustomDomainsApiUrl = new URL(saasCustomDomainsApiBaseUrl);
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: saasCustomDomainsApiBaseUrl,
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  skipDnsValidation: true,
+  defaultHeaders: { accept: "application/json" },
+});
 
 type SaasCustomDomainsPhase = "validate" | "execute";
 type QueryValue = string | number | undefined;
@@ -82,7 +91,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: firstAccountUuid ?? "saas_custom_domains",
         displayName: firstAccountName ?? "SaaS Custom Domains API Token",
       },
-      grantedScopes: [],
       metadata: compactObject({
         apiBaseUrl: saasCustomDomainsApiBaseUrl,
         authMethod: "bearer",
@@ -95,7 +103,7 @@ export const credentialValidators: CredentialValidators = {
 };
 
 async function listAccounts(
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
+  context: ApiKeyProviderContext,
   phase: SaasCustomDomainsPhase,
 ): Promise<{ accounts: Array<Record<string, unknown>> }> {
   const payload = await requestSaasCustomDomainsJson({ method: "GET", path: "/accounts" }, context, phase);
@@ -277,7 +285,7 @@ async function requestSaasCustomDomainsJson(
     query?: Record<string, QueryValue>;
     form?: Record<string, FormValue>;
   },
-  context: Pick<ApiKeyProviderContext, "apiKey" | "fetcher" | "signal">,
+  context: ApiKeyProviderContext,
   phase: SaasCustomDomainsPhase,
 ): Promise<unknown> {
   const url = new URL(`${saasCustomDomainsApiUrl.pathname}${request.path}`, saasCustomDomainsApiUrl.origin);
@@ -286,8 +294,8 @@ async function requestSaasCustomDomainsJson(
   }
 
   const headers = new Headers({
-    accept: "application/json",
-    authorization: `Bearer ${context.apiKey}`,
+    "accept": "application/json",
+    "authorization": `Bearer ${context.apiKey}`,
     "user-agent": providerUserAgent,
   });
   let body: URLSearchParams | undefined;

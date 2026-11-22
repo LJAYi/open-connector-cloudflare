@@ -1,6 +1,6 @@
-import type { CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type { CredentialValidators, ProviderExecutors, ProviderProxyExecutor } from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -10,18 +10,19 @@ import {
   rawStringOrNull,
   requiredString,
 } from "../../core/cast.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
-  defineApiKeyProviderExecutors,
   isAbortLikeError,
   providerInputError,
   providerUserAgent,
   ProviderRequestError,
   requiredResponseRecord,
+  defaultProviderRequestTimeoutMs,
 } from "../provider-runtime.ts";
 
 const service = "haveibeenpwned";
 const haveibeenpwnedApiBaseUrl = "https://haveibeenpwned.com/api/v3";
-const haveibeenpwnedDefaultRequestTimeoutMs = 30_000;
 
 type HaveIBeenPwnedRequestPhase = "validate" | "execute";
 type HaveIBeenPwnedActionContext = ApiKeyProviderContext;
@@ -70,6 +71,16 @@ export const haveibeenpwnedActionHandlers: ProviderActionHandlers<"haveibeenpwne
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, haveibeenpwnedActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: haveibeenpwnedApiBaseUrl,
+  auth: { type: "api_key_header", name: "hibp-api-key" },
+  skipDnsValidation: true,
+  customizeRequest({ headers }) {
+    headers.set("accept", "application/json");
+  },
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const subscription = normalizeSubscription(
@@ -86,7 +97,6 @@ export const credentialValidators: CredentialValidators = {
       profile: {
         displayName: subscription.SubscriptionName,
       },
-      grantedScopes: [],
       metadata: compactObject({
         apiBaseUrl: haveibeenpwnedApiBaseUrl,
         validationEndpoint: "/subscription/status",
@@ -236,14 +246,14 @@ async function requestHaveIBeenPwnedJson(input: {
   signal?: AbortSignal;
   query?: Record<string, string | undefined>;
 }): Promise<unknown> {
-  const timeoutSignal = AbortSignal.timeout(haveibeenpwnedDefaultRequestTimeoutMs);
+  const timeoutSignal = AbortSignal.timeout(defaultProviderRequestTimeoutMs);
   const signal = input.signal ? AbortSignal.any([input.signal, timeoutSignal]) : timeoutSignal;
 
   try {
     const response = await input.fetcher(buildHaveIBeenPwnedUrl(input.path, input.query ?? {}), {
       method: "GET",
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "hibp-api-key": input.apiKey,
         "user-agent": providerUserAgent,
       },

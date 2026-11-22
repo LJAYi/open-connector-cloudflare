@@ -1,6 +1,7 @@
 import type { CredentialValidationResult } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ProviderFetch, ProviderRuntimeHandler } from "../provider-runtime.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ProviderRuntimeHandler } from "../provider-executors.ts";
+import type { ProviderFetch } from "../provider-runtime.ts";
 
 import {
   compactObject,
@@ -184,7 +185,6 @@ export async function validateQdrantCredential(
       accountId: `${service}:${context.clusterUrl.hostname}`,
       displayName: `Qdrant Cloud - ${context.clusterUrl.hostname}`,
     },
-    grantedScopes: [],
     metadata: {
       clusterUrl: context.clusterUrl.origin,
       validationEndpoint: "/collections",
@@ -205,7 +205,7 @@ async function requestQdrantJson(
     const response = await context.fetcher(new URL(path, `${context.clusterUrl.origin}/`), {
       method,
       headers: {
-        accept: "application/json",
+        "accept": "application/json",
         "api-key": context.apiKey,
         "user-agent": providerUserAgent,
         ...(body === undefined ? {} : { "content-type": "application/json" }),
@@ -243,7 +243,7 @@ async function requestQdrantJson(
   }
 }
 
-function normalizeQdrantClusterUrl(value: string | undefined): URL {
+export function normalizeQdrantClusterUrl(value: unknown): URL {
   const url = assertPublicHttpUrl(requiredString(value, "clusterUrl", providerInputError), {
     fieldName: "clusterUrl",
     createError: providerInputError,
@@ -291,7 +291,7 @@ function createQdrantError(status: number, payload: unknown, phase: QdrantReques
     optionalString(record?.message) ??
     `Qdrant request failed with status ${status}`;
   if ((status === 401 || status === 403) && phase === "validate") {
-    return new ProviderRequestError(400, message);
+    return providerInputError(message);
   }
   return new ProviderRequestError(status >= 500 ? 502 : status || 502, message);
 }

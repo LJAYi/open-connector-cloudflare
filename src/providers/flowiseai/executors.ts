@@ -1,19 +1,26 @@
-import type { CredentialValidators, ExecutionContext, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
+import type {
+  CredentialValidators,
+  ExecutionContext,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
 
 import { compactObject, optionalRecord, optionalString } from "../../core/cast.ts";
-import { assertPublicHttpUrl } from "../../core/request.ts";
+import { assertPublicHttpUrl, isPrivateNetworkAccessAllowed } from "../../core/request.ts";
+import { requireApiKeyCredential } from "../provider-credentials.ts";
+import { defineProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
 import {
-  defineProviderExecutors,
+  createProviderFetch,
   isAbortLikeError,
   providerUserAgent,
   ProviderRequestError,
-  requireApiKeyCredential,
   requiredResponseRecord,
+  defaultProviderRequestTimeoutMs,
 } from "../provider-runtime.ts";
 
 const service = "flowiseai";
-const flowiseaiRequestTimeoutMs = 30_000;
 
 type FlowiseaiRequestPhase = "validate" | "execute";
 type FlowiseaiActionHandler = (input: Record<string, unknown>, context: FlowiseaiActionContext) => Promise<unknown>;
@@ -106,17 +113,30 @@ export const executors: ProviderExecutors = defineProviderExecutors<FlowiseaiAct
       signal: context.signal,
     };
   },
+  allowPrivateNetwork: isPrivateNetworkAccessAllowed,
+});
+
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  async baseUrl(context) {
+    const credential = await requireApiKeyCredential(context, service);
+    return normalizeBaseUrl(credential.metadata.baseUrl ?? credential.values.baseUrl);
+  },
+  auth: { type: "api_key_authorization", prefix: "Bearer " },
+  allowPrivateNetwork: isPrivateNetworkAccessAllowed,
+  defaultHeaders: { accept: "application/json" },
 });
 
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }) {
     const baseUrl = normalizeBaseUrl(input.values.baseUrl);
+    const guardedFetcher = createProviderFetch({ fetch: fetcher, allowPrivateNetwork: isPrivateNetworkAccessAllowed });
     const chatflow = normalizeChatflow(
       await requestFlowiseJson({
         baseUrl,
         apiKey: input.apiKey,
         path: `/chatflows/apikey/${encodeURIComponent(input.apiKey)}`,
-        fetcher,
+        fetcher: guardedFetcher,
         signal,
         phase: "validate",
       }),
@@ -127,7 +147,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: chatflow.id,
         displayName: chatflow.name || "FlowiseAI Chatflow API Key",
       },
-      grantedScopes: [],
       metadata: compactObject({
         baseUrl,
         chatflowId: chatflow.id,
@@ -144,15 +163,15 @@ export const credentialValidators: CredentialValidators = {
 };
 
 async function requestFlowiseJson(input: FlowiseaiRequestInput): Promise<unknown> {
-  const timeoutSignal = AbortSignal.timeout(flowiseaiRequestTimeoutMs);
+  const timeoutSignal = AbortSignal.timeout(defaultProviderRequestTimeoutMs);
   const signal = input.signal ? AbortSignal.any([input.signal, timeoutSignal]) : timeoutSignal;
 
   try {
     const response = await input.fetcher(buildFlowiseUrl(input.baseUrl, input.path), {
       method: input.method ?? "GET",
       headers: {
-        accept: "application/json",
-        authorization: `Bearer ${input.apiKey}`,
+        "accept": "application/json",
+        "authorization": `Bearer ${input.apiKey}`,
         "content-type": "application/json",
         "user-agent": providerUserAgent,
       },
@@ -349,11 +368,9 @@ function normalizeBaseUrl(value: unknown): string {
   const url = assertPublicHttpUrl(raw, {
     fieldName: "baseUrl",
     createError: (message) => new ProviderRequestError(400, message),
+    allowPrivateNetwork: isPrivateNetworkAccessAllowed(),
   });
 
-  if (url.protocol !== "https:") {
-    throw new ProviderRequestError(400, "baseUrl must use https");
-  }
   if (url.username || url.password || url.search || url.hash) {
     throw new ProviderRequestError(400, "baseUrl must be a clean API root URL");
   }

@@ -1,4 +1,4 @@
-import type { ApiKeyActionRequest, ProviderActionHandlers } from "../provider-runtime.ts";
+import type { ApiKeyActionRequest, ProviderActionHandlers } from "../provider-executors.ts";
 import type { ProductlaneActionName } from "./actions.ts";
 
 import { requiredString } from "../../core/cast.ts";
@@ -208,8 +208,8 @@ async function requestProductlaneJson(options: ProductlaneRequestOptions) {
   }
 
   const headers: Record<string, string> = {
-    accept: "application/json",
-    authorization: `Bearer ${options.apiKey}`,
+    "accept": "application/json",
+    "authorization": `Bearer ${options.apiKey}`,
     "user-agent": providerUserAgent,
   };
   if (options.body !== undefined) {

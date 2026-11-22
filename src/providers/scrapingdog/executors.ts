@@ -1,6 +1,11 @@
-import type { CredentialValidationResult, CredentialValidators, ProviderExecutors } from "../../core/types.ts";
-import type { ProviderActionHandlers } from "../provider-runtime.ts";
-import type { ApiKeyProviderContext } from "../provider-runtime.ts";
+import type {
+  CredentialValidationResult,
+  CredentialValidators,
+  ProviderExecutors,
+  ProviderProxyExecutor,
+} from "../../core/types.ts";
+import type { ProviderActionHandlers } from "../provider-executors.ts";
+import type { ApiKeyProviderContext } from "../provider-executors.ts";
 
 import {
   compactObject,
@@ -10,12 +15,9 @@ import {
   optionalString,
   requiredString,
 } from "../../core/cast.ts";
-import {
-  defineApiKeyProviderExecutors,
-  providerInputError,
-  providerUserAgent,
-  ProviderRequestError,
-} from "../provider-runtime.ts";
+import { defineApiKeyProviderExecutors } from "../provider-executors.ts";
+import { defineProviderProxy } from "../provider-proxy.ts";
+import { providerInputError, providerUserAgent, ProviderRequestError } from "../provider-runtime.ts";
 
 const service = "scrapingdog";
 const scrapingdogBaseUrl = "https://api.scrapingdog.com";
@@ -151,6 +153,13 @@ export const scrapingdogActionHandlers: ProviderActionHandlers<"scrapingdog", Sc
 
 export const executors: ProviderExecutors = defineApiKeyProviderExecutors(service, scrapingdogActionHandlers);
 
+export const proxy: ProviderProxyExecutor = defineProviderProxy({
+  service,
+  baseUrl: scrapingdogBaseUrl,
+  auth: { type: "api_key_query", name: "api_key" },
+  skipDnsValidation: true,
+});
+
 export const credentialValidators: CredentialValidators = {
   async apiKey(input, { fetcher, signal }): Promise<CredentialValidationResult> {
     const usage = await requestScrapingdogAccount(
@@ -167,7 +176,6 @@ export const credentialValidators: CredentialValidators = {
         accountId: "scrapingdog",
         displayName: "Scrapingdog API Key",
       },
-      grantedScopes: [],
       metadata: {
         validationEndpoint: "/account",
         apiBaseUrl: scrapingdogBaseUrl,
@@ -213,7 +221,7 @@ async function requestScrapingdogRaw(
     return await context.fetcher(buildScrapingdogUrl(path, query, context.apiKey), {
       method: "GET",
       headers: {
-        accept: "*/*",
+        "accept": "*/*",
         "user-agent": providerUserAgent,
       },
       signal: context.signal,
@@ -240,7 +248,7 @@ function buildScrapingdogUrl(path: string, query: Record<string, ScrapingdogQuer
 function createScrapingdogError(status: number, body: string, phase: ScrapingdogPhase): ProviderRequestError {
   const message = extractScrapingdogMessage(body) ?? `Scrapingdog request failed with ${status}`;
   if (phase === "validate" && [400, 401, 403].includes(status)) {
-    return new ProviderRequestError(400, message);
+    return providerInputError(message);
   }
   if (status === 403) {
     return new ProviderRequestError(429, message);
