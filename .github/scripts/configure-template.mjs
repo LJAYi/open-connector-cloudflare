@@ -1,9 +1,20 @@
+import { execFileSync } from "node:child_process";
 import { readFile, writeFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 
 const upstreamTag = process.argv[2];
 
 if (!/^v\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(upstreamTag ?? "")) {
   throw new Error("Usage: node .github/scripts/configure-template.mjs <upstream-release-tag>");
+}
+
+// Fail the sync before deployment if upstream changes conflict with the Free-plan optimization.
+const catalogPatch = fileURLToPath(new URL("../patches/cloudflare-catalog.patch", import.meta.url));
+try {
+  execFileSync("git", ["apply", "--reverse", "--check", catalogPatch], { stdio: "pipe" });
+} catch {
+  execFileSync("git", ["apply", "--check", catalogPatch], { stdio: "inherit" });
+  execFileSync("git", ["apply", catalogPatch], { stdio: "inherit" });
 }
 
 const packagePath = new URL("../../package.json", import.meta.url);

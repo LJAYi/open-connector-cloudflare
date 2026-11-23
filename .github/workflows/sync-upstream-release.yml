@@ -53,6 +53,7 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/open-connector-cloudflare/.github/scripts"
           mkdir -p "$RUNNER_TEMP/open-connector-cloudflare/.github/workflows"
+          cp -R .github/patches "$RUNNER_TEMP/open-connector-cloudflare/.github/patches"
           cp README.md "$RUNNER_TEMP/open-connector-cloudflare/README.md"
           cp .dev.vars.example "$RUNNER_TEMP/open-connector-cloudflare/.dev.vars.example"
           cp .github/scripts/check-cloudflare-free-limits.mjs "$RUNNER_TEMP/open-connector-cloudflare/.github/scripts/check-cloudflare-free-limits.mjs"
@@ -83,6 +84,7 @@ jobs:
         run: |
           rm -rf .github
           mkdir -p .github/scripts .github/workflows
+          cp -R "$RUNNER_TEMP/open-connector-cloudflare/.github/patches" .github/patches
           cp "$RUNNER_TEMP/open-connector-cloudflare/README.md" README.md
           cp "$RUNNER_TEMP/open-connector-cloudflare/.dev.vars.example" .dev.vars.example
           cp "$RUNNER_TEMP/open-connector-cloudflare/.github/scripts/check-cloudflare-free-limits.mjs" .github/scripts/check-cloudflare-free-limits.mjs
