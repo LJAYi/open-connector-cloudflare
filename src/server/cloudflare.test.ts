@@ -17,6 +17,11 @@ import { createWorkerSecretCodec } from "./secrets/worker-secret-codec.ts";
 import { D1RuntimeDatabase } from "./storage/d1/runtime-store.ts";
 import { SqliteD1Database } from "./storage/d1/test-database.ts";
 
+vi.mock("./cloudflare/catalog-startup.ts", async () => {
+  const { loadCatalogFromAssets } = await import("./cloudflare/catalog-assets.ts");
+  return { bindStartupCatalog: loadCatalogFromAssets };
+});
+
 const provider = {
   service: "example",
   displayName: "Example",

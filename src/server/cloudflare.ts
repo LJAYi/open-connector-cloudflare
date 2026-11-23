@@ -15,7 +15,7 @@ import { executorModules } from "../providers/registry.cloudflare.generated.ts";
 import { SaasCleanupService } from "../saas/saas-cleanup-service.ts";
 import { isConsoleShellPath } from "./api/console-paths.ts";
 import { DEFAULT_OAUTH_CLOSE_DELAY_SECONDS, parseOAuthResultOrigins } from "./api/oauth-completion-page.ts";
-import { loadCatalogFromAssets } from "./cloudflare/catalog-assets.ts";
+import { bindStartupCatalog } from "./cloudflare/catalog-startup.ts";
 import { readNonNegativeInteger, readPositiveInteger, resolvePublicOrigin } from "./cloudflare/cloudflare-env.ts";
 import { createConnectApp } from "./connect-app.ts";
 import { preloadOptionalServerModules } from "./connect-server.ts";
@@ -192,11 +192,7 @@ function writeWorkerLog(level: "error" | "info" | "warn"): (fields: unknown, mes
 function loadCatalogOnce(assets: AssetsBinding): Promise<CatalogStore> {
   // The catalog depends only on the assets binding, which is fixed for the isolate, so one slot
   // under a constant key covers every request.
-  return catalogCache.get("", () =>
-    loadCatalogFromAssets(assets, {
-      executableServices: Object.keys(executorModules),
-    }),
-  );
+  return catalogCache.get("", async () => bindStartupCatalog(assets));
 }
 
 function createSecretCodec(encryptionKey: string | undefined): Promise<ISecretCodec> {

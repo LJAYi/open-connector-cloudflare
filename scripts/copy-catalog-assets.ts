@@ -42,6 +42,7 @@ export async function copyCatalogAssets(options: CopyCatalogAssetsOptions): Prom
 
   await rm(options.targetDir, { recursive: true, force: true });
   await mkdir(options.targetDir, { recursive: true });
+  await mkdir(join(options.targetDir, "providers"), { recursive: true });
 
   const chunkNames = chunks.map((_, index) => `apps-${index.toString().padStart(4, "0")}.json`);
   const index: CatalogAssetIndex = {
@@ -51,6 +52,7 @@ export async function copyCatalogAssets(options: CopyCatalogAssetsOptions): Prom
   };
 
   await Promise.all([
+    ...providers.map((provider) => writeFile(join(options.targetDir, "providers", provider.filename), provider.json)),
     writeFile(join(options.targetDir, "index.json"), `${JSON.stringify(index)}\n`),
     ...chunks.map((chunk, index) => writeFile(join(options.targetDir, chunkNames[index]!), chunk)),
   ]);

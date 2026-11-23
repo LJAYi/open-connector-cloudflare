@@ -8,6 +8,7 @@ const generatedPaths = [
   join(process.cwd(), "src/providers/registry.generated.ts"),
   join(process.cwd(), "src/providers/registry.cloudflare.generated.ts"),
   join(process.cwd(), "src/providers/action-contracts.generated.ts"),
+  join(process.cwd(), "src/providers/catalog.cloudflare.generated.ts"),
 ];
 const catalogDir = join(process.cwd(), "catalog/apps");
 const catalogIndexFile = join(process.cwd(), "catalog", catalogIndexFileName);
@@ -27,7 +28,7 @@ const [generatedFilesPresent, catalogFresh] = await Promise.all([
   isFreshCatalog(sourceMtimeMs),
 ]);
 // A fresh catalog proves all generated provider files were produced from the same source set.
-if (!catalogFresh) {
+if (!catalogFresh || !generatedFilesPresent[3]) {
   runNodeScript("scripts/generate-catalog.ts");
 } else if (generatedFilesPresent.some((present) => !present)) {
   runNodeScript("scripts/generate-provider-registry.ts");
