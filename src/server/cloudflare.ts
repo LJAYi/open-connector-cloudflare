@@ -15,6 +15,7 @@ import { executorModules } from "../providers/registry.cloudflare.generated.ts";
 import { SaasCleanupService } from "../saas/saas-cleanup-service.ts";
 import { isConsoleShellPath } from "./api/console-paths.ts";
 import { DEFAULT_OAUTH_CLOSE_DELAY_SECONDS, parseOAuthResultOrigins } from "./api/oauth-completion-page.ts";
+import { withCatalogAssetScope } from "./cloudflare/bundled-catalog.ts";
 import { bindStartupCatalog } from "./cloudflare/catalog-startup.ts";
 import { readNonNegativeInteger, readPositiveInteger, resolvePublicOrigin } from "./cloudflare/cloudflare-env.ts";
 import { createConnectApp } from "./connect-app.ts";
@@ -83,6 +84,10 @@ export default {
 };
 
 async function fetchRuntime(request: Request, env: CloudflareEnv): Promise<Response> {
+  return withCatalogAssetScope(() => fetchRuntimeInScope(request, env));
+}
+
+async function fetchRuntimeInScope(request: Request, env: CloudflareEnv): Promise<Response> {
   const publicOrigin = resolvePublicOrigin(request, env);
   const { app } = await appCache.get(createCacheKey(env, publicOrigin), () => createCloudflareApp(env, publicOrigin));
   const response = await app.fetch(request, env);

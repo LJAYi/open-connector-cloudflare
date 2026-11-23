@@ -2,8 +2,16 @@ import type { CatalogProviderMetadata, CatalogStore, ExecutableActionOptions } f
 import type { ProviderDefinition } from "../../core/types.ts";
 import type { AssetsBinding } from "./cloudflare-bindings.ts";
 
+import { AsyncLocalStorage } from "node:async_hooks";
 import { createCatalogFromMetadata, resolveExecutableActionIds } from "../../catalog-store.ts";
 import { readJsonAsset } from "./catalog-assets.ts";
+
+const requestReads = new AsyncLocalStorage<Map<string, Promise<unknown>>>();
+
+/** Coalesce schema reads only within one request, never across request lifetimes. */
+export function withCatalogAssetScope<T>(run: () => Promise<T>): Promise<T> {
+  return requestReads.run(new Map(), run);
+}
 
 /** Prepare immutable list data during isolate startup, not within a Free-plan request's CPU budget. */
 export function prepareBundledCatalog(
@@ -30,10 +38,13 @@ export function prepareBundledCatalog(
         const service = summary.service;
         let provider = cache.get(service);
         if (!provider) {
-          provider = (await readJsonAsset(
-            assets,
-            `/catalog/providers/${encodeURIComponent(service)}.json`,
-          )) as ProviderDefinition;
+          const reads = requestReads.getStore();
+          let pending = reads?.get(service);
+          if (!pending) {
+            pending = readJsonAsset(assets, `/catalog/providers/${encodeURIComponent(service)}.json`);
+            reads?.set(service, pending);
+          }
+          provider = (await pending) as ProviderDefinition;
           if (provider.service !== service || !Array.isArray(provider.actions)) {
             throw new Error(`Invalid catalog provider asset: ${service}`);
           }
