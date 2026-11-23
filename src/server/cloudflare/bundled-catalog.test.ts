@@ -2,7 +2,7 @@ import type { ProviderDefinition } from "../../core/types.ts";
 
 import { describe, expect, it } from "vitest";
 import { createCatalogStore } from "../../catalog-store.ts";
-import { prepareBundledCatalog } from "./bundled-catalog.ts";
+import { prepareBundledCatalog, withCatalogAssetScope } from "./bundled-catalog.ts";
 
 const provider: ProviderDefinition = {
   service: "example",
@@ -26,6 +26,26 @@ const provider: ProviderDefinition = {
 };
 
 describe("bundled Cloudflare catalog", () => {
+  it("coalesces concurrent details within one request without sharing pending reads across requests", async () => {
+    let attempts = 0;
+    const catalog = prepareBundledCatalog(
+      [provider],
+      {},
+    )({
+      fetch: async () => {
+        attempts++;
+        return Response.json(provider);
+      },
+    });
+    await Promise.all(
+      [1, 2].map(() =>
+        withCatalogAssetScope(async () => {
+          await Promise.all(Array.from({ length: 60 }, () => catalog.getAction("example.ping")));
+        }),
+      ),
+    );
+    expect(attempts).toBe(2);
+  });
   it("prepares both list locales without asset reads and loads schemas only on explicit detail requests", async () => {
     const metadata = [
       {

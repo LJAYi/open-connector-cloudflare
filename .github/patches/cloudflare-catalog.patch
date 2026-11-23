@@ -119,19 +119,31 @@ index fdb7a005..3e3a33a3 100644
    service: "example",
    displayName: "Example",
 diff --git a/src/server/cloudflare.ts b/src/server/cloudflare.ts
-index e196e063..7bfb8c5f 100644
+index e196e063..cd486fbe 100644
 --- a/src/server/cloudflare.ts
 +++ b/src/server/cloudflare.ts
-@@ -15,7 +15,7 @@ import { executorModules } from "../providers/registry.cloudflare.generated.ts";
+@@ -15,7 +15,8 @@ import { executorModules } from "../providers/registry.cloudflare.generated.ts";
  import { SaasCleanupService } from "../saas/saas-cleanup-service.ts";
  import { isConsoleShellPath } from "./api/console-paths.ts";
  import { DEFAULT_OAUTH_CLOSE_DELAY_SECONDS, parseOAuthResultOrigins } from "./api/oauth-completion-page.ts";
 -import { loadCatalogFromAssets } from "./cloudflare/catalog-assets.ts";
++import { withCatalogAssetScope } from "./cloudflare/bundled-catalog.ts";
 +import { bindStartupCatalog } from "./cloudflare/catalog-startup.ts";
  import { readNonNegativeInteger, readPositiveInteger, resolvePublicOrigin } from "./cloudflare/cloudflare-env.ts";
  import { createConnectApp } from "./connect-app.ts";
  import { preloadOptionalServerModules } from "./connect-server.ts";
-@@ -192,11 +192,7 @@ function writeWorkerLog(level: "error" | "info" | "warn"): (fields: unknown, mes
+@@ -83,6 +84,10 @@ export default {
+ };
+ 
+ async function fetchRuntime(request: Request, env: CloudflareEnv): Promise<Response> {
++  return withCatalogAssetScope(() => fetchRuntimeInScope(request, env));
++}
++
++async function fetchRuntimeInScope(request: Request, env: CloudflareEnv): Promise<Response> {
+   const publicOrigin = resolvePublicOrigin(request, env);
+   const { app } = await appCache.get(createCacheKey(env, publicOrigin), () => createCloudflareApp(env, publicOrigin));
+   const response = await app.fetch(request, env);
+@@ -192,11 +197,7 @@ function writeWorkerLog(level: "error" | "info" | "warn"): (fields: unknown, mes
  function loadCatalogOnce(assets: AssetsBinding): Promise<CatalogStore> {
    // The catalog depends only on the assets binding, which is fixed for the isolate, so one slot
    // under a constant key covers every request.
@@ -146,15 +158,15 @@ index e196e063..7bfb8c5f 100644
  function createSecretCodec(encryptionKey: string | undefined): Promise<ISecretCodec> {
 diff --git a/src/server/cloudflare/bundled-catalog.test.ts b/src/server/cloudflare/bundled-catalog.test.ts
 new file mode 100644
-index 00000000..b36eb147
+index 00000000..852b99c5
 --- /dev/null
 +++ b/src/server/cloudflare/bundled-catalog.test.ts
-@@ -0,0 +1,71 @@
+@@ -0,0 +1,91 @@
 +import type { ProviderDefinition } from "../../core/types.ts";
 +
 +import { describe, expect, it } from "vitest";
 +import { createCatalogStore } from "../../catalog-store.ts";
-+import { prepareBundledCatalog } from "./bundled-catalog.ts";
++import { prepareBundledCatalog, withCatalogAssetScope } from "./bundled-catalog.ts";
 +
 +const provider: ProviderDefinition = {
 +  service: "example",
@@ -178,6 +190,26 @@ index 00000000..b36eb147
 +};
 +
 +describe("bundled Cloudflare catalog", () => {
++  it("coalesces concurrent details within one request without sharing pending reads across requests", async () => {
++    let attempts = 0;
++    const catalog = prepareBundledCatalog(
++      [provider],
++      {},
++    )({
++      fetch: async () => {
++        attempts++;
++        return Response.json(provider);
++      },
++    });
++    await Promise.all(
++      [1, 2].map(() =>
++        withCatalogAssetScope(async () => {
++          await Promise.all(Array.from({ length: 60 }, () => catalog.getAction("example.ping")));
++        }),
++      ),
++    );
++    expect(attempts).toBe(2);
++  });
 +  it("prepares both list locales without asset reads and loads schemas only on explicit detail requests", async () => {
 +    const metadata = [
 +      {
@@ -223,16 +255,24 @@ index 00000000..b36eb147
 +});
 diff --git a/src/server/cloudflare/bundled-catalog.ts b/src/server/cloudflare/bundled-catalog.ts
 new file mode 100644
-index 00000000..752af709
+index 00000000..55836bf3
 --- /dev/null
 +++ b/src/server/cloudflare/bundled-catalog.ts
-@@ -0,0 +1,50 @@
+@@ -0,0 +1,61 @@
 +import type { CatalogProviderMetadata, CatalogStore, ExecutableActionOptions } from "../../catalog-store.ts";
 +import type { ProviderDefinition } from "../../core/types.ts";
 +import type { AssetsBinding } from "./cloudflare-bindings.ts";
 +
++import { AsyncLocalStorage } from "node:async_hooks";
 +import { createCatalogFromMetadata, resolveExecutableActionIds } from "../../catalog-store.ts";
 +import { readJsonAsset } from "./catalog-assets.ts";
++
++const requestReads = new AsyncLocalStorage<Map<string, Promise<unknown>>>();
++
++/** Coalesce schema reads only within one request, never across request lifetimes. */
++export function withCatalogAssetScope<T>(run: () => Promise<T>): Promise<T> {
++  return requestReads.run(new Map(), run);
++}
 +
 +/** Prepare immutable list data during isolate startup, not within a Free-plan request's CPU budget. */
 +export function prepareBundledCatalog(
@@ -259,10 +299,13 @@ index 00000000..752af709
 +        const service = summary.service;
 +        let provider = cache.get(service);
 +        if (!provider) {
-+          provider = (await readJsonAsset(
-+            assets,
-+            `/catalog/providers/${encodeURIComponent(service)}.json`,
-+          )) as ProviderDefinition;
++          const reads = requestReads.getStore();
++          let pending = reads?.get(service);
++          if (!pending) {
++            pending = readJsonAsset(assets, `/catalog/providers/${encodeURIComponent(service)}.json`);
++            reads?.set(service, pending);
++          }
++          provider = (await pending) as ProviderDefinition;
 +          if (provider.service !== service || !Array.isArray(provider.actions)) {
 +            throw new Error(`Invalid catalog provider asset: ${service}`);
 +          }
