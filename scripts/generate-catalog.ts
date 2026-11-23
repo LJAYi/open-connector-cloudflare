@@ -21,6 +21,14 @@ await generateProviderRegistries(providerSources);
 const providers = providerSources.map((source) => source.definition);
 const apps = sortProviders(providers);
 validateCatalogTranslations(apps);
+const metadata = apps.map((provider) => ({
+  ...provider,
+  actions: provider.actions.map(({ inputSchema: _input, outputSchema: _output, ...action }) => action),
+}));
+await writeFile(
+  join(process.cwd(), "src/providers/catalog.cloudflare.generated.ts"),
+  `import type { CatalogProviderMetadata } from "../catalog-store.ts";\nexport const providers: CatalogProviderMetadata[] = JSON.parse(${JSON.stringify(JSON.stringify(metadata))});\n`,
+);
 
 await mkdir(catalogRootDir, { recursive: true });
 

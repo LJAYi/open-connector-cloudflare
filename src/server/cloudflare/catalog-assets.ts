@@ -92,7 +92,7 @@ function requireProviderArray(value: unknown, path: string): ProviderDefinition[
  * therefore detected by the response content type as well as by the status, otherwise the SPA shell
  * would be parsed as catalog JSON.
  */
-async function readJsonAsset(assets: AssetsBinding, path: string): Promise<unknown> {
+export async function readJsonAsset(assets: AssetsBinding, path: string): Promise<unknown> {
   const response = await fetchAsset(assets, path);
   if (response.status === 404) {
     throw assetRequestError(path, "returned 404");

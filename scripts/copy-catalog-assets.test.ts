@@ -36,7 +36,7 @@ describe("copyCatalogAssets", () => {
     for (const chunk of index.chunks) {
       expect(Buffer.byteLength(await readFile(join(targetDir, chunk), "utf8"))).toBeLessThanOrEqual(45);
     }
-    expect((await readdir(targetDir)).sort()).toEqual(["apps-0000.json", "apps-0001.json", "index.json"]);
+    expect((await readdir(targetDir)).sort()).toEqual(["apps-0000.json", "apps-0001.json", "index.json", "providers"]);
   });
 
   // Production chunks hold ~170 providers each, so the greedy fill and its separator accounting —
@@ -66,7 +66,8 @@ describe("copyCatalogAssets", () => {
 
     await copyCatalogAssets({ sourceDir, targetDir });
 
-    expect((await readdir(targetDir)).sort()).toEqual(["apps-0000.json", "index.json"]);
+    expect((await readdir(targetDir)).sort()).toEqual(["apps-0000.json", "index.json", "providers"]);
+    expect(JSON.parse(await readFile(join(targetDir, "providers/alpha.json"), "utf8"))).toEqual({ service: "alpha" });
   });
 
   it("accounts for UTF-8 bytes when rejecting an oversized provider", async () => {
@@ -94,7 +95,7 @@ describe("copyCatalogAssets", () => {
     const index = await copyCatalogAssets({ sourceDir, targetDir });
 
     expect(index).toEqual({ version: 1, providerCount: 0, chunks: [] });
-    expect(await readdir(targetDir)).toEqual(["index.json"]);
+    expect((await readdir(targetDir)).sort()).toEqual(["index.json", "providers"]);
   });
 
   // The index shape and the `apps-NNNN.json` naming are declared once here and once in the worker
