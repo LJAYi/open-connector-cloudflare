@@ -1,4 +1,5 @@
 {
+  "upload_source_maps": false,
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "open-connector-canary",
   "main": "src/server/cloudflare.ts",

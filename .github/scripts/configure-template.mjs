@@ -57,6 +57,9 @@ if (databaseIdMatches.length !== 1 || bucketNameMatches.length !== 1) {
 }
 
 const wranglerConfig = wranglerExample
+  // The full provider bundle exceeds Cloudflare's separate 60 MiB source-map limit.
+  .replace(/^\s*"upload_source_maps"\s*:.*\n/gm, "")
+  .replace(/^{/, '{\n  "upload_source_maps": false,')
   .replace(/^\s*"database_id"\s*:.*\n/gm, "")
   .replace(/^\s*"bucket_name"\s*:.*\n/gm, "");
 
