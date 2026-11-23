@@ -79,6 +79,7 @@ jobs:
         run: |
           overlay="$RUNNER_TEMP/open-connector-cloudflare"
           mkdir -p "$overlay/.github/scripts" "$overlay/.github/workflows"
+          cp -R .github/patches "$overlay/.github/patches"
           cp README.md "$overlay/README.md"
           cp .dev.vars.example "$overlay/.dev.vars.example"
           cp .github/scripts/check-cloudflare-free-limits.mjs "$overlay/.github/scripts/check-cloudflare-free-limits.mjs"
